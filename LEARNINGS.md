@@ -160,3 +160,66 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 ### Follow-ups
 
 - Backlog complete. All Items 01 through 04 implemented, tested, and verified.
+
+---
+
+## 2026-11-08 — Special Days, Ethiopian Holidays Engine & OM Downtime Reason Templates (Item 05)
+
+**Goal:** Implement automated yearly Ethiopian holiday generation with working-day flags, configurable custom special days (holidays, plant maintenance, strike, power outages), and OM-managed downtime reason templates with bilingual Amharic localization and active toggles.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Custom `ethiopian-holidays.ts`** | Maintained internally | MIT | 0kB ext | **Selected** | Pure mathematical algorithm based on Ethiopian Coptic Calendar astronomy (Meskerem 1 New Year, Meskel, Timket, Genna, Adwa Victory, Patriots Day, Downfall of Derg, and lunar Easter calculation via Gauss Meeus Computus algorithm). Zero heavy external dependencies, 100% test coverage. |
+| **ethiopian-calendar-date-converter** | Yes | MIT | ~8kB | Evaluated | Good for generic conversion, but lacks Ethiopian public holiday calculations and lunar movable Orthodox feast day determinations. |
+
+### Reference files studied
+
+- `src/lib/ethiopian-calendar.ts` — Leveraged core Ethiopian solar day-to-Gregorian transformations.
+- `src/db/schema.ts` — Added `specialDays` and `downtimeReasonTemplates` tables with Drizzle PostgreSQL schema definitions.
+- `src/lib/target.ts` — Connected target daily working day calculations with `specialDays` database records.
+
+### Edge cases & gotchas discovered
+
+- In Next.js 15, files marked with `"use server"` can strictly export **only async functions**. Exporting objects, arrays, or constants (e.g. `export const DEFAULT_REASONS = [...]`) causes Next.js build compilation failure (`invalid-use-server-value`). Constants must be exported from standard non-server modules or kept file-internal.
+- In Drizzle ORM for PostgreSQL, text columns without explicit non-null modifiers produce `string | null` in inferred select models. Any TypeScript interface accepting DB records (`SpecialDayInfo`, `SpecialDayInput`, `DowntimeReasonTemplate`) must use `nameAm?: string | null` rather than `string | undefined` to prevent strict TypeScript assignment errors.
+- Working status determination in the daily entry grid and calendar requires checking both the day of the week (e.g. Sunday) and custom special day records, where a working day override on a holiday or maintenance shutdown can change expected production line targets to 0.
+
+### Decision
+
+1. Build pure TypeScript Ethiopian holiday computation in `src/lib/ethiopian-holidays.ts` supporting fixed holidays and movable Easter/Fasika feasts.
+2. Store special days in PostgreSQL via `specialDays` table with `isWorkingDay` boolean, localized names (`nameEn`, `nameAm`), and factory scoping.
+3. Provide OM settings tab (`OMSettingsClient`) in `src/app/om/settings-client.tsx` with one-click "Seed Yearly Ethiopian Holidays" action, custom date modal, and downtime reason templates table.
+4. Add 11 automated component tests in `src/app/om/om-settings.test.tsx` and full action coverage in `reason-actions.test.ts` and `special-days-actions.test.ts`.
+
+---
+
+## 2026-11-08 — Next.js 15 App Router Edge Middleware vs. `_not-found` Tracing & `requireAuthPage` Guard (Item 06)
+
+**Goal:** Diagnose and resolve the App Router `_not-found` static page entry invariant and NFT build trace `ENOENT` failures, and establish a bulletproof `requireAuthPage` server component guard pattern.
+
+### Reference files studied
+
+- `node_modules/next/dist/build/collect-build-traces.js` — Traced how `@vercel/nft` attempts to read server route bundles for pages not present in `staticPages`.
+- `node_modules/next/dist/shared/lib/router/utils/app-paths.js` — Analyzed `selectAppPageEntry` invariant matching logic.
+- `src/lib/authz.ts` and `src/app/*/page.tsx` — Studied repeated auth boilerplate across server components.
+
+### Edge cases & gotchas discovered
+
+- **Edge Middleware Conflict with App Router Fallbacks:** Adding an edge `middleware.ts` file that matches root and static paths causes Next.js 15 to register synthetic edge routes. When combined with server pages or dynamic root redirects, it prevents the compiler from emitting direct app page entries for `/_not-found`, triggering `Invariant: no direct app page entry found for /_not-found`.
+- **`force-dynamic` on System Boundaries:** Setting `export const dynamic = "force-dynamic"` on `src/app/layout.tsx` or `src/app/not-found.tsx` forces system fallbacks dynamic. Because `_not-found` has no dedicated server bundle when statically optimized, `collect-build-traces` attempts to open `.next/server/app/_not-found/page.js.nft.json` and fails with `ENOENT`.
+- **Client Boundary for 404 Pages:** Adding `"use client";` to `src/app/not-found.tsx` ensures Next.js classifies it as a client-rendered component (`!isServerComponent`), correctly categorizing it under static pages and completely preventing missing server trace errors.
+- **Server Component Auth Redirect vs. 500 Throw:** Server components calling `requireUser()` directly throw an error if the user is unauthenticated, resulting in a server error (500) if not wrapped in a try/catch. Next.js server components require using `redirect("/login")` from `next/navigation` to smoothly transition unauthenticated users to the login route.
+
+### Decision
+
+1. Remove superfluous `src/middleware.ts`; implement instantaneous client-side authentication dispatch in `src/app/page.tsx` via `/api/auth/status`.
+2. Add `"use client";` to `src/app/not-found.tsx` to ensure canonical static compilation without missing `.nft.json` traces.
+3. Create `requireAuthPage(allowedRoles?: Role[])` in `src/lib/authz.ts` as the standard, unified guard across all server component routes (`admin`, `dashboard`, `fm`, `om`, `qa`, `entry`, `calendar`, `fm/store`):
+   - Redirects unauthenticated visitors to `/login`.
+   - Redirects forced password-change visitors to `/change-password`.
+   - Redirects role-violating visitors to `/dashboard`.
+   - Returns typed `SessionUser` for immediate data querying.
+4. Validate with 100% test coverage in `src/lib/authz.test.ts` (17 tests) and full multi-core `next build` passing in ~7s with exit code 0.
+
