@@ -6,6 +6,9 @@ import {
   gregorianToEth,
   getEthiopianMonthRange,
 } from "@/lib/ethiopian-calendar";
+import { db } from "@/db";
+import { specialDays } from "@/db/schema";
+import { and, gte, lte } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -59,11 +62,26 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     endDateStr = format(endOfMonth(monthDate), "yyyy-MM-dd");
   }
 
-  const data = await getMonthCalendarSummary(
-    context.factoryId,
-    startDateStr,
-    endDateStr
-  );
+  const [data, monthSpecialDays] = await Promise.all([
+    getMonthCalendarSummary(context.factoryId, startDateStr, endDateStr),
+    db
+      .select({
+        id: specialDays.id,
+        date: specialDays.date,
+        nameEn: specialDays.nameEn,
+        nameAm: specialDays.nameAm,
+        type: specialDays.type,
+        isWorkingDay: specialDays.isWorkingDay,
+      })
+      .from(specialDays)
+      .where(
+        and(
+          gte(specialDays.date, startDateStr),
+          lte(specialDays.date, endDateStr)
+        )
+      )
+      .catch(() => []),
+  ]);
 
   return (
     <CalendarClient
@@ -78,6 +96,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       endDateStr={endDateStr}
       entries={data.entries}
       plans={data.plans}
+      specialDays={monthSpecialDays || []}
     />
   );
 }
