@@ -1,18 +1,32 @@
-import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default async function HomePage() {
-  const reqHeaders = await headers();
-  const session = await auth.api.getSession({
-    headers: reqHeaders,
-  });
+export default function HomePage() {
+  const router = useRouter();
 
-  if (!session?.user) {
-    redirect("/login");
-  }
+  useEffect(() => {
+    fetch("/api/auth/status")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated && data.user) {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/login");
+        }
+      })
+      .catch(() => {
+        router.replace("/login");
+      });
+  }, [router]);
 
-  redirect("/dashboard");
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex flex-col items-center gap-3">
+        <span className="loading loading-spinner loading-lg text-primary"></span>
+        <p className="text-sm font-medium text-slate-500">Redirecting to DPM...</p>
+      </div>
+    </div>
+  );
 }
