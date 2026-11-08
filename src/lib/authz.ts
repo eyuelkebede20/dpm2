@@ -1,4 +1,5 @@
 import { headers, cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { users, factoryUsers, qaAssignments, lines, factories } from "@/db/schema";
@@ -315,3 +316,29 @@ export async function can(
 
   return false;
 }
+
+/**
+ * Safe Page Guard for Next.js Server Components.
+ * Redirects unauthenticated visitors to /login instead of throwing a 500 error.
+ * Redirects mustChangePassword users to /change-password.
+ * Redirects unauthorized roles to /dashboard.
+ */
+export async function requireAuthPage(allowedRoles?: Role[]): Promise<SessionUser> {
+  let user: SessionUser;
+  try {
+    user = await requireUser();
+  } catch {
+    redirect("/login");
+  }
+
+  if (user.mustChangePassword) {
+    redirect("/change-password");
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    redirect("/dashboard");
+  }
+
+  return user;
+}
+

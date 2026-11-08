@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import {
   getOMFactories,
   getOMUsers,
@@ -12,15 +11,7 @@ import { OMClient } from "./om-client";
 export const dynamic = "force-dynamic";
 
 export default async function OMPage() {
-  const user = await requireUser();
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
-  }
-
-  if (user.role !== "om" && user.role !== "sys_admin") {
-    redirect("/dashboard");
-  }
+  await requireAuthPage(["om", "sys_admin"]);
 
   const factories = await getOMFactories();
   const factoryUsers = await getOMUsers();

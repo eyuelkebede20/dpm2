@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 import { getStoreStockData } from "@/actions/fm-actions";
@@ -15,15 +14,7 @@ import {
 } from "lucide-react";
 
 export default async function StoreStockPage() {
-  const user = await requireUser();
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
-  }
-
-  if (!["fm", "om", "sys_admin"].includes(user.role)) {
-    redirect("/dashboard");
-  }
+  const user = await requireAuthPage(["fm", "om", "sys_admin"]);
 
   const { factory, productBalances, transactions } = await getStoreStockData();
 

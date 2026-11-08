@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import {
   getFMFactory,
   getLines,
@@ -12,15 +11,7 @@ import { FMClient } from "./fm-client";
 export const dynamic = "force-dynamic";
 
 export default async function FMPage() {
-  const user = await requireUser();
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
-  }
-
-  if (!["fm", "om", "sys_admin"].includes(user.role)) {
-    redirect("/dashboard");
-  }
+  await requireAuthPage(["fm", "om", "sys_admin"]);
 
   const factory = await getFMFactory();
   const lines = await getLines();

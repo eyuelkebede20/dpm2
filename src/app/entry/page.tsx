@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import { getCurrentUserContext, getDailyGridData } from "@/actions/data";
 import { DailyEntryClient } from "@/components/entry-grid/daily-entry-client";
 import { redirect } from "next/navigation";
@@ -13,7 +13,7 @@ interface EntryPageProps {
 }
 
 export default async function EntryPage({ searchParams }: EntryPageProps) {
-  const user = await requireUser();
+  const user = await requireAuthPage(["fm", "om", "sys_admin"]);
   const context = await getCurrentUserContext();
 
   if (!context.factoryId) {

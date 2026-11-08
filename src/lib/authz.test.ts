@@ -1,5 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { can, SessionUser } from "./authz";
+import { can, SessionUser, requireAuthPage } from "./authz";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((path: string) => {
+    const error = new Error(`NEXT_REDIRECT: ${path}`);
+    (error as any).digest = `NEXT_REDIRECT;${path}`;
+    throw error;
+  }),
+}));
+
+vi.mock("next/headers", () => ({
+  headers: vi.fn(async () => new Map()),
+  cookies: vi.fn(async () => ({
+    get: vi.fn(),
+  })),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  auth: {
+    api: {
+      getSession: vi.fn(),
+    },
+  },
+}));
 
 describe("authz.ts - Central Authorization Guard", () => {
   const adminUser: SessionUser = {
@@ -170,6 +195,43 @@ describe("authz.ts - Central Authorization Guard", () => {
     it("allows QA to read lines and products", async () => {
       expect(await can(qaUser, "read", { type: "line" })).toBe(true);
       expect(await can(qaUser, "read", { type: "product" })).toBe(true);
+    });
+  });
+
+  describe("requireAuthPage - Safe Page Guard", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("redirects unauthenticated user to /login", async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue(null as any);
+      await expect(requireAuthPage()).rejects.toThrow("NEXT_REDIRECT: /login");
+      expect(redirect).toHaveBeenCalledWith("/login");
+    });
+
+    it("redirects user with mustChangePassword = true to /change-password", async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue({
+        user: { ...fmUser, mustChangePassword: true },
+      } as any);
+      await expect(requireAuthPage()).rejects.toThrow("NEXT_REDIRECT: /change-password");
+      expect(redirect).toHaveBeenCalledWith("/change-password");
+    });
+
+    it("redirects user with unauthorized role to /dashboard", async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue({
+        user: fmUser,
+      } as any);
+      await expect(requireAuthPage(["sys_admin", "om"])).rejects.toThrow("NEXT_REDIRECT: /dashboard");
+      expect(redirect).toHaveBeenCalledWith("/dashboard");
+    });
+
+    it("returns user when authenticated and role is allowed", async () => {
+      vi.mocked(auth.api.getSession).mockResolvedValue({
+        user: omUser,
+      } as any);
+      const result = await requireAuthPage(["om"]);
+      expect(result).toEqual(omUser);
+      expect(redirect).not.toHaveBeenCalled();
     });
   });
 });

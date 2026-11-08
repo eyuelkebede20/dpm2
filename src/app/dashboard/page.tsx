@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import { getCurrentUserContext } from "@/actions/data";
 import {
   getSysAdminDashboardData,
@@ -13,12 +12,8 @@ import { DashboardView } from "./dashboard-view";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const user = await requireUser();
+  const user = await requireAuthPage();
   const context = await getCurrentUserContext();
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
-  }
 
   let adminData;
   let omData;

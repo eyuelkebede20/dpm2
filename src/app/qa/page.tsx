@@ -1,16 +1,11 @@
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import { getQAWorkspaceData, getQAInspectionsHistory } from "@/actions/qa-actions";
 import { QAClient } from "./qa-client";
 
 export const dynamic = "force-dynamic";
 
 export default async function QAPage() {
-  const user = await requireUser();
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
-  }
+  await requireAuthPage();
 
   const { assignedProducts, availableLines } = await getQAWorkspaceData();
   const inspections = await getQAInspectionsHistory();

@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import {
   getIndustryProfile,
   getOperationManagers,
@@ -11,15 +10,7 @@ import { AdminClient } from "./admin-client";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const user = await requireUser();
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
-  }
-
-  if (user.role !== "sys_admin") {
-    redirect("/dashboard");
-  }
+  const user = await requireAuthPage(["sys_admin"]);
 
   const profile = await getIndustryProfile();
   const oms = await getOperationManagers();

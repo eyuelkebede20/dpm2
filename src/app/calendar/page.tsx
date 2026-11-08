@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/authz";
+import { requireAuthPage } from "@/lib/authz";
 import { getCurrentUserContext, getMonthCalendarSummary } from "@/actions/data";
 import { CalendarClient } from "@/components/calendar/calendar-client";
 import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
@@ -19,7 +19,7 @@ interface CalendarPageProps {
 }
 
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
-  const user = await requireUser();
+  const user = await requireAuthPage();
   const context = await getCurrentUserContext();
 
   if (!context.factoryId) {
