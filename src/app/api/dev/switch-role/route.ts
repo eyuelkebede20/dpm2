@@ -120,9 +120,19 @@ export async function POST(req: NextRequest) {
       userAgent: req.headers.get("user-agent") || "dev-role-switcher",
     });
 
+    // Better Auth signs cookies using HMAC SHA-256 with BETTER_AUTH_SECRET
+    const secret =
+      process.env.BETTER_AUTH_SECRET ||
+      "dpm_secret_key_random_at_least_32_characters_long_12345";
+    const signature = crypto
+      .createHmac("sha256", secret)
+      .update(token)
+      .digest("base64");
+    const signedToken = `${token}.${signature}`;
+
     // Set cookie on response
     const cookieStore = await cookies();
-    cookieStore.set("dpm.session_token", token, {
+    cookieStore.set("dpm.session_token", signedToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
