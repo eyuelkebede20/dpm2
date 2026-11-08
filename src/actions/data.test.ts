@@ -30,6 +30,7 @@ vi.mock("@/db", () => {
             limit: vi.fn(() => Promise.resolve(mockSelectData)),
             orderBy: vi.fn(() => ({
               limit: vi.fn(() => Promise.resolve(mockSelectData)),
+              then: vi.fn((resolve) => resolve(mockSelectData)),
             })),
             then: vi.fn((resolve) => resolve(mockSelectData)),
           })),
@@ -245,6 +246,107 @@ describe("Data & Calendar Workflows - data.ts", () => {
       expect(row.entry.finishedGood).toBe(105);
       expect(row.entry.rework).toBe(2);
       expect(row.entry.issueNote).toBe("Good run");
+    });
+
+    it("evaluates daily target to 0 on non-working special day and returns holiday and reasons", async () => {
+      // 1. Profile
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue([{ workingDays: [1, 2, 3, 4, 5, 6] }]),
+        })),
+      } as any);
+
+      // 2. Lines
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([{ id: "line_1", name: "Line 1" }]),
+        })),
+      } as any);
+
+      // 3. Products
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([
+            { id: "prod_1", name: "Polo Shirt", sku: "POLO-01" },
+          ]),
+        })),
+      } as any);
+
+      // 4. LineProduct links
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => Promise.resolve([{ lineId: "line_1", productId: "prod_1" }])),
+      } as any);
+
+      // 5. Active plans
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([
+            {
+              lineId: "line_1",
+              productId: "prod_1",
+              startDate: "2026-11-01",
+              endDate: "2026-11-30",
+              plannedQty: 2500,
+            },
+          ]),
+        })),
+      } as any);
+
+      // 6. Existing report entries
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([]),
+        })),
+      } as any);
+
+      // 7. Special day lookup
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([
+              {
+                id: "sp_1",
+                date: "2026-11-09",
+                nameEn: "Victory Day",
+                nameAm: "የድል ቀን",
+                type: "holiday",
+                isWorkingDay: false,
+                year: 2026,
+              },
+            ]),
+          })),
+        })),
+      } as any);
+
+      // 8. Downtime reasons lookup
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            orderBy: vi.fn().mockResolvedValue([
+              {
+                id: "dtr_1",
+                code: "DOW-01",
+                nameEn: "Tool Wear",
+                nameAm: "የመሳሪያ መሸርሸር",
+                category: "tooling",
+                isActive: true,
+                sortOrder: 1,
+              },
+            ]),
+          })),
+        })),
+      } as any);
+
+      const gridData = await getDailyGridData("fac_01", "2026-11-09");
+      expect(gridData.specialDay).toEqual({
+        nameEn: "Victory Day",
+        nameAm: "የድል ቀን",
+        type: "holiday",
+        isWorkingDay: false,
+      });
+      expect(gridData.downtimeReasons).toHaveLength(1);
+      expect(gridData.downtimeReasons[0].code).toBe("DOW-01");
+      expect(gridData.gridRows[0].plan?.dailyTarget).toBe(0);
     });
   });
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSessionContext } from "@/lib/authz";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const { user } = await getSessionContext();
   if (!user) {

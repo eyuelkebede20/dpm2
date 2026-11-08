@@ -6,6 +6,8 @@ import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const impersonateSchema = z
   .object({
     targetUserId: z.string().min(1),

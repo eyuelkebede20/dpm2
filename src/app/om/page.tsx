@@ -4,6 +4,8 @@ import {
   getOMFactories,
   getOMUsers,
   getQAProductMatrixData,
+  getOMSpecialDays,
+  getOMDowntimeReasons,
 } from "@/actions/om-actions";
 import { OMClient } from "./om-client";
 
@@ -23,6 +25,8 @@ export default async function OMPage() {
   const factories = await getOMFactories();
   const factoryUsers = await getOMUsers();
   const matrixData = await getQAProductMatrixData();
+  const specialDays = await getOMSpecialDays();
+  const downtimeReasons = await getOMDowntimeReasons();
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -39,6 +43,8 @@ export default async function OMPage() {
         factories={factories}
         factoryUsers={factoryUsers}
         matrixData={matrixData}
+        initialSpecialDays={specialDays}
+        initialDowntimeReasons={downtimeReasons}
       />
     </div>
   );

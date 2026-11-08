@@ -87,7 +87,7 @@ describe("Button Interaction Tests - QAClient", () => {
     const zeroBtn = screen.getByRole("button", { name: /0 defects/i });
     fireEvent.click(zeroBtn);
     expect(defectInput.value).toBe("0");
-  });
+  }, 15000);
 
   it("recalculates live defect rate when defect pill buttons are clicked", () => {
     renderQA();

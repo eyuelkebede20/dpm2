@@ -15,7 +15,10 @@ import {
   plans,
   reportEntries,
   stockLedger,
+  specialDays,
+  downtimeReasons,
 } from "./schema";
+import { getEthiopianHolidaysForYear } from "../lib/ethiopian-holidays";
 import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 
@@ -47,6 +50,140 @@ async function seed() {
         units: "pcs",
       },
     });
+
+  // 1b. Downtime Reasons
+  console.log("Seeding Standard Downtime Reasons (DOW-01 through DOW-09)...");
+  const standardDowntimeReasons = [
+    {
+      id: "dow_01",
+      code: "DOW-01",
+      nameEn: "Punch / Die Tool Wear or Breakage",
+      nameAm: "የፑንች ወይም ዳይ መሠበር / መሸርሸር",
+      category: "tooling",
+      isActive: true,
+      sortOrder: 1,
+    },
+    {
+      id: "dow_02",
+      code: "DOW-02",
+      nameEn: "CNC Control / Scale & Sensor Fault",
+      nameAm: "የሲኤንሲ ኮንትሮል ወይም ሴንሰር ብልሽት",
+      category: "machine",
+      isActive: true,
+      sortOrder: 2,
+    },
+    {
+      id: "dow_03",
+      code: "DOW-03",
+      nameEn: "Tooling & Caliber Changeover",
+      nameAm: "የካሊበር እና የመሳሪያ ቅያሬ",
+      category: "tooling",
+      isActive: true,
+      sortOrder: 3,
+    },
+    {
+      id: "dow_04",
+      code: "DOW-04",
+      nameEn: "Brass Strip / Steel / Powder Shortage",
+      nameAm: "የናስ/የብረት ቆርቆሮ ወይም የባሩድ እጥረት",
+      category: "material",
+      isActive: true,
+      sortOrder: 4,
+    },
+    {
+      id: "dow_05",
+      code: "DOW-05",
+      nameEn: "Ballistic Test & Chamber Verification",
+      nameAm: "የባለስቲክስ ተኩስ ፈተሻ እና ቻምበር ማረጋገጫ",
+      category: "quality",
+      isActive: true,
+      sortOrder: 5,
+    },
+    {
+      id: "dow_06",
+      code: "DOW-06",
+      nameEn: "Chemical & Pyrotechnic Safety Clearance",
+      nameAm: "የኬሚካልና ፒሮቴክኒክ ደህንነት ፈተሻ",
+      category: "safety",
+      isActive: true,
+      sortOrder: 6,
+    },
+    {
+      id: "dow_07",
+      code: "DOW-07",
+      nameEn: "Preventive Press Maintenance & Lubrication",
+      nameAm: "የታቀደ የፕሬስ ጥገና እና ቅባት መቀባት",
+      category: "machine",
+      isActive: true,
+      sortOrder: 7,
+    },
+    {
+      id: "dow_08",
+      code: "DOW-08",
+      nameEn: "Power Cut / Generator Transition",
+      nameAm: "የኃይል መቋረጥ",
+      category: "power",
+      isActive: true,
+      sortOrder: 8,
+    },
+    {
+      id: "dow_09",
+      code: "DOW-09",
+      nameEn: "Machine Breakdown",
+      nameAm: "የማሽን ብልሽት",
+      category: "machine",
+      isActive: true,
+      sortOrder: 9,
+    },
+  ];
+
+  for (const reason of standardDowntimeReasons) {
+    await db
+      .insert(downtimeReasons)
+      .values(reason)
+      .onConflictDoUpdate({
+        target: downtimeReasons.code,
+        set: {
+          nameEn: reason.nameEn,
+          nameAm: reason.nameAm,
+          category: reason.category,
+          isActive: reason.isActive,
+          sortOrder: reason.sortOrder,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  // 1c. Special Days & Ethiopian Holidays (2026 and 2027)
+  console.log("Seeding Ethiopian Holidays for 2026 and 2027...");
+  const holidays2026 = getEthiopianHolidaysForYear(2026);
+  const holidays2027 = getEthiopianHolidaysForYear(2027);
+  const allHolidays = [...holidays2026, ...holidays2027];
+
+  for (const holiday of allHolidays) {
+    await db
+      .insert(specialDays)
+      .values({
+        id: `hol_${holiday.date}`,
+        date: holiday.date,
+        nameEn: holiday.nameEn,
+        nameAm: holiday.nameAm,
+        type: holiday.type,
+        isWorkingDay: holiday.isWorkingDay,
+        year: holiday.year,
+      })
+      .onConflictDoUpdate({
+        target: specialDays.date,
+        set: {
+          nameEn: holiday.nameEn,
+          nameAm: holiday.nameAm,
+          type: holiday.type,
+          isWorkingDay: holiday.isWorkingDay,
+          year: holiday.year,
+          updatedAt: new Date(),
+        },
+      });
+  }
 
   // 2. Users & Accounts
   const seedUsers = [
@@ -239,6 +376,7 @@ async function seed() {
       scrap: 2,
       wip: 60,
       downtimeMinutes: 10,
+      downtimeReasonId: "dow_02",
       issueNote: "Minor conveyor calibration in the morning",
     },
     {
@@ -251,6 +389,7 @@ async function seed() {
       scrap: 1,
       wip: 30,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: null,
     },
     {
@@ -263,6 +402,7 @@ async function seed() {
       scrap: 4,
       wip: 85,
       downtimeMinutes: 45,
+      downtimeReasonId: "dow_01",
       issueNote: "Capper head jammed during shift 1",
     },
     {
@@ -275,6 +415,7 @@ async function seed() {
       scrap: 2,
       wip: 25,
       downtimeMinutes: 20,
+      downtimeReasonId: "dow_04",
       issueNote: "Label roll replacement delay",
     },
     {
@@ -287,6 +428,7 @@ async function seed() {
       scrap: 1,
       wip: 50,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: "Smooth run across all shifts",
     },
     {
@@ -299,6 +441,7 @@ async function seed() {
       scrap: 0,
       wip: 20,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: null,
     },
     {
@@ -311,6 +454,7 @@ async function seed() {
       scrap: 1,
       wip: 55,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: "Great efficiency by shift 2",
     },
     {
@@ -323,6 +467,7 @@ async function seed() {
       scrap: 0,
       wip: 22,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: null,
     },
     {
@@ -335,6 +480,7 @@ async function seed() {
       scrap: 3,
       wip: 70,
       downtimeMinutes: 30,
+      downtimeReasonId: "dow_08",
       issueNote: "Steam pressure drop in preform molding",
     },
     {
@@ -347,6 +493,7 @@ async function seed() {
       scrap: 1,
       wip: 18,
       downtimeMinutes: 15,
+      downtimeReasonId: "dow_02",
       issueNote: "Carton printer ink reset",
     },
     {
@@ -359,6 +506,7 @@ async function seed() {
       scrap: 2,
       wip: 45,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: "Weekend shift reached target early",
     },
     {
@@ -371,6 +519,7 @@ async function seed() {
       scrap: 1,
       wip: 25,
       downtimeMinutes: 0,
+      downtimeReasonId: null,
       issueNote: null,
     },
   ];
@@ -390,6 +539,7 @@ async function seed() {
         scrap: entry.scrap,
         wip: entry.wip,
         downtimeMinutes: entry.downtimeMinutes,
+        downtimeReasonId: entry.downtimeReasonId,
         issueNote: entry.issueNote,
         updatedBy: "usr_fm_01",
       })

@@ -14,9 +14,12 @@ import {
   industryProfile,
   qaAssignments,
   qaInspections,
+  specialDays,
+  downtimeReasons,
 } from "@/db/schema";
 import { requireUser, can } from "@/lib/authz";
-import { eq, and, sql, gte, lte, desc } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, asc } from "drizzle-orm";
+import { calculateDailyTarget } from "@/lib/target";
 
 export async function getCurrentUserContext() {
   const user = await requireUser();
@@ -138,8 +141,33 @@ export async function getDailyGridData(factoryId: string, date: string) {
     .from(reportEntries)
     .where(eq(reportEntries.date, date));
 
+  // Fetch special day for date
+  const [specialDayRecord] = await db
+    .select()
+    .from(specialDays)
+    .where(eq(specialDays.date, date))
+    .limit(1);
+
+  // Fetch active downtime reasons ordered by sortOrder asc
+  const activeDowntimeReasons = await db
+    .select()
+    .from(downtimeReasons)
+    .where(eq(downtimeReasons.isActive, true))
+    .orderBy(asc(downtimeReasons.sortOrder));
+
   // Build grid items
   const gridRows = [];
+
+  const specialDaysList = specialDayRecord
+    ? [
+        {
+          date: specialDayRecord.date,
+          isWorkingDay: specialDayRecord.isWorkingDay,
+          nameEn: specialDayRecord.nameEn,
+          nameAm: specialDayRecord.nameAm,
+        },
+      ]
+    : undefined;
 
   for (const line of factoryLines) {
     const linkedProductIds = lineProductLinks
@@ -159,6 +187,20 @@ export async function getDailyGridData(factoryId: string, date: string) {
         (e) => e.lineId === line.id && e.productId === prod.id
       );
 
+      // Pass special day to calculateDailyTarget so non-working holidays evaluate to 0
+      const targetCalc = plan
+        ? calculateDailyTarget(
+            {
+              startDate: plan.startDate,
+              endDate: plan.endDate,
+              plannedQty: plan.plannedQty,
+            },
+            date,
+            workingDays,
+            specialDaysList
+          )
+        : null;
+
       gridRows.push({
         lineId: line.id,
         lineName: line.name,
@@ -170,6 +212,7 @@ export async function getDailyGridData(factoryId: string, date: string) {
               startDate: plan.startDate,
               endDate: plan.endDate,
               plannedQty: plan.plannedQty,
+              dailyTarget: targetCalc?.hasTarget ? targetCalc.displayTarget : 0,
             }
           : null,
         entry: entry || {
@@ -180,6 +223,7 @@ export async function getDailyGridData(factoryId: string, date: string) {
           wip: 0,
           downtimeMinutes: 0,
           issueNote: "",
+          downtimeReasonId: null,
         },
       });
     }
@@ -190,6 +234,24 @@ export async function getDailyGridData(factoryId: string, date: string) {
     factoryId,
     workingDays,
     gridRows,
+    specialDay: specialDayRecord
+      ? {
+          nameEn: specialDayRecord.nameEn,
+          nameAm: specialDayRecord.nameAm,
+          type: specialDayRecord.type,
+          isWorkingDay: specialDayRecord.isWorkingDay,
+        }
+      : null,
+    downtimeReasons: (Array.isArray(activeDowntimeReasons)
+      ? activeDowntimeReasons
+      : []
+    ).map((r) => ({
+      id: r.id,
+      code: r.code,
+      nameEn: r.nameEn,
+      nameAm: r.nameAm,
+      category: r.category,
+    })),
   };
 }
 

@@ -21,7 +21,9 @@ import {
   ChevronRight,
   Copy,
   CheckCheck,
+  CalendarCog,
 } from "lucide-react";
+import { OMSettingsClient } from "./settings-client";
 
 interface OMClientProps {
   factories: Array<{
@@ -63,11 +65,21 @@ interface OMClientProps {
       productId: string;
     }>;
   };
+  initialSpecialDays?: any[];
+  initialDowntimeReasons?: any[];
 }
 
-export function OMClient({ factories, factoryUsers, matrixData }: OMClientProps) {
+export function OMClient({
+  factories,
+  factoryUsers,
+  matrixData,
+  initialSpecialDays,
+  initialDowntimeReasons,
+}: OMClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"factories" | "users" | "matrix">("factories");
+  const [activeTab, setActiveTab] = useState<
+    "factories" | "users" | "matrix" | "settings"
+  >("factories");
 
   // Create Factory Modal
   const [facModalOpen, setFacModalOpen] = useState(false);
@@ -217,6 +229,17 @@ export function OMClient({ factories, factoryUsers, matrixData }: OMClientProps)
         >
           <Grid className="w-4 h-4" />
           QA Assignment Matrix
+        </button>
+        <button
+          onClick={() => setActiveTab("settings")}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+            activeTab === "settings"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          <CalendarCog className="w-4 h-4" />
+          Settings & Calendars (ቅንብሮች)
         </button>
       </div>
 
@@ -486,6 +509,14 @@ export function OMClient({ factories, factoryUsers, matrixData }: OMClientProps)
             )}
           </div>
         </div>
+      )}
+
+      {/* TAB 4: Settings & Calendars */}
+      {activeTab === "settings" && (
+        <OMSettingsClient
+          initialSpecialDays={initialSpecialDays}
+          initialDowntimeReasons={initialDowntimeReasons}
+        />
       )}
 
       {/* Modal: New Factory */}

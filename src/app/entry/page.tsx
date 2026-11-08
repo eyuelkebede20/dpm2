@@ -42,6 +42,8 @@ export default async function EntryPage({ searchParams }: EntryPageProps) {
       initialRows={data.gridRows}
       userRole={user.role}
       calendarSystem={(context.industryProfile as any)?.calendarSystem || "ethiopian"}
+      specialDay={data.specialDay}
+      downtimeReasons={data.downtimeReasons}
     />
   );
 }

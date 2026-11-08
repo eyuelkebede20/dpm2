@@ -6,13 +6,21 @@ export interface PlanTargetInput {
   plannedQty: number;
 }
 
+export interface SpecialDayInput {
+  date: string; // YYYY-MM-DD
+  isWorkingDay: boolean;
+  nameEn?: string;
+  nameAm?: string | null;
+}
+
 export interface TargetCalculationResult {
   hasTarget: boolean;
   dailyTarget: number;       // Exact number with decimals
   displayTarget: number;     // Rounded for UI display
   isWorkingDay: boolean;
   totalWorkingDays: number;
-  reason?: "non_working_day" | "no_plan" | "out_of_range";
+  reason?: "non_working_day" | "no_plan" | "out_of_range" | "special_non_working_day";
+  holidayName?: string;
 }
 
 export interface VarianceResult {
@@ -23,26 +31,41 @@ export interface VarianceResult {
 }
 
 /**
- * Checks if a given date is a working day according to the company profile.
+ * Checks if a given date is a working day according to the company profile
+ * and special days overrides (e.g. public holidays or special working days).
  * Default workingDays: [1, 2, 3, 4, 5, 6] (Mon-Sat, Sunday=0 off).
  */
 export function isWorkingDay(
   dateInput: Date | string,
-  workingDays: number[] = [1, 2, 3, 4, 5, 6]
+  workingDays: number[] = [1, 2, 3, 4, 5, 6],
+  specialDays?: SpecialDayInput[]
 ): boolean {
   const d = typeof dateInput === "string" ? parseISO(dateInput) : dateInput;
   if (!isValid(d)) return false;
+
+  if (specialDays && specialDays.length > 0) {
+    const dateStr = format(d, "yyyy-MM-dd");
+    const specialDay = specialDays.find(
+      (s) => s.date === dateStr || s.date.slice(0, 10) === dateStr
+    );
+    if (specialDay) {
+      return specialDay.isWorkingDay;
+    }
+  }
+
   const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
   return workingDays.includes(dayOfWeek);
 }
 
 /**
- * Counts total working days between startDate and endDate (inclusive).
+ * Counts total working days between startDate and endDate (inclusive),
+ * accounting for custom working days and special day overrides.
  */
 export function countWorkingDays(
   startDateInput: Date | string,
   endDateInput: Date | string,
-  workingDays: number[] = [1, 2, 3, 4, 5, 6]
+  workingDays: number[] = [1, 2, 3, 4, 5, 6],
+  specialDays?: SpecialDayInput[]
 ): number {
   const start = typeof startDateInput === "string" ? parseISO(startDateInput) : startDateInput;
   const end = typeof endDateInput === "string" ? parseISO(endDateInput) : endDateInput;
@@ -54,7 +77,7 @@ export function countWorkingDays(
   let curr = start;
 
   while (!isAfter(curr, end)) {
-    if (workingDays.includes(curr.getDay())) {
+    if (isWorkingDay(curr, workingDays, specialDays)) {
       count++;
     }
     curr = addDays(curr, 1);
@@ -66,12 +89,13 @@ export function countWorkingDays(
 /**
  * Pure function: calculates daily target for a line + product plan on a specific day.
  * Daily target = planned_qty ÷ number of working days in the period.
- * Days with no plan or non-working days show no target.
+ * Days with no plan, non-working days, or special holidays show no target.
  */
 export function calculateDailyTarget(
   plan: PlanTargetInput | null | undefined,
   dateInput: Date | string,
-  workingDays: number[] = [1, 2, 3, 4, 5, 6]
+  workingDays: number[] = [1, 2, 3, 4, 5, 6],
+  specialDays?: SpecialDayInput[]
 ): TargetCalculationResult {
   const d = typeof dateInput === "string" ? parseISO(dateInput) : dateInput;
   if (!isValid(d)) {
@@ -85,7 +109,26 @@ export function calculateDailyTarget(
     };
   }
 
-  const working = isWorkingDay(d, workingDays);
+  const dateStr = format(d, "yyyy-MM-dd");
+
+  if (specialDays && specialDays.length > 0) {
+    const specialDay = specialDays.find(
+      (s) => s.date === dateStr || s.date.slice(0, 10) === dateStr
+    );
+    if (specialDay && !specialDay.isWorkingDay) {
+      return {
+        hasTarget: false,
+        dailyTarget: 0,
+        displayTarget: 0,
+        isWorkingDay: false,
+        totalWorkingDays: 0,
+        reason: "special_non_working_day",
+        holidayName: specialDay.nameEn,
+      };
+    }
+  }
+
+  const working = isWorkingDay(d, workingDays, specialDays);
   if (!working) {
     return {
       hasTarget: false,
@@ -122,7 +165,6 @@ export function calculateDailyTarget(
     };
   }
 
-  const dateStr = format(d, "yyyy-MM-dd");
   if (dateStr < plan.startDate || dateStr > plan.endDate) {
     return {
       hasTarget: false,
@@ -134,7 +176,7 @@ export function calculateDailyTarget(
     };
   }
 
-  const totalWorkingDays = countWorkingDays(plan.startDate, plan.endDate, workingDays);
+  const totalWorkingDays = countWorkingDays(plan.startDate, plan.endDate, workingDays, specialDays);
   if (totalWorkingDays === 0 || plan.plannedQty <= 0) {
     return {
       hasTarget: false,

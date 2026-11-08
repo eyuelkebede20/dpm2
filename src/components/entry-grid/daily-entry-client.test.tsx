@@ -177,4 +177,71 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
     const saveBtn = screen.getByRole("button", { name: /save daily numbers/i }) as HTMLButtonElement;
     expect(saveBtn.disabled).toBe(true);
   });
+
+  it("displays special day holiday banner and sets target to 0 when non-working specialDay is passed", () => {
+    render(
+      <DailyEntryClient
+        initialDate="2026-11-08"
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        initialRows={sampleRows}
+        userRole="fm"
+        specialDay={{
+          nameEn: "Victory Day",
+          nameAm: "የድል ቀን",
+          type: "holiday",
+          isWorkingDay: false,
+        }}
+      />
+    );
+
+    expect(screen.getByText(/Special Off-Day: Victory Day \(የድል ቀን\)/i)).toBeDefined();
+    expect(screen.getByText(/Daily Target: 0/i)).toBeDefined();
+    expect(screen.getByText("holiday")).toBeDefined();
+  });
+
+  it("populates issue note when a downtime reason template is selected", () => {
+    const downtimeReasons = [
+      {
+        id: "dtr_1",
+        code: "DOW-01",
+        nameEn: "Tool Wear",
+        nameAm: "የመሳሪያ መሸርሸር",
+        category: "tooling",
+      },
+      {
+        id: "dtr_2",
+        code: "DOW-02",
+        nameEn: "Machine Fault",
+        nameAm: "የማሽን ብልሽት",
+        category: "machine",
+      },
+    ];
+
+    render(
+      <DailyEntryClient
+        initialDate="2026-11-08"
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        initialRows={sampleRows}
+        userRole="fm"
+        downtimeReasons={downtimeReasons}
+      />
+    );
+
+    const select = screen.getByLabelText(/OM Reason Template/i) as HTMLSelectElement;
+    expect(select).toBeDefined();
+
+    // Select DOW-01
+    fireEvent.change(select, { target: { value: "dtr_1" } });
+
+    const noteInput = screen.getByPlaceholderText(/Note stoppage or quality issue/i) as HTMLInputElement;
+    expect(noteInput.value).toBe("[DOW-01: Tool Wear] ");
+
+    // Change to DOW-02 and verify prefix replaced
+    fireEvent.change(select, { target: { value: "dtr_2" } });
+    expect(noteInput.value).toBe("[DOW-02: Machine Fault] ");
+  });
 });

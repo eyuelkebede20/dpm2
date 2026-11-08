@@ -191,6 +191,40 @@ export const plans = pgTable("plans", {
 });
 
 // -------------------------------------------------------------
+// Special Days & Holidays
+// -------------------------------------------------------------
+export const specialDays = pgTable("special_days", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  date: text("date").notNull().unique(),
+  nameEn: text("name_en").notNull(),
+  nameAm: text("name_am").notNull(),
+  type: text("type").notNull().default("holiday"), // 'holiday' | 'weekend' | 'shutdown' | 'custom'
+  isWorkingDay: boolean("is_working_day").notNull().default(false),
+  year: integer("year").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// -------------------------------------------------------------
+// Downtime Reasons
+// -------------------------------------------------------------
+export const downtimeReasons = pgTable("downtime_reasons", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  code: text("code").notNull().unique(), // e.g. DOW-01
+  nameEn: text("name_en").notNull(),
+  nameAm: text("name_am").notNull(),
+  category: text("category").notNull().default("machine"), // 'tooling' | 'machine' | 'power' | 'material' | 'quality' | 'safety' | 'other'
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// -------------------------------------------------------------
 // Report Entries (Daily Production)
 // -------------------------------------------------------------
 export const reportEntries = pgTable(
@@ -211,6 +245,10 @@ export const reportEntries = pgTable(
     wip: integer("wip").notNull().default(0),
     downtimeMinutes: integer("downtime_minutes").notNull().default(0),
     issueNote: text("issue_note"),
+    downtimeReasonId: text("downtime_reason_id").references(
+      () => downtimeReasons.id,
+      { onDelete: "set null" }
+    ),
     updatedBy: text("updated_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -363,11 +401,19 @@ export const reportEntriesRelations = relations(reportEntries, ({ one, many }) =
     fields: [reportEntries.productId],
     references: [products.id],
   }),
+  downtimeReason: one(downtimeReasons, {
+    fields: [reportEntries.downtimeReasonId],
+    references: [downtimeReasons.id],
+  }),
   updater: one(users, {
     fields: [reportEntries.updatedBy],
     references: [users.id],
   }),
   stockLedgers: many(stockLedger),
+}));
+
+export const downtimeReasonsRelations = relations(downtimeReasons, ({ many }) => ({
+  reportEntries: many(reportEntries),
 }));
 
 export const qaInspectionsRelations = relations(qaInspections, ({ one }) => ({

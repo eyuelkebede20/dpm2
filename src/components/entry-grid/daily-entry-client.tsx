@@ -52,7 +52,23 @@ export interface GridRowData {
     wip: number;
     downtimeMinutes: number;
     issueNote: string | null;
+    downtimeReasonId?: string | null;
   };
+}
+
+export interface DowntimeReasonTemplate {
+  id: string;
+  code: string;
+  nameEn: string;
+  nameAm?: string | null;
+  category: string;
+}
+
+export interface SpecialDayInfo {
+  nameEn: string;
+  nameAm?: string | null;
+  isWorkingDay: boolean;
+  type: string;
 }
 
 interface DailyEntryClientProps {
@@ -63,6 +79,8 @@ interface DailyEntryClientProps {
   initialRows: GridRowData[];
   userRole: string;
   calendarSystem?: string;
+  specialDay?: SpecialDayInfo | null;
+  downtimeReasons?: DowntimeReasonTemplate[];
 }
 
 export function DailyEntryClient({
@@ -73,6 +91,8 @@ export function DailyEntryClient({
   initialRows,
   userRole,
   calendarSystem,
+  specialDay,
+  downtimeReasons = [],
 }: DailyEntryClientProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(initialDate);
@@ -207,6 +227,65 @@ export function DailyEntryClient({
     });
   };
 
+  const specialDaysList = useMemo(() => {
+    if (!specialDay) return undefined;
+    return [
+      {
+        date: selectedDate,
+        isWorkingDay: specialDay.isWorkingDay,
+        nameEn: specialDay.nameEn,
+        nameAm: specialDay.nameAm,
+      },
+    ];
+  }, [specialDay, selectedDate]);
+
+  const handleSelectDowntimeReason = (idx: number, reasonId: string) => {
+    if (!reasonId) {
+      setRows((prev) => {
+        const copy = [...prev];
+        copy[idx] = {
+          ...copy[idx],
+          entry: {
+            ...copy[idx].entry,
+            downtimeReasonId: null,
+          },
+        };
+        return copy;
+      });
+      return;
+    }
+
+    const reason = downtimeReasons.find((r) => r.id === reasonId);
+    if (!reason) return;
+
+    const prefix = `[${reason.code}: ${reason.nameEn}]`;
+    const currentNote = rows[idx]?.entry?.issueNote || "";
+
+    let newNote = "";
+    const existingPrefixRegex = /^\[[A-Za-z0-9-_]+:\s*[^\]]+\]\s*/;
+    if (existingPrefixRegex.test(currentNote)) {
+      const rest = currentNote.replace(existingPrefixRegex, "").trim();
+      newNote = rest ? `${prefix} ${rest}` : `${prefix} `;
+    } else if (currentNote.trim()) {
+      newNote = `${prefix} ${currentNote.trim()}`;
+    } else {
+      newNote = `${prefix} `;
+    }
+
+    setRows((prev) => {
+      const copy = [...prev];
+      copy[idx] = {
+        ...copy[idx],
+        entry: {
+          ...copy[idx].entry,
+          issueNote: newNote,
+          downtimeReasonId: reason.id,
+        },
+      };
+      return copy;
+    });
+  };
+
   const handleReset = () => {
     setRows(JSON.parse(initialSnapshot));
     setToast(null);
@@ -229,6 +308,7 @@ export function DailyEntryClient({
           wip: row.entry.wip,
           downtimeMinutes: row.entry.downtimeMinutes,
           issueNote: row.entry.issueNote || null,
+          downtimeReasonId: row.entry.downtimeReasonId || null,
         });
 
         if (res.success) {
@@ -273,7 +353,12 @@ export function DailyEntryClient({
     totalWIP += r.entry.wip || 0;
     totalDowntime += r.entry.downtimeMinutes || 0;
 
-    const targetRes = calculateDailyTarget(r.plan, selectedDate, workingDays);
+    const targetRes = calculateDailyTarget(
+      r.plan,
+      selectedDate,
+      workingDays,
+      specialDaysList
+    );
     if (targetRes.hasTarget) {
       totalTarget += targetRes.dailyTarget;
       hasAnyTarget = true;
@@ -436,6 +521,18 @@ export function DailyEntryClient({
         </div>
       </div>
 
+      {/* Special Off-Day Holiday Banner */}
+      {specialDay && !specialDay.isWorkingDay && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2.5 rounded-xl flex items-center justify-between text-sm shadow-sm mb-4">
+          <div className="flex items-center gap-2 font-semibold">
+            <span className="text-lg">🎉</span>
+            <span>Special Off-Day: {specialDay.nameEn} ({specialDay.nameAm})</span>
+            <span className="badge badge-sm badge-outline border-emerald-500 text-emerald-700 uppercase font-mono">{specialDay.type}</span>
+          </div>
+          <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2.5 py-1 rounded-full font-medium">Daily Target: 0</span>
+        </div>
+      )}
+
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6">
         <div className="card bg-white border border-slate-200/90 shadow-2xs p-4 rounded-2xl">
@@ -588,7 +685,8 @@ export function DailyEntryClient({
                     const targetRes = calculateDailyTarget(
                       row.plan,
                       selectedDate,
-                      workingDays
+                      workingDays,
+                      specialDaysList
                     );
                     const varianceRes = targetRes.hasTarget
                       ? calculateVariance(
@@ -734,16 +832,44 @@ export function DailyEntryClient({
                         </td>
 
                         {/* Issue Notes */}
-                        <td className="py-3 px-4">
-                          <input
-                            type="text"
-                            placeholder="Note stoppage or quality issue..."
-                            value={row.entry.issueNote || ""}
-                            onChange={(e) =>
-                              updateRowField(idx, "issueNote", e.target.value)
-                            }
-                            className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500"
-                          />
+                        <td className="py-3 px-4 min-w-[280px]">
+                          <div className="space-y-1.5">
+                            <input
+                              type="text"
+                              placeholder="Note stoppage or quality issue..."
+                              value={row.entry.issueNote || ""}
+                              onChange={(e) =>
+                                updateRowField(idx, "issueNote", e.target.value)
+                              }
+                              className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500"
+                            />
+                            {downtimeReasons && downtimeReasons.length > 0 && (
+                              <div className="flex flex-col gap-0.5">
+                                <label
+                                  htmlFor={`downtime-template-${idx}`}
+                                  className="text-[10px] font-bold text-slate-500 whitespace-nowrap"
+                                >
+                                  OM Reason Template (የመዘግየት ምክንያት):
+                                </label>
+                                <select
+                                  id={`downtime-template-${idx}`}
+                                  aria-label="OM Reason Template (የመዘግየት ምክንያት)"
+                                  value={row.entry.downtimeReasonId || ""}
+                                  onChange={(e) =>
+                                    handleSelectDowntimeReason(idx, e.target.value)
+                                  }
+                                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white"
+                                >
+                                  <option value="">Select reason template...</option>
+                                  {downtimeReasons.map((r) => (
+                                    <option key={r.id} value={r.id}>
+                                      {r.code}: {r.nameEn} ({r.nameAm})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -760,7 +886,8 @@ export function DailyEntryClient({
             const targetRes = calculateDailyTarget(
               row.plan,
               selectedDate,
-              workingDays
+              workingDays,
+              specialDaysList
             );
             const varianceRes = targetRes.hasTarget
               ? calculateVariance(
@@ -881,7 +1008,10 @@ export function DailyEntryClient({
                 </div>
 
                 {/* Issue Note */}
-                <div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-extrabold text-slate-600 uppercase block">
+                    Issue Note & Reason
+                  </label>
                   <input
                     type="text"
                     placeholder="Add issue note or stoppage remark..."
@@ -891,6 +1021,32 @@ export function DailyEntryClient({
                     }
                     className="input input-sm input-bordered w-full text-xs rounded-xl"
                   />
+                  {downtimeReasons && downtimeReasons.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor={`card-downtime-template-${idx}`}
+                        className="text-[10px] font-bold text-slate-500"
+                      >
+                        OM Reason Template (የመዘግየት ምክንያት):
+                      </label>
+                      <select
+                        id={`card-downtime-template-${idx}`}
+                        aria-label="OM Reason Template (የመዘግየት ምክንያት)"
+                        value={row.entry.downtimeReasonId || ""}
+                        onChange={(e) =>
+                          handleSelectDowntimeReason(idx, e.target.value)
+                        }
+                        className="select select-xs select-bordered w-full text-xs font-medium text-slate-700 rounded-lg bg-slate-50"
+                      >
+                        <option value="">Select reason template...</option>
+                        {downtimeReasons.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.code}: {r.nameEn} ({r.nameAm})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
             );

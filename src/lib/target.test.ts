@@ -4,6 +4,7 @@ import {
   countWorkingDays,
   calculateDailyTarget,
   calculateVariance,
+  SpecialDayInput,
 } from "./target";
 
 describe("target.ts - Daily target and variance calculations", () => {
@@ -24,6 +25,35 @@ describe("target.ts - Daily target and variance calculations", () => {
       // 2026-11-13 is Friday
       expect(isWorkingDay("2026-11-13", monToFri)).toBe(true);
     });
+
+    it("respects special non-working days (holidays on normally working days)", () => {
+      // 2026-03-02 is Monday (Adwa Victory Day)
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-03-02",
+          isWorkingDay: false,
+          nameEn: "Adwa Victory Day",
+          nameAm: "የዓድዋ ድል በዓል",
+        },
+      ];
+      expect(isWorkingDay("2026-03-02", undefined, specialDays)).toBe(false);
+      // 2026-03-03 is Tuesday (not a special day, normal working day)
+      expect(isWorkingDay("2026-03-03", undefined, specialDays)).toBe(true);
+    });
+
+    it("respects special working days (e.g. Sunday designated as working day)", () => {
+      // 2026-11-08 is Sunday (normally off)
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-11-08",
+          isWorkingDay: true,
+          nameEn: "Overtime Catch-up Sunday",
+        },
+      ];
+      expect(isWorkingDay("2026-11-08", undefined, specialDays)).toBe(true);
+      // 2026-11-15 is another Sunday (not special, stays off)
+      expect(isWorkingDay("2026-11-15", undefined, specialDays)).toBe(false);
+    });
   });
 
   describe("countWorkingDays", () => {
@@ -42,6 +72,37 @@ describe("target.ts - Daily target and variance calculations", () => {
       // Total working days = 30 - 5 = 25
       const count = countWorkingDays("2026-11-01", "2026-11-30");
       expect(count).toBe(25);
+    });
+
+    it("excludes special holidays from working days count", () => {
+      // Nov 9, 2026 to Nov 15, 2026: normally 6 working days
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-11-10", // Tuesday off
+          isWorkingDay: false,
+          nameEn: "Special Holiday",
+        },
+        {
+          date: "2026-11-12", // Thursday off
+          isWorkingDay: false,
+          nameEn: "Special Holiday 2",
+        },
+      ];
+      const count = countWorkingDays("2026-11-09", "2026-11-15", undefined, specialDays);
+      expect(count).toBe(4); // 6 - 2 = 4
+    });
+
+    it("includes special working days on weekend in working days count", () => {
+      // Nov 9, 2026 to Nov 15, 2026: normally 6 working days
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-11-15", // Sunday worked
+          isWorkingDay: true,
+          nameEn: "Working Sunday",
+        },
+      ];
+      const count = countWorkingDays("2026-11-09", "2026-11-15", undefined, specialDays);
+      expect(count).toBe(7); // 6 + 1 = 7
     });
   });
 
@@ -64,6 +125,80 @@ describe("target.ts - Daily target and variance calculations", () => {
       const res = calculateDailyTarget(novPlan, "2026-11-08"); // Sunday
       expect(res.hasTarget).toBe(false);
       expect(res.reason).toBe("non_working_day");
+    });
+
+    it("returns no target when date is a special holiday (e.g. Adwa Victory Day on Tuesday)", () => {
+      const marchPlan = {
+        startDate: "2026-03-01",
+        endDate: "2026-03-31",
+        plannedQty: 2600,
+      };
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-03-02", // Monday/Tuesday holiday
+          isWorkingDay: false,
+          nameEn: "Adwa Victory Day",
+          nameAm: "የዓድዋ ድል በዓል",
+        },
+      ];
+
+      const res = calculateDailyTarget(marchPlan, "2026-03-02", undefined, specialDays);
+      expect(res.hasTarget).toBe(false);
+      expect(res.dailyTarget).toBe(0);
+      expect(res.displayTarget).toBe(0);
+      expect(res.isWorkingDay).toBe(false);
+      expect(res.totalWorkingDays).toBe(0);
+      expect(res.reason).toBe("special_non_working_day");
+      expect(res.holidayName).toBe("Adwa Victory Day");
+    });
+
+    it("correctly distributes planned quantity across actual working days excluding special off-days", () => {
+      // Nov 2026 normally has 25 working days.
+      // With 1 special off-day on Nov 10, total working days = 24.
+      // plannedQty = 2400 -> daily target = 2400 / 24 = 100.
+      const plan = {
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+        plannedQty: 2400,
+      };
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-11-10",
+          isWorkingDay: false,
+          nameEn: "Special Off Day",
+        },
+      ];
+
+      const res = calculateDailyTarget(plan, "2026-11-09", undefined, specialDays); // Monday
+      expect(res.hasTarget).toBe(true);
+      expect(res.isWorkingDay).toBe(true);
+      expect(res.totalWorkingDays).toBe(24);
+      expect(res.dailyTarget).toBe(100);
+      expect(res.displayTarget).toBe(100);
+    });
+
+    it("allows target on a weekend day if designated as a special working day", () => {
+      const specialDays: SpecialDayInput[] = [
+        {
+          date: "2026-11-08", // Sunday
+          isWorkingDay: true,
+          nameEn: "Special Shift Sunday",
+        },
+      ];
+
+      // Nov 2026 normally 25 working days + 1 Sunday = 26 working days
+      const plan = {
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+        plannedQty: 2600,
+      };
+
+      const res = calculateDailyTarget(plan, "2026-11-08", undefined, specialDays);
+      expect(res.hasTarget).toBe(true);
+      expect(res.isWorkingDay).toBe(true);
+      expect(res.totalWorkingDays).toBe(26);
+      expect(res.dailyTarget).toBe(100);
+      expect(res.displayTarget).toBe(100);
     });
 
     it("returns no target when date is outside plan period", () => {

@@ -25,6 +25,7 @@ const saveDailyEntrySchema = z
     wip: z.number().int().min(0, "WIP must be non-negative").default(0),
     downtimeMinutes: z.number().int().min(0, "Downtime must be non-negative").default(0),
     issueNote: z.string().max(500, "Issue note too long").optional().nullable(),
+    downtimeReasonId: z.string().optional().nullable(),
   })
   .strict();
 
@@ -101,6 +102,7 @@ export async function saveDailyReportEntryAction(rawInput: unknown) {
           wip: data.wip,
           downtimeMinutes: data.downtimeMinutes,
           issueNote: data.issueNote || null,
+          downtimeReasonId: data.downtimeReasonId || null,
           updatedBy: user.id,
           updatedAt: new Date(),
         })
@@ -114,6 +116,7 @@ export async function saveDailyReportEntryAction(rawInput: unknown) {
             wip: data.wip,
             downtimeMinutes: data.downtimeMinutes,
             issueNote: data.issueNote || null,
+            downtimeReasonId: data.downtimeReasonId || null,
             updatedBy: user.id,
             updatedAt: new Date(),
           },
