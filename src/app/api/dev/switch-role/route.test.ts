@@ -30,10 +30,14 @@ vi.mock("@/db", () => {
     db: {
       select: vi.fn(() => ({
         from: vi.fn(() => ({
-          where: vi.fn((cond: any) => ({
-            orderBy: vi.fn(() => Promise.resolve(mockUsersInDb)),
-            limit: vi.fn(() => Promise.resolve(mockUsersInDb.slice(0, 1))),
-          })),
+          where: vi.fn((cond: any) => {
+            const queryObj: any = {
+              orderBy: vi.fn(() => queryObj),
+              limit: vi.fn(() => Promise.resolve(mockUsersInDb.slice(0, 1))),
+              then: (resolve: any, reject?: any) => Promise.resolve(mockUsersInDb).then(resolve, reject),
+            };
+            return queryObj;
+          }),
           orderBy: vi.fn(() => Promise.resolve(mockUsersInDb)),
         })),
       })),

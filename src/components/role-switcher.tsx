@@ -235,6 +235,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
 
             <button
               type="button"
+              aria-label="Close"
               onClick={() => setIsOpen(false)}
               className="btn btn-ghost btn-xs btn-circle text-slate-400 hover:text-slate-700"
             >

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useTransition, useMemo } from "react";
+import React, { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays, subDays, parseISO } from "date-fns";
 import {
@@ -163,19 +163,21 @@ export function DailyEntryClient({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
+  const handleSaveAllRef = useRef<() => void>(() => {});
+
   // Global Ctrl+S / Cmd+S shortcut to save
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         if (isDirty && !isPending) {
-          handleSaveAll();
+          handleSaveAllRef.current();
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isDirty, isPending, rows, selectedDate]);
+  }, [isDirty, isPending]);
 
   const handleDateChange = (newDateStr: string) => {
     if (isDirty) {
@@ -251,6 +253,7 @@ export function DailyEntryClient({
       setTimeout(() => setToast(null), 4000);
     });
   };
+  handleSaveAllRef.current = handleSaveAll;
 
   // Aggregated totals
   let totalFG = 0;

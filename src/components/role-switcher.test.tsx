@@ -3,30 +3,42 @@ import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { RoleSwitcher } from "./role-switcher";
-import { authClient } from "@/lib/auth-client";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
     refresh: vi.fn(),
   }),
-}));
-
-vi.mock("@/lib/auth-client", () => ({
-  authClient: {
-    signOut: vi.fn().mockResolvedValue({ success: true }),
-    signIn: {
-      email: vi.fn().mockResolvedValue({ data: { user: { id: "1" } } }),
-    },
-  },
+  usePathname: () => "/admin",
 }));
 
 describe("Button Interaction Tests - RoleSwitcher", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true }),
+    globalThis.fetch = vi.fn().mockImplementation((url: string, opts?: any) => {
+      if (opts?.method === "POST") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, redirectTo: "/om" }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            enabled: true,
+            currentUser: { role: "sys_admin", email: "admin@dpm.local" },
+            users: [
+              {
+                id: "om-1",
+                name: "Solomon Tadesse",
+                email: "om@dpm.local",
+                role: "om",
+                isActive: true,
+              },
+            ],
+          }),
+      });
     });
   });
 
@@ -38,29 +50,29 @@ describe("Button Interaction Tests - RoleSwitcher", () => {
     render(<RoleSwitcher currentRole="sys_admin" />);
 
     // Drawer is closed initially
-    expect(screen.queryByText("Dev Quick Role Switcher")).toBeNull();
+    expect(screen.queryByText("Developer Role Switcher")).toBeNull();
 
     // Click floating pill button to open
-    const toggleBtn = screen.getByTitle("Switch Active User Role");
+    const toggleBtn = screen.getByTitle("Switch Active Developer Role");
     fireEvent.click(toggleBtn);
 
-    expect(screen.getByText("Dev Quick Role Switcher")).toBeDefined();
+    expect(screen.getByText("Developer Role Switcher")).toBeDefined();
 
     // Click Close button inside drawer
     const closeBtn = screen.getByRole("button", { name: "Close" });
     fireEvent.click(closeBtn);
 
-    expect(screen.queryByText("Dev Quick Role Switcher")).toBeNull();
+    expect(screen.queryByText("Developer Role Switcher")).toBeNull();
   });
 
-  it("handles clicking a role button to switch active user role", async () => {
+  it("handles clicking a role button to switch active user role via /api/dev/switch-role", async () => {
     delete (window as any).location;
     (window as any).location = { href: "" };
 
     render(<RoleSwitcher currentRole="sys_admin" />);
 
     // Open drawer
-    const toggleBtn = screen.getByTitle("Switch Active User Role");
+    const toggleBtn = screen.getByTitle("Switch Active Developer Role");
     fireEvent.click(toggleBtn);
 
     // Click Operation Mgr role button
@@ -68,12 +80,14 @@ describe("Button Interaction Tests - RoleSwitcher", () => {
     fireEvent.click(omRoleBtn);
 
     await waitFor(() => {
-      expect(authClient.signOut).toHaveBeenCalled();
-      expect(authClient.signIn.email).toHaveBeenCalledWith({
-        email: "om@dpm.local",
-        password: "AdminPassword123!",
-      });
-      expect(window.location.href).toContain("/dashboard");
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/api/dev/switch-role",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ role: "om", targetRoute: "/om" }),
+        })
+      );
+      expect(window.location.href).toContain("/om");
     });
   });
 });

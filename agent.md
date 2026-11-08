@@ -245,7 +245,7 @@ Include: what and why (link the task), screenshots/recordings for UI changes, ho
 
 Work on **one item at a time**, in order. Do not start the next item until the current one meets Section 10.
 
-### [ ] Item 01 — `feat/core-design-and-error-foundation`
+### [x] Item 01 — `feat/core-design-and-error-foundation`
 
 - Audit dependencies; log selections in `LEARNINGS.md` (`zod`, `lucide-react`, `sonner`, `vitest`, `@testing-library/react`, `@testing-library/user-event`, and any alternatives considered).
 - Create `DESIGN.md`: color tokens (background ladder, text hierarchy, accent, borders), type scale, spacing scale, radii, shadow elevations, and motion constants (≤ 250ms with defined easing curves).
