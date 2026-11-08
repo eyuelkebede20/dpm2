@@ -477,21 +477,21 @@ export function DashboardView({
                 Today&apos;s Finished Output
               </span>
               <div className="text-3xl font-black text-slate-900 mt-2 font-mono tabular-nums">
-                {fmData.todayActual.toLocaleString()}{" "}
+                {(fmData.todayActual ?? 0).toLocaleString()}{" "}
                 <span className="text-xs font-normal text-slate-400">pcs</span>
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <span
                   className={`badge badge-sm font-mono font-black ${
-                    fmData.todayVariance >= 0
+                    (fmData.todayVariance ?? 0) >= 0
                       ? "bg-emerald-100 text-emerald-800 border-emerald-200"
                       : "bg-rose-100 text-rose-800 border-rose-200"
                   }`}
                 >
-                  {fmData.todayVariance >= 0
-                    ? `+${fmData.todayVariance}`
-                    : `${fmData.todayVariance}`}{" "}
-                  vs Target ({fmData.todayTarget})
+                  {(fmData.todayVariance ?? 0) >= 0
+                    ? `+${fmData.todayVariance ?? 0}`
+                    : `${fmData.todayVariance ?? 0}`}{" "}
+                  vs Target ({fmData.todayTarget ?? 0})
                 </span>
               </div>
             </div>
@@ -501,11 +501,11 @@ export function DashboardView({
                 Month-to-Date Output
               </span>
               <div className="text-3xl font-black text-slate-900 mt-2 font-mono tabular-nums">
-                {fmData.mtdActual.toLocaleString()}{" "}
+                {(fmData.mtdActual ?? 0).toLocaleString()}{" "}
                 <span className="text-xs font-normal text-slate-400">pcs</span>
               </div>
               <p className="text-xs text-slate-400 mt-2 font-mono font-medium">
-                Target: {fmData.mtdTarget.toLocaleString()} pcs
+                Target: {(fmData.mtdTarget ?? 0).toLocaleString()} pcs
               </p>
             </div>
 
@@ -514,12 +514,12 @@ export function DashboardView({
                 Today&apos;s Losses (Rew / Rej / Scrap)
               </span>
               <div className="text-2xl font-black text-slate-900 mt-2 font-mono tabular-nums">
-                <span className="text-amber-600">{fmData.todayRework}</span> /{" "}
-                <span className="text-rose-600">{fmData.todayReject}</span> /{" "}
-                <span className="text-slate-500">{fmData.todayScrap}</span>
+                <span className="text-amber-600">{fmData.todayRework ?? 0}</span> /{" "}
+                <span className="text-rose-600">{fmData.todayReject ?? 0}</span> /{" "}
+                <span className="text-slate-500">{fmData.todayScrap ?? 0}</span>
               </div>
               <p className="text-xs text-slate-400 mt-2 font-mono">
-                MTD: {fmData.mtdRework} rew, {fmData.mtdReject} rej
+                MTD: {fmData.mtdRework ?? 0} rew, {fmData.mtdReject ?? 0} rej
               </p>
             </div>
 
@@ -528,7 +528,7 @@ export function DashboardView({
                 Current Work-in-Progress (WIP)
               </span>
               <div className="text-3xl font-black text-indigo-600 mt-2 font-mono tabular-nums">
-                {fmData.todayWip.toLocaleString()}{" "}
+                {(fmData.todayWip ?? 0).toLocaleString()}{" "}
                 <span className="text-xs font-normal text-slate-400">pcs</span>
               </div>
               <p className="text-xs text-slate-400 mt-2 font-medium">
@@ -557,7 +557,7 @@ export function DashboardView({
             </div>
 
             <div className="mt-4 overflow-x-auto">
-              {fmData.lineBreakdowns.length === 0 ? (
+              {(!fmData.lineBreakdowns || fmData.lineBreakdowns.length === 0) ? (
                 <div className="text-center py-10 text-slate-400 text-sm">
                   No production numbers submitted for today yet.{" "}
                   <Link href="/entry" className="text-indigo-600 font-bold underline">
@@ -579,7 +579,7 @@ export function DashboardView({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {fmData.lineBreakdowns.map((row: any) => (
+                    {(fmData.lineBreakdowns || []).map((row: any) => (
                       <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="font-bold text-slate-900">{row.lineName}</td>
                         <td>

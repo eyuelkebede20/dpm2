@@ -5,6 +5,8 @@ import { Navbar } from "@/components/navbar";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { RoleSwitcher } from "@/components/role-switcher";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "DPM - Daily Product Manager",
   description: "Simple, clean factory production tracking and quality management",

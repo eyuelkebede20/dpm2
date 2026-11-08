@@ -58,7 +58,7 @@ export interface GridRowData {
 interface DailyEntryClientProps {
   initialDate: string;
   factoryId: string;
-  factoryName: string;
+  factoryName?: string;
   workingDays: number[];
   initialRows: GridRowData[];
   userRole: string;
@@ -68,7 +68,7 @@ interface DailyEntryClientProps {
 export function DailyEntryClient({
   initialDate,
   factoryId,
-  factoryName,
+  factoryName = "Plant",
   workingDays,
   initialRows,
   userRole,
@@ -946,7 +946,7 @@ export function DailyEntryClient({
             <span className="text-slate-300 hidden sm:inline">•</span>
             <span className="text-xs sm:text-sm font-semibold text-slate-700">
               Total FG:{" "}
-              <b className="text-indigo-600 font-mono font-black tabular-nums">
+              <b className="text-emerald-700 font-mono font-black tabular-nums">
                 {totalFG.toLocaleString()}
               </b>
             </span>
@@ -976,7 +976,7 @@ export function DailyEntryClient({
               disabled={isPending || !isDirty}
               className={`btn btn-sm sm:btn-md px-5 sm:px-7 rounded-2xl font-black shadow-md transition-all flex items-center gap-2 ${
                 isDirty
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white border-none active:scale-95"
+                  ? "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border-none shadow-emerald-200 active:scale-95 cursor-pointer"
                   : "btn-disabled opacity-40 bg-slate-200 text-slate-400 border-none"
               }`}
             >
@@ -987,9 +987,9 @@ export function DailyEntryClient({
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Save className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   <span>Save Daily Numbers</span>
-                  <span className="hidden lg:inline-flex items-center text-[10px] bg-indigo-700/60 px-1.5 py-0.5 rounded font-mono text-indigo-100">
+                  <span className="hidden lg:inline-flex items-center text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded font-mono text-emerald-100 font-bold">
                     Ctrl+S
                   </span>
                 </>

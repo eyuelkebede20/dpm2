@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/authz";
-
-export const dynamic = "force-dynamic";
 import {
   getOMFactories,
   getOMUsers,
   getQAProductMatrixData,
 } from "@/actions/om-actions";
 import { OMClient } from "./om-client";
+
+export const dynamic = "force-dynamic";
 
 export default async function OMPage() {
   const user = await requireUser();

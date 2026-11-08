@@ -26,62 +26,62 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 ## 2. Authentication & Account Screens
 
 ### `/login` (Login Screen)
-- [ ] Email input: focus, validation, keyboard entry
-- [ ] Password input: show/hide toggle, min-length validation
-- [ ] Sign In button: loading spinner during in-flight request, double-click prevention
-- [ ] Error alert: surfaces clear user message on invalid credentials
-- [ ] Rate-limit countdown lock: disables submit button during lockout window
-- [ ] Auto-redirects if already authenticated
+- [x] Email input: focus, validation, keyboard entry (`src/app/login/login-client.test.tsx`)
+- [x] Password input: show/hide toggle, min-length validation (`src/app/login/login-client.test.tsx`)
+- [x] Sign In button: loading spinner during in-flight request, double-click prevention (`src/app/login/login-client.test.tsx`)
+- [x] Error alert: surfaces clear user message on invalid credentials (`src/app/login/login-client.test.tsx`)
+- [x] Rate-limit countdown lock: disables submit button during lockout window (`src/app/login/login-client.test.tsx`)
+- [x] Auto-redirects if already authenticated (`src/actions/auth-actions.test.ts`)
 
 ### `/change-password` (Forced Password Change)
-- [ ] New password & confirm password validation
-- [ ] Copy temporary password feedback
-- [ ] Submit button: loading lockout and password mismatch feedback
-- [ ] Success state redirects to dashboard
+- [x] New password & confirm password validation (`src/app/change-password/change-password-client.test.tsx`)
+- [x] Copy temporary password feedback (`src/app/change-password/change-password-client.test.tsx`)
+- [x] Submit button: loading lockout and password mismatch feedback (`src/app/change-password/change-password-client.test.tsx`)
+- [x] Success state redirects to dashboard (`src/actions/auth-actions.test.ts`)
 
 ---
 
 ## 3. Factory Management Screens
 
 ### `/entry` (Fast Daily Number Entry Grid)
-- [ ] Date switcher: previous day, next day, today, Ethiopian/Gregorian toggle
-- [ ] Numeric inputs: `inputmode="numeric"`, auto-select on focus, Enter/Tab key navigation
-- [ ] Stepper buttons: `−` and `+` buttons decrement/increment by 1
-- [ ] Quick-add pills: `+1`, `+5`, `+10` add quantity instantly
-- [ ] Live variance pill: calculates `Finished Good - Daily Target` dynamically
-- [ ] Save Report sticky bar: loading lockout, success toast, unsaved navigation guard
+- [x] Date switcher: previous day, next day, today, Ethiopian/Gregorian toggle (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Numeric inputs: `inputmode="numeric"`, auto-select on focus, Enter/Tab key navigation (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Stepper buttons: `−` and `+` buttons decrement/increment by 1 (`src/components/ui/stepper-input.test.tsx`)
+- [x] Quick-add pills: `+1`, `+5`, `+10` add quantity instantly (`src/components/ui/stepper-input.test.tsx`)
+- [x] Live variance pill: calculates `Finished Good - Daily Target` dynamically (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Save Report sticky bar: loading lockout, success toast, unsaved navigation guard (`src/components/entry-grid/daily-entry-client.test.tsx`)
 
 ### `/calendar` (Month Production Calendar View)
-- [ ] Month navigation: Prev Month, Next Month, Today
-- [ ] Calendar day cells: displays total output and variance badge
-- [ ] Day cell click: opens side-drawer with line breakdown
-- [ ] Drawer "Edit Report" button: deep-links to `/entry?date=...`
+- [x] Month navigation: Prev Month, Next Month, Today (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Calendar day cells: displays total output and variance badge (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Day cell click: opens side-drawer with line breakdown (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Drawer "Edit Report" button: deep-links to `/entry?date=...` (`src/components/calendar/calendar-client.test.tsx`)
 
 ---
 
 ## 4. Role Administration & Management Portals
 
 ### `/admin` (System Administrator Portal)
-- [ ] Navigation tabs: switch between "Role Assignment & Users" and "Industry Profile"
-- [ ] Role Assignment Table: inline `<select>` updates user role with live feedback
-- [ ] Role Filter Pills: filters user list by `sys_admin`, `om`, `fm`, `qa`
-- [ ] Search input: live filter by user name or email
-- [ ] "Provision User" button: opens modal with role selector
-- [ ] User Active toggle: activates/deactivates user accounts
-- [ ] Dev Impersonation toolbar: switches session into candidate OM/FM
+- [x] Navigation tabs: switch between "Role Assignment & Users" and "Industry Profile" (`src/app/admin/admin-client.test.tsx`)
+- [x] Role Assignment Table: inline `<select>` updates user role with live feedback (`src/app/admin/admin-client.test.tsx`)
+- [x] Role Filter Pills: filters user list by `sys_admin`, `om`, `fm`, `qa` (`src/app/admin/admin-client.test.tsx`)
+- [x] Search input: live filter by user name or email (`src/app/admin/admin-client.test.tsx`)
+- [x] "Provision User" button: opens modal with role selector (`src/app/admin/admin-client.test.tsx`)
+- [x] User Active toggle: activates/deactivates user accounts (`src/app/admin/admin-client.test.tsx`)
+- [x] Dev Impersonation toolbar: switches session into candidate OM/FM (`src/app/admin/admin-client.test.tsx`)
 
 ### `/om` (Operation Manager Portal)
-- [ ] Tabs: "Factories", "Factory Personnel & Role Assignment", "QA Matrix"
-- [ ] Create Factory modal: validation, submit lockout, factory card addition
-- [ ] Factory Personnel Table: inline role dropdown switches role between `fm` and `qa`
-- [ ] Provision Team Member modal: validates plant assignment and temporary password
-- [ ] QA Matrix checkboxes: toggles assignment with pending spinner
+- [x] Tabs: "Factories", "Factory Personnel & Role Assignment", "QA Matrix" (`src/app/om/om-client.test.tsx`)
+- [x] Create Factory modal: validation, submit lockout, factory card addition (`src/app/om/om-client.test.tsx`)
+- [x] Factory Personnel Table: inline role dropdown switches role between `fm` and `qa` (`src/app/om/om-client.test.tsx`)
+- [x] Provision Team Member modal: validates plant assignment and temporary password (`src/app/om/om-client.test.tsx`)
+- [x] QA Matrix checkboxes: toggles assignment with pending spinner (`src/app/om/om-client.test.tsx`)
 
 ---
 
 ## 5. UI Stress-Testing Matrix (Worst-Case Edge Payloads)
 
-- [ ] 120-character unbroken product names and emails
-- [ ] Zero, negative, and extreme integer values (e.g. 1,000,000)
-- [ ] Empty database collections (zero factories, zero lines, zero users)
-- [ ] Offline / simulated network failure recovery
+- [x] 120-character unbroken product names and emails (`src/test/ui-stress-harness.test.tsx`)
+- [x] Zero, negative, and extreme integer values (e.g. 1,000,000) (`src/test/ui-stress-harness.test.tsx`)
+- [x] Empty database collections (zero factories, zero lines, zero users) (`src/test/ui-stress-harness.test.tsx`)
+- [x] Offline / simulated network failure recovery (`src/lib/api-client.test.ts`)

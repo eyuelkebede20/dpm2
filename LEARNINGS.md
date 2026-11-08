@@ -87,3 +87,42 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 
 - Replace raw `fetch` in `impersonation-banner.tsx` and `role-switcher.tsx` with `apiClient`.
 - Add offline indicator banner when `AppError.isOffline()` is detected in Item 03.
+
+---
+
+## 2026-11-08 — UI Stress-Test Harness & Frictionless Control Verification (Item 03)
+
+**Goal:** Establish systematic break-ui stress-test harness and complete every-control interactive verification checklist across all screens.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **@testing-library/react** | Yes (v16.3) | MIT | Dev | **Selected** | Already configured; dispatches synthetic DOM interactions with high-fidelity accessibility assertions (`getByRole`, `aria-busy`). |
+| **Playwright** | Yes (v1.50) | Apache-2.0 | Heavy | Complementary | Ideal for full-browser end-to-end journeys; happy-dom unit/component harness selected for fast automated CI execution. |
+
+### Reference files studied
+
+- `agent.md` Sections 4.3 (break-ui), 4.4 (Round of Subtraction), 7.2 (Test Every Button).
+- `docs/qa/ui-checklist.md` — Audited every interactive control across all 9 application routes.
+
+### Edge cases & gotchas discovered
+
+- 120-character unbroken strings without `truncate` or `break-words` push table columns off-screen and break responsive mobile containers.
+- Inputs receiving negative or out-of-range values can produce nonsensical variances unless clamped via `Math.max(0, val)`.
+- Rapid button spamming requires in-flight locks and debounce protection (350ms window) to prevent duplicate transactions.
+- Zero-record states (empty factories, empty lines, empty plans) must display actionable guidance cards rather than blank space.
+
+### Decision
+
+1. Implement `src/test/ui-stress-harness.test.tsx` with rigorous edge-payload test suites:
+   - 120-character unbroken names and emails.
+   - Extreme numbers (0, negative inputs, 1,000,000 units).
+   - Empty collections for all roles.
+   - Rapid double-click protection on primary buttons.
+   - Amharic unicode localization rendering.
+2. Complete all items in `docs/qa/ui-checklist.md` with verified automated test coverage.
+
+### Follow-ups
+
+- Wire CI quality gates in Item 04 to execute lint, typecheck, tests with coverage, and build.

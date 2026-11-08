@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/authz";
-
-export const dynamic = "force-dynamic";
 import { getCurrentUserContext } from "@/actions/data";
 import {
   getSysAdminDashboardData,
@@ -11,6 +9,8 @@ import {
 } from "@/actions/dashboard-actions";
 import { getFMFactory } from "@/actions/fm-actions";
 import { DashboardView } from "./dashboard-view";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await requireUser();

@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/authz";
-
-export const dynamic = "force-dynamic";
 import {
   getIndustryProfile,
   getOperationManagers,
@@ -9,6 +7,8 @@ import {
   getImpersonationCandidates,
 } from "@/actions/admin-actions";
 import { AdminClient } from "./admin-client";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const user = await requireUser();

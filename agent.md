@@ -261,7 +261,7 @@ Work on **one item at a time**, in order. Do not start the next item until the c
 - Evaluate `TanStack Query` (or equivalent) before building custom caching; record the decision.
 - Tests simulating network timeouts, 500 responses, 4xx responses, malformed JSON, schema mismatch, aborted requests, retry exhaustion, and offline.
 
-### [ ] Item 03 — `feat/ui-stress-test-harness`
+### [x] Item 03 — `feat/ui-stress-test-harness`
 
 - Apply break-ui stress tests and Round of Subtraction across core views.
 - Add automated tests for every interactive control and edge-case payload (long strings, empty data, `0`/negative values, slow network, rapid double-click).

@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/authz";
-
-export const dynamic = "force-dynamic";
 import {
   getFMFactory,
   getLines,
@@ -10,6 +8,8 @@ import {
   getPlans,
 } from "@/actions/fm-actions";
 import { FMClient } from "./fm-client";
+
+export const dynamic = "force-dynamic";
 
 export default async function FMPage() {
   const user = await requireUser();
