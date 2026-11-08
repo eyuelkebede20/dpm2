@@ -14,7 +14,9 @@ export type ErrorCode =
   | "NETWORK_ERROR"
   | "TIMEOUT"
   | "DATABASE_ERROR"
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "PARSE_ERROR"
+  | "ABORTED";
 
 export interface AppErrorOptions {
   code: ErrorCode;
@@ -24,6 +26,7 @@ export interface AppErrorOptions {
   retryable?: boolean;
   details?: unknown;
   cause?: unknown;
+  metadata?: Record<string, unknown>;
 }
 
 const DEFAULT_USER_MESSAGES: Record<ErrorCode, string> = {
@@ -38,6 +41,8 @@ const DEFAULT_USER_MESSAGES: Record<ErrorCode, string> = {
   TIMEOUT: "The server took too long to respond. Please try again.",
   DATABASE_ERROR: "A database error occurred. Your changes were safely rolled back.",
   INTERNAL_ERROR: "An unexpected error occurred. Please try again or contact support.",
+  PARSE_ERROR: "Failed to parse data from the server. Please try again.",
+  ABORTED: "Operation cancelled.",
 };
 
 const DEFAULT_STATUS_CODES: Record<ErrorCode, number> = {
@@ -52,6 +57,8 @@ const DEFAULT_STATUS_CODES: Record<ErrorCode, number> = {
   TIMEOUT: 504,
   DATABASE_ERROR: 500,
   INTERNAL_ERROR: 500,
+  PARSE_ERROR: 502,
+  ABORTED: 499,
 };
 
 export class AppError extends Error {
@@ -60,6 +67,7 @@ export class AppError extends Error {
   readonly statusCode: number;
   readonly retryable: boolean;
   readonly details?: unknown;
+  readonly metadata?: Record<string, unknown>;
   readonly timestamp: string;
 
   constructor(options: AppErrorOptions) {
@@ -69,8 +77,9 @@ export class AppError extends Error {
     this.statusCode = options.statusCode || DEFAULT_STATUS_CODES[options.code] || 500;
     this.userMessage = options.userMessage || DEFAULT_USER_MESSAGES[options.code];
     this.retryable = options.retryable ?? (this.statusCode >= 500 || this.code === "NETWORK_ERROR" || this.code === "TIMEOUT");
-    this.details = options.details;
+    this.details = options.details ?? options.metadata;
     this.cause = options.cause;
+    this.metadata = options.metadata || (typeof options.details === "object" && options.details !== null ? (options.details as Record<string, unknown>) : undefined);
     this.timestamp = new Date().toISOString();
 
     // Maintain V8 stack trace
@@ -143,22 +152,47 @@ export class AppError extends Error {
     });
   }
 
-  static network(message = "Network connection failed", retryable = true, cause?: unknown): AppError {
+  static network(
+    message = "Network connection failed",
+    retryableOrOptions: boolean | Partial<AppErrorOptions> = true,
+    cause?: unknown
+  ): AppError {
+    if (typeof retryableOrOptions === "object" && retryableOrOptions !== null) {
+      return new AppError({
+        code: "NETWORK_ERROR",
+        message,
+        statusCode: 503,
+        retryable: true,
+        ...retryableOrOptions,
+      });
+    }
     return new AppError({
       code: "NETWORK_ERROR",
       message,
       statusCode: 503,
-      retryable,
+      retryable: retryableOrOptions,
       cause,
     });
   }
 
-  static timeout(message = "Request timed out", retryable = true): AppError {
+  static timeout(
+    message = "Request timed out",
+    retryableOrOptions: boolean | Partial<AppErrorOptions> = true
+  ): AppError {
+    if (typeof retryableOrOptions === "object" && retryableOrOptions !== null) {
+      return new AppError({
+        code: "TIMEOUT",
+        message,
+        statusCode: 504,
+        retryable: true,
+        ...retryableOrOptions,
+      });
+    }
     return new AppError({
       code: "TIMEOUT",
       message,
       statusCode: 504,
-      retryable,
+      retryable: retryableOrOptions,
     });
   }
 
@@ -180,6 +214,66 @@ export class AppError extends Error {
       retryable: true,
       cause,
     });
+  }
+
+  static rateLimited(message = "Too many attempts, rate limit exceeded", userMessage?: string): AppError {
+    return new AppError({
+      code: "RATE_LIMITED",
+      message,
+      userMessage,
+      statusCode: 429,
+      retryable: true,
+    });
+  }
+
+  static parse(message = "Failed to parse data response", details?: unknown): AppError {
+    return new AppError({
+      code: "PARSE_ERROR",
+      message,
+      statusCode: 502,
+      retryable: true,
+      details,
+    });
+  }
+
+  static fromCode(code: ErrorCode, message: string, options?: Partial<AppErrorOptions>): AppError {
+    return new AppError({
+      code,
+      message,
+      statusCode: options?.statusCode ?? DEFAULT_STATUS_CODES[code],
+      userMessage: options?.userMessage ?? DEFAULT_USER_MESSAGES[code],
+      retryable: options?.retryable,
+      details: options?.details,
+      cause: options?.cause,
+    });
+  }
+
+  static fromHttpStatus(status: number, details?: unknown): AppError {
+    switch (status) {
+      case 400:
+        return AppError.badRequest("Bad Request", undefined, details);
+      case 401:
+        return AppError.unauthorized("Authentication required", undefined);
+      case 403:
+        return AppError.forbidden("Access denied", undefined);
+      case 404:
+        return AppError.notFound("Resource");
+      case 408:
+        return AppError.timeout("Request timeout", true);
+      case 409:
+        return AppError.conflict("Resource conflict", undefined);
+      case 422:
+        return AppError.validation("Validation failure", details);
+      case 429:
+        return AppError.rateLimited("Rate limit exceeded", undefined);
+      case 502:
+      case 503:
+        return AppError.network(`Server error (${status})`, true);
+      case 504:
+        return AppError.timeout("Gateway timeout", true);
+      default:
+        return AppError.internal(`HTTP ${status} server error`);
+    }
   }
 
   /**

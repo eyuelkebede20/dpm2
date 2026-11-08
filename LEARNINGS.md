@@ -45,3 +45,45 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 
 - Wire `<Button />` and `<ErrorBoundary />` across existing factory and admin screens in Item 03.
 - Connect API fetch wrappers with `AppError` in Item 02.
+
+---
+
+## 2026-11-08 — Resilient API & State Layer (Item 02)
+
+**Goal:** Build a robust, typed API client and query hook with AbortController, request timeouts, exponential backoff with jitter for idempotent operations, Zod schema validation, and complete AppError translation.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **TanStack Query (v5)** | Yes (v5.66) | MIT | ~13kB | Rejected | Heavy for this architecture; DPM relies on Next.js 15 Server Components and Server Actions for 95% of data fetching and mutations. Adding QueryClientProvider and hydration creates unnecessary overhead. |
+| **SWR (v2)** | Yes (v2.3) | MIT | ~4.5kB | Rejected | Still requires global context and configuration; does not natively integrate with our central `AppError` taxonomy or Zod schemas out of the box. |
+| **Custom `apiClient` + `useApiQuery`** | Maintained internally | MIT | 0kB ext | **Selected** | Zero external dependencies; leverages native `fetch` + `AbortController`; strict TypeScript generic inference; native Zod validation; automated exponential backoff with full jitter on idempotent calls (GET/PUT/DELETE); 100% integrated with `AppError`. |
+| **ky** | Yes (v1.7) | MIT | ~3.5kB | Evaluated | Good fetch wrapper, but custom client with our exact error contracts and backoff jitter formula provides tighter coupling to `AppError` without extra runtime dependencies. |
+
+### Reference files studied
+
+- `src/lib/errors.ts` — Leveraged typed error constructors (`AppError.network`, `AppError.timeout`, `AppError.validation`, `AppError.fromHttpStatus`).
+- `agent.md` Section 6 — Implemented the 4 required async states (loading, success, empty, error), cancellation on unmount, and backoff with jitter for idempotent calls only.
+
+### Edge cases & gotchas discovered
+
+- Retrying non-idempotent operations (POST / PATCH) by default can result in duplicate payments or duplicate database records. Automatic retries must strictly guard against non-idempotent methods unless the caller explicitly flags `idempotent: true`.
+- Native `AbortSignal.timeout()` is supported in Node 18+ and modern browsers, but chaining with a user-supplied `signal` requires `AbortSignal.any()` or manual cleanup listeners to prevent memory leaks.
+- When `fetch` fails due to network disconnection, browsers throw a generic `TypeError: Failed to fetch`. The client must inspect `navigator.onLine` and error signatures to distinguish true offline/connectivity issues from CORS or DNS failures.
+- In Vitest test environments, `fetch` must be cleanable between tests, and `AbortController` timers must be handled cleanly with fake or real timers.
+
+### Decision
+
+1. Build `apiClient` in `src/lib/api-client.ts` supporting standard HTTP methods (`get`, `post`, `put`, `patch`, `delete`).
+2. Include timeout handling via `AbortController` with configurable `timeoutMs` (default 10,000ms).
+3. Implement exponential backoff with full jitter: `delay = Math.min(maxDelay, baseDelay * 2 ** attempt + Math.random() * jitterMs)`.
+4. Restrict automatic retry to idempotent methods (GET, HEAD, OPTIONS, PUT, DELETE) and retryable HTTP status codes (408, 429, 500, 502, 503, 504).
+5. Parse and validate JSON responses with `zod` schemas if provided, surfacing structured `AppError` validation issues.
+6. Provide `useApiQuery<T>()` React hook with automatic cancellation on unmount, loading/error state tracking, and a `refetch()` function.
+7. Test the client comprehensively in `src/lib/api-client.test.ts`.
+
+### Follow-ups
+
+- Replace raw `fetch` in `impersonation-banner.tsx` and `role-switcher.tsx` with `apiClient`.
+- Add offline indicator banner when `AppError.isOffline()` is detected in Item 03.

@@ -255,7 +255,7 @@ Work on **one item at a time**, in order. Do not start the next item until the c
 - Build the typed `AppError` model and a `toUserMessage()` helper.
 - Unit tests: Button (idle, loading, success, disabled, error recovery, keyboard) and ErrorBoundary (catch, fallback, retry/reset, isolation).
 
-### [ ] Item 02 — `feat/resilient-api-and-state-layer`
+### [x] Item 02 — `feat/resilient-api-and-state-layer`
 
 - Typed fetch/query wrapper with `AbortController`, timeout, exponential backoff with jitter (idempotent calls only), and `zod` runtime validation, mapping failures into `AppError`.
 - Evaluate `TanStack Query` (or equivalent) before building custom caching; record the decision.
