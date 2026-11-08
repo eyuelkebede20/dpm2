@@ -267,7 +267,7 @@ Work on **one item at a time**, in order. Do not start the next item until the c
 - Add automated tests for every interactive control and edge-case payload (long strings, empty data, `0`/negative values, slow network, rapid double-click).
 - Complete `docs/qa/ui-checklist.md` for all existing screens.
 
-### [ ] Item 04 — `chore/ci-quality-gates`
+### [x] Item 04 — `chore/ci-quality-gates`
 
 - CI pipeline running lint, typecheck, tests with coverage, and build on every PR; block merge on failure.
 - Optional pre-commit hooks (`husky` + `lint-staged`) and a commit-message linter (`commitlint`).

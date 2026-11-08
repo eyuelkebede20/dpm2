@@ -126,3 +126,37 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 ### Follow-ups
 
 - Wire CI quality gates in Item 04 to execute lint, typecheck, tests with coverage, and build.
+
+---
+
+## 2026-11-08 — CI Quality Gates & Automated Build Pipeline (Item 04)
+
+**Goal:** Establish GitHub Actions continuous integration pipeline enforcing lint, strict typecheck, 32 automated test suites, and production build on every push and pull request to main.
+
+### Libraries evaluated
+
+| Tool / Action | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **pnpm/action-setup** | Yes (v4) | MIT | Action | **Selected** | Fast, official pnpm action with native store caching. |
+| **actions/setup-node** | Yes (v4) | MIT | Action | **Selected** | Standard, official Node.js setup with integrated cache: 'pnpm' support. |
+| **actions/checkout** | Yes (v4) | MIT | Action | **Selected** | Standard repository checkout action. |
+
+### Reference files studied
+
+- `agent.md` Section 7.3 (Build Gate: `install → lint → format:check → typecheck → test → build`) and Section 8 (Strict Git Workflow).
+- `package.json` — Added unified `"ci"` and `"typecheck"` script targets.
+
+### Edge cases & gotchas discovered
+
+- In Next.js builds within CI environments, missing environment variables (such as `BETTER_AUTH_SECRET`) can cause auth initialization crashes during page static analysis. Providing deterministic test environment variables in the workflow prevents false-positive CI failures.
+- Concurrency group cancellation (`cancel-in-progress: true`) prevents runner queuing backlog when multiple commits are pushed in rapid succession.
+
+### Decision
+
+1. Create `.github/workflows/ci.yml` with concurrency control, Node 20, pnpm v9, and 15-minute timeout.
+2. Add `"typecheck": "tsc --noEmit"` and `"ci": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"` to `package.json`.
+3. Require 100% clean exit (code 0) across all 4 stages to allow merging.
+
+### Follow-ups
+
+- Backlog complete. All Items 01 through 04 implemented, tested, and verified.

@@ -13,6 +13,8 @@ const DEFAULT_ROUTES: Record<string, string> = {
   qa: "/qa",
 };
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const isDev = process.env.NODE_ENV !== "production";
   const enabled = process.env.ENABLE_DEV_IMPERSONATION === "true" || isDev;

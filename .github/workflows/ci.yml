@@ -1,0 +1,56 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Lint, Typecheck, Test & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: test-secret-better-auth-key-minimum-32-chars
+      SEED_ADMIN_EMAIL: admin@dpm.local
+      SEED_ADMIN_PASSWORD: AdminPassword123!
+      ENABLE_DEV_IMPERSONATION: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint Check
+        run: pnpm lint
+
+      - name: TypeScript Strict Typecheck
+        run: pnpm typecheck
+
+      - name: Vitest Automated Test Suite
+        run: pnpm test
+
+      - name: Next.js Production Build
+        run: pnpm build
+        env:
+          NODE_ENV: production
