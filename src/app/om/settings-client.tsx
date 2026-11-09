@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   seedYearlySpecialDaysAction,
@@ -70,6 +70,22 @@ interface OMSettingsClientProps {
   initialDowntimeReasons?: DowntimeReasonItem[];
 }
 
+const STANDARD_HOLIDAY_SUFFIXES = [
+  "-01-07",
+  "-01-19",
+  "-03-02",
+  "-03-20",
+  "-05-01",
+  "-05-05",
+  "-05-08",
+  "-05-10",
+  "-05-27",
+  "-05-28",
+  "-08-26",
+  "-09-11",
+  "-09-27",
+];
+
 export function OMSettingsClient({
   initialSpecialDays = [],
   initialDowntimeReasons = [],
@@ -85,6 +101,14 @@ export function OMSettingsClient({
   const [specialModalOpen, setSpecialModalOpen] = useState(false);
   const [savingSpecial, setSavingSpecial] = useState(false);
   const [specialError, setSpecialError] = useState<string | null>(null);
+
+  // Check if all official Ethiopian holidays for selectedYear are already present in the list
+  const isYearFullySeeded = useMemo(() => {
+    const existingDates = new Set(specialDaysList.map((d) => d.date));
+    return STANDARD_HOLIDAY_SUFFIXES.every((suffix) =>
+      existingDates.has(`${selectedYear}${suffix}`)
+    );
+  }, [specialDaysList, selectedYear]);
 
   // New Special Day Form
   const [newDate, setNewDate] = useState<string>(`${selectedYear}-01-01`);
@@ -525,20 +549,27 @@ export function OMSettingsClient({
               </select>
             </div>
 
-            {/* Prominent Green Button */}
-            <button
-              onClick={handleSeedHolidays}
-              disabled={seeding}
-              style={{ backgroundColor: "#059669" }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 text-sm"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>
-                {seeding
-                  ? "Seeding Holidays..."
-                  : "Seed Yearly Ethiopian Holidays (የዓመቱ የኢትዮጵያ በዓላት መዝግብ)"}
-              </span>
-            </button>
+            {/* Seed Yearly Ethiopian Holidays Button - only visible if not seeded or if accidentally deleted */}
+            {!isYearFullySeeded ? (
+              <button
+                onClick={handleSeedHolidays}
+                disabled={seeding}
+                style={{ backgroundColor: "#059669" }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 font-bold px-4 py-2 rounded-xl flex items-center gap-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 text-sm"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>
+                  {seeding
+                    ? "Seeding Holidays..."
+                    : "Seed Yearly Ethiopian Holidays (የዓመቱ የኢትዮጵያ በዓላት መዝግብ)"}
+                </span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Holidays Seeded ({selectedYear})</span>
+              </div>
+            )}
 
             {/* Add Special Date Button */}
             <button
@@ -549,7 +580,7 @@ export function OMSettingsClient({
               className="btn btn-sm rounded-xl bg-slate-900 hover:bg-slate-800 text-white border-none flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Add Special Date</span>
+              <span>Add Special Date</span>
             </button>
           </div>
         </div>
@@ -681,7 +712,7 @@ export function OMSettingsClient({
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center gap-2 px-4 py-2 text-sm shadow-md transition-all self-start md:self-center"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add Reason Template</span>
+            <span>Add Reason Template</span>
           </button>
         </div>
 

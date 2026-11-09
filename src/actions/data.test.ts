@@ -383,6 +383,15 @@ describe("Data & Calendar Workflows - data.ts", () => {
         })),
       } as any);
 
+      // Active products in factory
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([
+            { id: "prod_1", name: "Shirt", sku: "SHIRT-01" },
+          ]),
+        })),
+      } as any);
+
       // Plans
       vi.mocked(db.select).mockReturnValueOnce({
         from: vi.fn(() => ({

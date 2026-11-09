@@ -259,7 +259,7 @@ describe("Operation Manager Settings Component Interaction Tests - OMSettingsCli
     });
   });
 
-  it("opens '+ Add Special Date' modal, fills fields, and submits calling createSpecialDayAction", async () => {
+  it("opens 'Add Special Date' modal, fills fields, and submits calling createSpecialDayAction", async () => {
     render(
       <OMSettingsClient
         initialSpecialDays={sampleSpecialDays}
@@ -267,7 +267,7 @@ describe("Operation Manager Settings Component Interaction Tests - OMSettingsCli
       />
     );
 
-    const addBtn = screen.getByRole("button", { name: /\+ Add Special Date/i });
+    const addBtn = screen.getByRole("button", { name: /Add Special Date/i });
     fireEvent.click(addBtn);
 
     expect(screen.getByText("Add Special Date or Holiday")).toBeDefined();
@@ -284,7 +284,8 @@ describe("Operation Manager Settings Component Interaction Tests - OMSettingsCli
     fireEvent.change(typeSelect, { target: { value: "shutdown" } });
     fireEvent.click(isWorkingCheckbox);
 
-    const submitBtn = screen.getByRole("button", { name: "Add Special Date" });
+    const submitBtns = screen.getAllByRole("button", { name: "Add Special Date" });
+    const submitBtn = submitBtns[submitBtns.length - 1];
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -393,7 +394,7 @@ describe("Operation Manager Settings Component Interaction Tests - OMSettingsCli
     );
 
     const addReasonBtn = screen.getByRole("button", {
-      name: /\+ Add Reason Template/i,
+      name: /Add Reason Template/i,
     });
     fireEvent.click(addReasonBtn);
 
@@ -409,7 +410,8 @@ describe("Operation Manager Settings Component Interaction Tests - OMSettingsCli
     fireEvent.change(nameAmInput, { target: { value: "የኮምፕረሰር ግፊት መቀነስ" } });
     fireEvent.change(categorySelect, { target: { value: "machine" } });
 
-    const submitBtn = screen.getByRole("button", { name: "Add Reason Template" });
+    const submitBtns = screen.getAllByRole("button", { name: "Add Reason Template" });
+    const submitBtn = submitBtns[submitBtns.length - 1];
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -455,6 +457,77 @@ describe("Operation Manager Settings Component Interaction Tests - OMSettingsCli
           nameEn: "Extruder Motor Major Breakdown",
         })
       );
+    });
+  });
+
+  it("hides 'Seed Yearly Ethiopian Holidays' button when holidays are already fully seeded and shows badge", () => {
+    const fullYearHolidays2026: SpecialDayItem[] = [
+      { id: "h1", date: "2026-01-07", nameEn: "Genna", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h2", date: "2026-01-19", nameEn: "Timkat", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h3", date: "2026-03-02", nameEn: "Adwa", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h4", date: "2026-03-20", nameEn: "Eid al-Fitr", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h5", date: "2026-05-01", nameEn: "Workers Day", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h6", date: "2026-05-05", nameEn: "Patriots Day", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h7", date: "2026-05-08", nameEn: "Siklet", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h8", date: "2026-05-10", nameEn: "Fasika", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h9", date: "2026-05-27", nameEn: "Arafa", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h10", date: "2026-05-28", nameEn: "Derg Downfall", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h11", date: "2026-08-26", nameEn: "Mawlid", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h12", date: "2026-09-11", nameEn: "Enkutatash", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h13", date: "2026-09-27", nameEn: "Meskel", type: "holiday", isWorkingDay: false, year: 2026 },
+    ];
+
+    render(
+      <OMSettingsClient
+        initialSpecialDays={fullYearHolidays2026}
+        initialDowntimeReasons={sampleDowntimeReasons}
+      />
+    );
+
+    // Button should not be present
+    const seedBtn = screen.queryByRole("button", {
+      name: /Seed Yearly Ethiopian Holidays/i,
+    });
+    expect(seedBtn).toBeNull();
+
+    // Confirmation badge should be visible
+    expect(screen.getByText(/Holidays Seeded \(2026\)/i)).toBeDefined();
+  });
+
+  it("re-displays 'Seed Yearly Ethiopian Holidays' button when a holiday is deleted", async () => {
+    const holidaysWithOneToDelete: SpecialDayItem[] = [
+      { id: "h1", date: "2026-01-07", nameEn: "Genna", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h2", date: "2026-01-19", nameEn: "Timkat", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h3", date: "2026-03-02", nameEn: "Adwa", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h4", date: "2026-03-20", nameEn: "Eid al-Fitr", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h5", date: "2026-05-01", nameEn: "Workers Day", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h6", date: "2026-05-05", nameEn: "Patriots Day", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h7", date: "2026-05-08", nameEn: "Siklet", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h8", date: "2026-05-10", nameEn: "Fasika", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h9", date: "2026-05-27", nameEn: "Arafa", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h10", date: "2026-05-28", nameEn: "Derg Downfall", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h11", date: "2026-08-26", nameEn: "Mawlid", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h12", date: "2026-09-11", nameEn: "Enkutatash", type: "holiday", isWorkingDay: false, year: 2026 },
+      { id: "h13", date: "2026-09-27", nameEn: "Meskel", type: "holiday", isWorkingDay: false, year: 2026 },
+    ];
+
+    render(
+      <OMSettingsClient
+        initialSpecialDays={holidaysWithOneToDelete}
+        initialDowntimeReasons={sampleDowntimeReasons}
+      />
+    );
+
+    // Initially seeded -> no seed button
+    expect(screen.queryByRole("button", { name: /Seed Yearly Ethiopian Holidays/i })).toBeNull();
+
+    // Delete one holiday (Genna)
+    const deleteGennaBtn = screen.getByLabelText("Delete Genna");
+    fireEvent.click(deleteGennaBtn);
+
+    // After deletion, the seed button should reappear!
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Seed Yearly Ethiopian Holidays/i })).toBeDefined();
     });
   });
 });

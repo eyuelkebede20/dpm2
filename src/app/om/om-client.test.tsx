@@ -19,6 +19,15 @@ vi.mock("@/actions/om-actions", () => ({
   toggleFactoryUserStatusAction: vi.fn().mockResolvedValue({ success: true }),
   updateFactoryUserRoleAction: vi.fn().mockResolvedValue({ success: true }),
   toggleQAProductAssignmentAction: vi.fn().mockResolvedValue({ success: true }),
+  getOMFactoryCalendarDataAction: vi.fn().mockResolvedValue({
+    success: true,
+    data: {
+      workingDays: [1, 2, 3, 4, 5, 6],
+      entries: [],
+      plans: [],
+      specialDays: [],
+    },
+  }),
 }));
 
 describe("Button Interaction Tests - OMClient", () => {
@@ -109,7 +118,7 @@ describe("Button Interaction Tests - OMClient", () => {
     expect(screen.getByRole("heading", { name: /qa product assignment matrix/i })).toBeDefined();
 
     // Switch back to Factories
-    const facTab = screen.getByRole("button", { name: /factories overview/i });
+    const facTab = screen.getByRole("button", { name: /operating plants/i });
     fireEvent.click(facTab);
     expect(screen.getByText("Operating Plants")).toBeDefined();
   });
@@ -159,7 +168,7 @@ describe("Button Interaction Tests - OMClient", () => {
     const openBtn = screen.getByRole("button", { name: /provision team member/i });
     fireEvent.click(openBtn);
 
-    expect(screen.getByRole("heading", { name: /provision factory team member/i })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /provision team member & set qa/i })).toBeDefined();
 
     // Fill inputs
     const nameInput = screen.getByPlaceholderText(/e\.g\. Abebe Kebede/i);

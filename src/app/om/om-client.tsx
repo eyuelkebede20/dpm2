@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   createFactoryAction,
@@ -8,6 +8,7 @@ import {
   toggleFactoryUserStatusAction,
   updateFactoryUserRoleAction,
   toggleQAProductAssignmentAction,
+  getOMFactoryCalendarDataAction,
 } from "@/actions/om-actions";
 import {
   Building2,
@@ -22,8 +23,23 @@ import {
   Copy,
   CheckCheck,
   CalendarCog,
+  Calendar as CalendarIcon,
+  ArrowLeft,
+  Package,
+  Wrench,
+  Sparkles,
+  CheckSquare,
+  Square,
+  ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { OMSettingsClient } from "./settings-client";
+import { CalendarClient } from "@/components/calendar/calendar-client";
+import { format } from "date-fns";
+import {
+  gregorianToEth,
+  getEthiopianMonthRange,
+} from "@/lib/ethiopian-calendar";
 
 interface OMClientProps {
   factories: Array<{
@@ -67,6 +83,13 @@ interface OMClientProps {
   };
   initialSpecialDays?: any[];
   initialDowntimeReasons?: any[];
+  linesList?: Array<{
+    id: string;
+    factoryId: string;
+    name: string;
+    code: string;
+    active: boolean;
+  }>;
 }
 
 export function OMClient({
@@ -75,11 +98,27 @@ export function OMClient({
   matrixData,
   initialSpecialDays,
   initialDowntimeReasons,
+  linesList = [],
 }: OMClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
     "factories" | "users" | "matrix" | "settings"
   >("factories");
+
+  // Selected Factory Plant Hub State
+  const [selectedFactoryId, setSelectedFactoryId] = useState<string | null>(null);
+  const [plantSubTab, setPlantSubTab] = useState<
+    "calendar" | "teams" | "matrix" | "lines"
+  >("calendar");
+
+  // Factory Plant Calendar State
+  const [plantCalendarData, setPlantCalendarData] = useState<{
+    workingDays: number[];
+    entries: any[];
+    plans: any[];
+    specialDays: any[];
+  } | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
 
   // Create Factory Modal
   const [facModalOpen, setFacModalOpen] = useState(false);
@@ -97,6 +136,7 @@ export function OMClient({
   const [userFactoryId, setUserFactoryId] = useState(factories[0]?.id || "");
   const [userSaving, setUserSaving] = useState(false);
   const [userError, setUserError] = useState<string | null>(null);
+  const [selectedQAProductIds, setSelectedQAProductIds] = useState<string[]>([]);
 
   // Matrix Optimistic / Pending state
   const [pendingAssignment, setPendingAssignment] = useState<string | null>(null);
@@ -104,6 +144,72 @@ export function OMClient({
   // Role Assignment change state & notification
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Today in Gregorian and Ethiopian
+  const today = useMemo(() => new Date(), []);
+  const todayGC = useMemo(() => format(today, "yyyy-MM-dd"), [today]);
+  const currentGregMonth = useMemo(() => format(today, "yyyy-MM"), [today]);
+  const currentEth = useMemo(() => gregorianToEth(todayGC), [todayGC]);
+
+  const ethRange = useMemo(() => {
+    return getEthiopianMonthRange(currentEth.year, currentEth.month);
+  }, [currentEth]);
+
+  // Selected Factory Object
+  const selectedFactory = useMemo(() => {
+    if (!selectedFactoryId) return null;
+    return factories.find((f) => f.id === selectedFactoryId) || null;
+  }, [factories, selectedFactoryId]);
+
+  // Products belonging to the currently selected or modal factory
+  const factoryProductsForModal = useMemo(() => {
+    const targetFacId = userFactoryId || selectedFactoryId || factories[0]?.id;
+    return matrixData.productsList.filter((p) => p.factoryId === targetFacId);
+  }, [matrixData.productsList, userFactoryId, selectedFactoryId, factories]);
+
+  // Load factory calendar data when a factory is selected or calendar sub-tab opened
+  useEffect(() => {
+    if (!selectedFactoryId) {
+      setPlantCalendarData(null);
+      return;
+    }
+
+    let isCancelled = false;
+    async function loadCalendar() {
+      setCalendarLoading(true);
+      const res = await getOMFactoryCalendarDataAction(
+        selectedFactoryId!,
+        ethRange.from,
+        ethRange.to
+      );
+      if (!isCancelled) {
+        setCalendarLoading(false);
+        if (res.success && res.data) {
+          setPlantCalendarData(res.data);
+        } else {
+          setPlantCalendarData(null);
+        }
+      }
+    }
+
+    loadCalendar();
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedFactoryId, ethRange]);
+
+  // Open provision modal pre-configured for a specific factory
+  const handleOpenProvisionForFactory = (facId?: string) => {
+    const targetId = facId || selectedFactoryId || factories[0]?.id || "";
+    setUserFactoryId(targetId);
+    setUserName("");
+    setUserEmail("");
+    setUserPassword("TemporaryPass123!");
+    setUserRole("fm");
+    setSelectedQAProductIds([]);
+    setUserError(null);
+    setUserModalOpen(true);
+  };
 
   const handleRoleChange = async (userId: string, newRole: "fm" | "qa") => {
     setUpdatingRoleId(userId);
@@ -140,7 +246,7 @@ export function OMClient({
     }
   };
 
-  // Submit Provision User
+  // Submit Provision User (with QA product assignments)
   const handleProvisionUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setUserSaving(true);
@@ -152,6 +258,7 @@ export function OMClient({
       password: userPassword,
       role: userRole,
       factoryId: userFactoryId,
+      assignedProductIds: userRole === "qa" ? selectedQAProductIds : undefined,
     });
 
     setUserSaving(false);
@@ -160,6 +267,16 @@ export function OMClient({
       setUserName("");
       setUserEmail("");
       setUserPassword("TemporaryPass123!");
+      setSelectedQAProductIds([]);
+      setToastMsg({
+        type: "success",
+        text: `Provisioned ${userName} successfully${
+          userRole === "qa" && selectedQAProductIds.length > 0
+            ? ` with ${selectedQAProductIds.length} QA product assignment(s)`
+            : ""
+        }.`,
+      });
+      setTimeout(() => setToastMsg(null), 4000);
       router.refresh();
     } else {
       setUserError(res.error || "Failed to provision user");
@@ -193,26 +310,68 @@ export function OMClient({
     );
   };
 
+  // Filtered lists for the selected factory
+  const plantTeamUsers = useMemo(() => {
+    if (!selectedFactoryId) return [];
+    return factoryUsers.filter((u) => u.factoryId === selectedFactoryId);
+  }, [factoryUsers, selectedFactoryId]);
+
+  const plantQAUsers = useMemo(() => {
+    if (!selectedFactoryId) return [];
+    return matrixData.qaUsers.filter((q) => q.factoryId === selectedFactoryId);
+  }, [matrixData.qaUsers, selectedFactoryId]);
+
+  const plantProducts = useMemo(() => {
+    if (!selectedFactoryId) return [];
+    return matrixData.productsList.filter((p) => p.factoryId === selectedFactoryId);
+  }, [matrixData.productsList, selectedFactoryId]);
+
+  const plantLines = useMemo(() => {
+    if (!selectedFactoryId) return [];
+    return linesList.filter((l) => l.factoryId === selectedFactoryId);
+  }, [linesList, selectedFactoryId]);
+
   return (
     <div className="space-y-6">
-      {/* Tabs Header */}
-      <div className="flex border-b border-slate-200">
+      {/* Global Toast */}
+      {toastMsg && (
+        <div
+          className={`alert text-xs py-2.5 px-4 rounded-2xl flex items-center gap-2 shadow-md animate-in fade-in duration-200 ${
+            toastMsg.type === "success"
+              ? "bg-emerald-600 text-white font-bold"
+              : "bg-rose-600 text-white font-bold"
+          }`}
+        >
+          {toastMsg.type === "success" ? (
+            <Check className="w-4 h-4 text-white" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-white" />
+          )}
+          <span>{toastMsg.text}</span>
+        </div>
+      )}
+
+      {/* Main OM Navigation Tabs */}
+      <div className="flex border-b border-slate-200 overflow-x-auto">
         <button
-          onClick={() => setActiveTab("factories")}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+          onClick={() => {
+            setActiveTab("factories");
+            // If returning from another tab, preserve selected factory
+          }}
+          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors shrink-0 ${
             activeTab === "factories"
-              ? "border-indigo-600 text-indigo-600"
+              ? "border-emerald-600 text-emerald-800 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
           <Building2 className="w-4 h-4" />
-          Factories Overview ({factories.length})
+          Operating Plants ({factories.length})
         </button>
         <button
           onClick={() => setActiveTab("users")}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors shrink-0 ${
             activeTab === "users"
-              ? "border-indigo-600 text-indigo-600"
+              ? "border-emerald-600 text-emerald-800 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -221,9 +380,9 @@ export function OMClient({
         </button>
         <button
           onClick={() => setActiveTab("matrix")}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors shrink-0 ${
             activeTab === "matrix"
-              ? "border-indigo-600 text-indigo-600"
+              ? "border-emerald-600 text-emerald-800 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -232,9 +391,9 @@ export function OMClient({
         </button>
         <button
           onClick={() => setActiveTab("settings")}
-          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors ${
+          className={`py-3 px-5 text-sm font-semibold border-b-2 flex items-center gap-2 transition-colors shrink-0 ${
             activeTab === "settings"
-              ? "border-indigo-600 text-indigo-600"
+              ? "border-emerald-600 text-emerald-800 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           }`}
         >
@@ -243,67 +402,526 @@ export function OMClient({
         </button>
       </div>
 
-      {/* TAB 1: Factories */}
+      {/* ============================================================= */}
+      {/* TAB 1: OPERATING PLANTS & SPECIFIC FACTORY HUB                */}
+      {/* ============================================================= */}
       {activeTab === "factories" && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Operating Plants
-              </h2>
-              <p className="text-xs text-slate-500">
-                Industrial bottling and packaging facilities managed by your division
-              </p>
-            </div>
-            <button
-              onClick={() => setFacModalOpen(true)}
-              className="btn btn-sm btn-primary rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white border-none gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              New Factory
-            </button>
-          </div>
+          {/* VIEW A: Full List of Operating Plants (Clickable cards) */}
+          {!selectedFactoryId && (
+            <div className="space-y-5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-emerald-600" />
+                    <span>Operating Plants</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Select any plant to inspect its specific Calendar, Teams, Lines, and QA product matrix.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setFacModalOpen(true)}
+                  className="btn btn-sm rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none gap-1.5 shadow-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Factory
+                </button>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {factories.map((f) => (
-              <div
-                key={f.id}
-                className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow transition-shadow"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                    <Building2 className="w-6 h-6" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {factories.map((f) => {
+                  const membersCount = factoryUsers.filter((u) => u.factoryId === f.id).length;
+                  const plantProductsCount = matrixData.productsList.filter((p) => p.factoryId === f.id).length;
+                  const plantLinesCount = linesList.filter((l) => l.factoryId === f.id).length;
+
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => {
+                        setSelectedFactoryId(f.id);
+                        setPlantSubTab("calendar");
+                      }}
+                      className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-2xs hover:shadow-md hover:border-emerald-500 cursor-pointer transition-all group flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between">
+                          <div className="p-3 bg-emerald-50 text-emerald-800 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                            <Building2 className="w-6 h-6" />
+                          </div>
+                          <span
+                            className={`badge badge-sm font-bold ${
+                              f.active ? "bg-emerald-100 text-emerald-800 border-none" : "badge-ghost text-slate-400"
+                            }`}
+                          >
+                            {f.active ? "Active" : "Archived"}
+                          </span>
+                        </div>
+
+                        <h3 className="font-black text-slate-900 text-lg mt-3 group-hover:text-emerald-700 transition-colors">
+                          {f.name}
+                        </h3>
+                        <p className="text-xs font-mono text-slate-400 mt-0.5">ID: {f.id}</p>
+
+                        {/* Quick Statistics Strip */}
+                        <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-center">
+                          <div className="bg-slate-50 p-2 rounded-xl">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Team</span>
+                            <span className="font-mono font-bold text-slate-800 text-xs">{membersCount}</span>
+                          </div>
+                          <div className="bg-slate-50 p-2 rounded-xl">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Lines</span>
+                            <span className="font-mono font-bold text-slate-800 text-xs">{plantLinesCount}</span>
+                          </div>
+                          <div className="bg-slate-50 p-2 rounded-xl">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Products</span>
+                            <span className="font-mono font-bold text-slate-800 text-xs">{plantProductsCount}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-emerald-700 group-hover:text-emerald-800">
+                        <span>Open Plant Hub</span>
+                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW B: Specific Plant Operations Hub */}
+          {selectedFactory && (
+            <div className="space-y-5 animate-in fade-in duration-150">
+              {/* Plant Header & Back Button */}
+              <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFactoryId(null)}
+                      className="btn btn-sm btn-ghost rounded-xl text-xs font-bold gap-1 text-slate-600 hover:text-slate-900"
+                      title="Back to All Plants"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Back to Plants</span>
+                    </button>
+                    <div className="h-4 w-px bg-slate-200" />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                          {selectedFactory.name}
+                        </h2>
+                        <span className="badge badge-sm bg-emerald-100 text-emerald-800 font-bold border-none">
+                          {selectedFactory.active ? "Active" : "Archived"}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 font-mono">
+                        Plant Hub ID: {selectedFactory.id}
+                      </span>
+                    </div>
                   </div>
-                  <span
-                    className={`badge badge-sm ${
-                      f.active ? "badge-success text-white" : "badge-ghost"
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenProvisionForFactory(selectedFactory.id)}
+                      className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs border-none gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>+ Add Personnel to Plant</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Plant Sub-Navigation Tabs */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setPlantSubTab("calendar")}
+                    className={`btn btn-sm rounded-xl font-bold text-xs gap-1.5 ${
+                      plantSubTab === "calendar"
+                        ? "bg-slate-900 text-white border-none shadow-xs"
+                        : "btn-ghost text-slate-600"
                     }`}
                   >
-                    {f.active ? "Active" : "Archived"}
-                  </span>
-                </div>
-                <h3 className="font-bold text-slate-900 text-base mt-4">
-                  {f.name}
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">ID: {f.id}</p>
-                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <span>Created {new Date(f.createdAt).toLocaleDateString()}</span>
-                  <span className="text-indigo-600 font-medium flex items-center">
-                    Operational <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
+                    <CalendarIcon className="w-4 h-4 text-emerald-400" />
+                    <span>Calendar & Production</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlantSubTab("teams")}
+                    className={`btn btn-sm rounded-xl font-bold text-xs gap-1.5 ${
+                      plantSubTab === "teams"
+                        ? "bg-slate-900 text-white border-none shadow-xs"
+                        : "btn-ghost text-slate-600"
+                    }`}
+                  >
+                    <Users className="w-4 h-4 text-emerald-400" />
+                    <span>Plant Team ({plantTeamUsers.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlantSubTab("matrix")}
+                    className={`btn btn-sm rounded-xl font-bold text-xs gap-1.5 ${
+                      plantSubTab === "matrix"
+                        ? "bg-slate-900 text-white border-none shadow-xs"
+                        : "btn-ghost text-slate-600"
+                    }`}
+                  >
+                    <Grid className="w-4 h-4 text-emerald-400" />
+                    <span>QA Matrix ({plantQAUsers.length})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPlantSubTab("lines")}
+                    className={`btn btn-sm rounded-xl font-bold text-xs gap-1.5 ${
+                      plantSubTab === "lines"
+                        ? "bg-slate-900 text-white border-none shadow-xs"
+                        : "btn-ghost text-slate-600"
+                    }`}
+                  >
+                    <Layers className="w-4 h-4 text-emerald-400" />
+                    <span>Lines & Products ({plantLines.length}/{plantProducts.length})</span>
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
+
+              {/* SUB-VIEW 1: Factory Calendar */}
+              {plantSubTab === "calendar" && (
+                <div>
+                  {calendarLoading ? (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-2xs space-y-3">
+                      <span className="loading loading-spinner loading-md text-emerald-600"></span>
+                      <p className="text-sm font-bold text-slate-600">Loading plant production calendar...</p>
+                    </div>
+                  ) : plantCalendarData ? (
+                    <CalendarClient
+                      factoryId={selectedFactory.id}
+                      factoryName={selectedFactory.name}
+                      workingDays={plantCalendarData.workingDays}
+                      calendarType="ethiopian"
+                      ethiopianYear={currentEth.year}
+                      ethiopianMonth={currentEth.month}
+                      gregorianMonthStr={currentGregMonth}
+                      startDateStr={ethRange.from}
+                      endDateStr={ethRange.to}
+                      entries={plantCalendarData.entries}
+                      plans={plantCalendarData.plans}
+                      specialDays={plantCalendarData.specialDays}
+                    />
+                  ) : (
+                    <div className="bg-white rounded-3xl border border-slate-200/90 p-8 text-center text-slate-400 text-sm">
+                      No production entries recorded for this plant yet.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SUB-VIEW 2: Factory Team Members */}
+              {plantSubTab === "teams" && (
+                <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900">
+                        {selectedFactory.name} Personnel
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Assigned Factory Managers and QA Inspectors for this facility.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenProvisionForFactory(selectedFactory.id)}
+                      className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs border-none gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Add Personnel & Set QA</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    {plantTeamUsers.length === 0 ? (
+                      <div className="text-center py-10 text-slate-400 text-sm">
+                        No team members assigned to {selectedFactory.name} yet.
+                        <div className="mt-3">
+                          <button
+                            onClick={() => handleOpenProvisionForFactory(selectedFactory.id)}
+                            className="btn btn-sm bg-emerald-600 text-white font-bold rounded-xl"
+                          >
+                            + Provision First Member
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <table className="table w-full text-sm">
+                        <thead>
+                          <tr className="text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-100">
+                            <th>Name / Email</th>
+                            <th>Role</th>
+                            <th>Reassign Role</th>
+                            <th>Assigned QA Products</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {plantTeamUsers.map((u) => {
+                            const isUpdating = updatingRoleId === u.id;
+                            const assignedProds = matrixData.productsList.filter((p) =>
+                              matrixData.assignments.some(
+                                (a) => a.qaUserId === u.id && a.productId === p.id
+                              )
+                            );
+
+                            return (
+                              <tr key={u.id} className="hover:bg-slate-50/50">
+                                <td>
+                                  <div className="font-bold text-slate-900">{u.name}</div>
+                                  <div className="text-xs text-slate-500">{u.email}</div>
+                                </td>
+                                <td>
+                                  <span
+                                    className={`badge badge-sm font-bold uppercase text-[10px] ${
+                                      u.role === "fm"
+                                        ? "bg-slate-900 text-white"
+                                        : "bg-emerald-100 text-emerald-800 border-none"
+                                    }`}
+                                  >
+                                    {u.role === "fm" ? "Factory Mgr" : "QA Inspector"}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div className="flex items-center gap-1.5">
+                                    <select
+                                      disabled={isUpdating}
+                                      value={u.role}
+                                      onChange={(e) =>
+                                        handleRoleChange(u.id, e.target.value as "fm" | "qa")
+                                      }
+                                      className="select select-bordered select-xs rounded-lg text-xs font-medium cursor-pointer"
+                                    >
+                                      <option value="fm">Factory Manager (FM)</option>
+                                      <option value="qa">QA Inspector (QA)</option>
+                                    </select>
+                                    {isUpdating && (
+                                      <span className="loading loading-spinner loading-xs text-emerald-600"></span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td>
+                                  {u.role === "qa" ? (
+                                    <div className="flex items-center gap-1 flex-wrap">
+                                      {assignedProds.length > 0 ? (
+                                        assignedProds.map((p) => (
+                                          <span
+                                            key={p.id}
+                                            className="badge badge-xs bg-slate-100 border border-slate-200 text-slate-700 font-medium"
+                                          >
+                                            {p.name}
+                                          </span>
+                                        ))
+                                      ) : (
+                                        <span className="text-xs text-slate-400 italic">None assigned</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">All Factory Lines (FM)</span>
+                                  )}
+                                </td>
+                                <td>
+                                  <span
+                                    className={`badge badge-sm font-bold ${
+                                      u.active ? "bg-emerald-100 text-emerald-800 border-none" : "badge-ghost text-slate-400"
+                                    }`}
+                                  >
+                                    {u.active ? "Active" : "Inactive"}
+                                  </span>
+                                </td>
+                                <td>
+                                  <button
+                                    onClick={() => handleToggleUserStatus(u.id, u.active)}
+                                    className={`btn btn-xs rounded-lg ${
+                                      u.active
+                                        ? "btn-ghost text-red-600 hover:bg-red-50"
+                                        : "btn-ghost text-emerald-600 hover:bg-emerald-50"
+                                    }`}
+                                  >
+                                    {u.active ? "Deactivate" : "Activate"}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-VIEW 3: QA Matrix for Selected Plant */}
+              {plantSubTab === "matrix" && (
+                <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
+                  <div className="pb-3 border-b border-slate-100">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900">
+                      QA Product Assignment Matrix ({selectedFactory.name})
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Configure QA inspector product permissions for this plant.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    {plantQAUsers.length === 0 || plantProducts.length === 0 ? (
+                      <div className="text-center py-10 text-slate-400 text-sm">
+                        {plantQAUsers.length === 0
+                          ? `No QA Inspectors in ${selectedFactory.name}. Click "+ Add Personnel to Plant" to provision one.`
+                          : `No Products created for ${selectedFactory.name} yet.`}
+                      </div>
+                    ) : (
+                      <table className="table w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="py-2.5 px-4 font-bold text-slate-700 text-xs uppercase tracking-wider">
+                              QA Inspector
+                            </th>
+                            {plantProducts.map((p) => (
+                              <th
+                                key={p.id}
+                                className="py-2.5 px-4 text-center font-bold text-slate-700 text-xs uppercase tracking-wider"
+                              >
+                                <div>{p.name}</div>
+                                <div className="text-[10px] text-slate-400 font-mono font-normal">
+                                  {p.sku}
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {plantQAUsers.map((qa) => (
+                            <tr key={qa.id} className="hover:bg-slate-50/50">
+                              <td className="py-3 px-4 font-bold text-slate-900">
+                                <div>{qa.name}</div>
+                                <div className="text-xs text-slate-500 font-normal">{qa.email}</div>
+                              </td>
+                              {plantProducts.map((prod) => {
+                                const assigned = isAssigned(qa.id, prod.id);
+                                const isPending = pendingAssignment === `${qa.id}_${prod.id}`;
+
+                                return (
+                                  <td key={prod.id} className="py-3 px-4 text-center">
+                                    <label className="inline-flex items-center justify-center p-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
+                                      <input
+                                        type="checkbox"
+                                        disabled={isPending}
+                                        checked={assigned}
+                                        onChange={() =>
+                                          handleAssignmentToggle(qa.id, prod.id, assigned)
+                                        }
+                                        className="checkbox checkbox-sm checkbox-primary rounded-md"
+                                      />
+                                    </label>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SUB-VIEW 4: Lines & Products for Selected Plant */}
+              {plantSubTab === "lines" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* Lines Card */}
+                  <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-2xs space-y-3">
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-emerald-600" />
+                      <span>Production Lines ({plantLines.length})</span>
+                    </h4>
+
+                    {plantLines.length === 0 ? (
+                      <div className="text-center py-8 text-slate-400 text-xs">
+                        No production lines added to this plant yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {plantLines.map((l) => (
+                          <div
+                            key={l.id}
+                            className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <span className="font-bold text-slate-900 text-sm block">{l.name}</span>
+                              <span className="font-mono text-slate-400">Code: {l.code}</span>
+                            </div>
+                            <span
+                              className={`badge badge-xs font-bold ${
+                                l.active ? "bg-emerald-100 text-emerald-800 border-none" : "badge-ghost"
+                              }`}
+                            >
+                              {l.active ? "Active" : "Disabled"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Products Card */}
+                  <div className="bg-white rounded-3xl border border-slate-200/90 p-5 shadow-2xs space-y-3">
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Package className="w-4 h-4 text-emerald-600" />
+                      <span>Manufactured Products ({plantProducts.length})</span>
+                    </h4>
+
+                    {plantProducts.length === 0 ? (
+                      <div className="text-center py-8 text-slate-400 text-xs">
+                        No products configured for this plant yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {plantProducts.map((p) => (
+                          <div
+                            key={p.id}
+                            className="bg-slate-50 p-3 rounded-2xl border border-slate-200/70 flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <span className="font-bold text-slate-900 text-sm block">{p.name}</span>
+                              <span className="font-mono text-slate-400">SKU: {p.sku}</span>
+                            </div>
+                            <span className="badge badge-xs bg-slate-200 text-slate-700 font-mono">
+                              Active
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* TAB 2: Users (FM & QA) */}
+      {/* ============================================================= */}
+      {/* TAB 2: GLOBAL FACTORY TEAMS (FM & QA)                         */}
+      {/* ============================================================= */}
       {activeTab === "users" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-5 border-b border-slate-100">
+        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">
                 Factory Personnel & Role Assignment
               </h2>
               <p className="text-xs text-slate-500">
@@ -311,30 +929,13 @@ export function OMClient({
               </p>
             </div>
             <button
-              onClick={() => setUserModalOpen(true)}
-              className="btn btn-sm btn-primary rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white border-none gap-1.5"
+              onClick={() => handleOpenProvisionForFactory()}
+              className="btn btn-sm rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold border-none gap-1.5 shadow-xs"
             >
               <Plus className="w-4 h-4" />
               Provision Team Member
             </button>
           </div>
-
-          {toastMsg && (
-            <div
-              className={`alert text-xs py-2 px-3 rounded-xl flex items-center gap-2 ${
-                toastMsg.type === "success"
-                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                  : "bg-red-50 text-red-800 border border-red-200"
-              }`}
-            >
-              {toastMsg.type === "success" ? (
-                <Check className="w-4 h-4 text-emerald-600" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-red-600" />
-              )}
-              <span>{toastMsg.text}</span>
-            </div>
-          )}
 
           <div className="overflow-x-auto">
             {factoryUsers.length === 0 ? (
@@ -360,55 +961,53 @@ export function OMClient({
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/50">
                         <td>
-                          <div className="font-semibold text-slate-900">{u.name}</div>
+                          <div className="font-bold text-slate-900">{u.name}</div>
                           <div className="text-xs text-slate-500">{u.email}</div>
                         </td>
                         <td>
                           <span
-                            className={`badge badge-sm font-semibold uppercase text-[10px] tracking-wider ${
+                            className={`badge badge-sm font-bold uppercase text-[10px] ${
                               u.role === "fm"
-                                ? "badge-secondary text-white"
-                                : "badge-accent text-white"
+                                ? "bg-slate-900 text-white"
+                                : "bg-emerald-100 text-emerald-800 border-none"
                             }`}
                           >
                             {u.role === "fm" ? "Factory Mgr" : "QA Inspector"}
                           </span>
                         </td>
                         <td>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             <select
                               disabled={isUpdating}
                               value={u.role}
                               onChange={(e) =>
                                 handleRoleChange(u.id, e.target.value as "fm" | "qa")
                               }
-                              className="select select-bordered select-xs rounded-lg text-xs font-medium cursor-pointer focus:border-indigo-600"
+                              className="select select-bordered select-xs rounded-lg text-xs font-medium cursor-pointer"
                             >
                               <option value="fm">Factory Manager (FM)</option>
                               <option value="qa">QA Inspector (QA)</option>
                             </select>
                             {isUpdating && (
-                              <span className="loading loading-spinner loading-xs text-indigo-600"></span>
+                              <span className="loading loading-spinner loading-xs text-emerald-600"></span>
                             )}
                           </div>
                         </td>
                         <td>
-                          <span className="font-medium text-slate-700">{u.factoryName}</span>
+                          <span className="font-bold text-slate-800">{u.factoryName}</span>
                         </td>
                         <td>
-                          {u.active ? (
-                            <span className="badge badge-sm badge-success text-white">
-                              Active
-                            </span>
-                          ) : (
-                            <span className="badge badge-sm badge-ghost text-slate-400">
-                              Inactive
-                            </span>
-                          )}
+                          <span
+                            className={`badge badge-sm font-bold ${
+                              u.active ? "bg-emerald-100 text-emerald-800 border-none" : "badge-ghost text-slate-400"
+                            }`}
+                          >
+                            {u.active ? "Active" : "Inactive"}
+                          </span>
                         </td>
                         <td>
                           {u.mustChangePassword ? (
-                            <span className="badge badge-sm badge-warning text-amber-900">
+                            <span className="badge badge-sm bg-amber-100 text-amber-900 border-none font-bold">
                               Temporary
                             </span>
                           ) : (
@@ -439,19 +1038,21 @@ export function OMClient({
         </div>
       )}
 
-      {/* TAB 3: QA Product Assignment Matrix */}
+      {/* ============================================================= */}
+      {/* TAB 3: QA PRODUCT ASSIGNMENT MATRIX (GLOBAL)                  */}
+      {/* ============================================================= */}
       {activeTab === "matrix" && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <div className="pb-5 border-b border-slate-100">
-            <h2 className="text-lg font-bold text-slate-900">
+        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs">
+          <div className="pb-4 border-b border-slate-100">
+            <h2 className="text-lg font-black text-slate-900 tracking-tight">
               QA Product Assignment Matrix
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Assign Quality Assurance inspectors to products. QA users can only submit inspections for products assigned to them.
+              Assign Quality Assurance inspectors to products across all managed facilities.
             </p>
           </div>
 
-          <div className="mt-6 overflow-x-auto">
+          <div className="mt-5 overflow-x-auto">
             {matrixData.qaUsers.length === 0 || matrixData.productsList.length === 0 ? (
               <div className="text-center py-12 text-slate-400 text-sm">
                 Ensure you have active QA inspectors and Products created to build assignments.
@@ -479,7 +1080,7 @@ export function OMClient({
                 <tbody className="divide-y divide-slate-100">
                   {matrixData.qaUsers.map((qa) => (
                     <tr key={qa.id} className="hover:bg-slate-50/50">
-                      <td className="py-3 px-4 font-semibold text-slate-900">
+                      <td className="py-3 px-4 font-bold text-slate-900">
                         <div>{qa.name}</div>
                         <div className="text-xs text-slate-500 font-normal">
                           {qa.email} • {qa.factoryName}
@@ -511,7 +1112,9 @@ export function OMClient({
         </div>
       )}
 
-      {/* TAB 4: Settings & Calendars */}
+      {/* ============================================================= */}
+      {/* TAB 4: SETTINGS & CALENDARS                                   */}
+      {/* ============================================================= */}
       {activeTab === "settings" && (
         <OMSettingsClient
           initialSpecialDays={initialSpecialDays}
@@ -519,12 +1122,14 @@ export function OMClient({
         />
       )}
 
-      {/* Modal: New Factory */}
+      {/* ============================================================= */}
+      {/* MODAL: CREATE NEW FACTORY                                     */}
+      {/* ============================================================= */}
       {facModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 className="text-base font-black text-slate-900">
                 Create New Factory Plant
               </h3>
               <button
@@ -536,14 +1141,14 @@ export function OMClient({
             </div>
 
             {facError && (
-              <div className="alert alert-error text-xs py-2 px-3 rounded-xl mt-4 bg-red-50 text-red-700 border border-red-200">
+              <div className="alert alert-error text-xs py-2 px-3 rounded-xl mt-4 bg-rose-50 text-rose-700 border border-rose-200">
                 <span>{facError}</span>
               </div>
             )}
 
             <form onSubmit={handleCreateFactory} className="space-y-4 mt-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Factory Name
                 </label>
                 <input
@@ -552,7 +1157,7 @@ export function OMClient({
                   value={facName}
                   onChange={(e) => setFacName(e.target.value)}
                   placeholder="e.g. Hawassa Agro-Processing Plant"
-                  className="input input-bordered w-full text-sm rounded-xl"
+                  className="input input-bordered w-full text-sm rounded-xl font-medium"
                 />
               </div>
 
@@ -560,14 +1165,14 @@ export function OMClient({
                 <button
                   type="button"
                   onClick={() => setFacModalOpen(false)}
-                  className="btn btn-sm btn-ghost rounded-xl"
+                  className="btn btn-sm btn-ghost rounded-xl font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={facSaving}
-                  className="btn btn-sm btn-primary rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                  className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl border-none"
                 >
                   {facSaving ? "Creating..." : "Create Factory"}
                 </button>
@@ -577,14 +1182,21 @@ export function OMClient({
         </div>
       )}
 
-      {/* Modal: Provision User */}
+      {/* ============================================================= */}
+      {/* MODAL: PROVISION TEAM MEMBER & SET QA PRODUCTS               */}
+      {/* ============================================================= */}
       {userModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">
-                Provision Factory Team Member
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  Provision Team Member & Set QA
+                </h3>
+                <span className="text-xs text-slate-500">
+                  Create credentials and assign quality inspection products
+                </span>
+              </div>
               <button
                 onClick={() => setUserModalOpen(false)}
                 className="btn btn-sm btn-circle btn-ghost text-slate-400"
@@ -594,14 +1206,14 @@ export function OMClient({
             </div>
 
             {userError && (
-              <div className="alert alert-error text-xs py-2 px-3 rounded-xl mt-4 bg-red-50 text-red-700 border border-red-200">
+              <div className="alert alert-error text-xs py-2 px-3 rounded-xl mt-3 bg-rose-50 text-rose-700 border border-rose-200">
                 <span>{userError}</span>
               </div>
             )}
 
             <form onSubmit={handleProvisionUser} className="space-y-4 mt-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Full Name
                 </label>
                 <input
@@ -610,12 +1222,12 @@ export function OMClient({
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
                   placeholder="e.g. Abebe Kebede"
-                  className="input input-bordered w-full text-sm rounded-xl"
+                  className="input input-bordered w-full text-sm rounded-xl font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Email Address
                 </label>
                 <input
@@ -624,17 +1236,17 @@ export function OMClient({
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="input input-bordered w-full text-sm rounded-xl"
+                  className="input input-bordered w-full text-sm rounded-xl font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Role
                   </label>
                   <select
-                    className="select select-bordered w-full text-sm rounded-xl"
+                    className="select select-bordered w-full text-sm rounded-xl font-bold"
                     value={userRole}
                     onChange={(e) => setUserRole(e.target.value as "fm" | "qa")}
                   >
@@ -644,13 +1256,16 @@ export function OMClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Factory Assignment
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Factory Plant
                   </label>
                   <select
-                    className="select select-bordered w-full text-sm rounded-xl"
+                    className="select select-bordered w-full text-sm rounded-xl font-bold"
                     value={userFactoryId}
-                    onChange={(e) => setUserFactoryId(e.target.value)}
+                    onChange={(e) => {
+                      setUserFactoryId(e.target.value);
+                      setSelectedQAProductIds([]); // Reset when factory changes
+                    }}
                     required
                   >
                     {factories.map((f) => (
@@ -662,8 +1277,88 @@ export function OMClient({
                 </div>
               </div>
 
+              {/* QA Product Assignment Checklist (Visible when role === "qa") */}
+              {userRole === "qa" && (
+                <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2.5 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-black text-slate-900 block uppercase tracking-wider">
+                        Set QA Product Inspections (የጥራት ቁጥጥር ምርቶች)
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Select products this inspector is authorized to evaluate
+                      </span>
+                    </div>
+
+                    {factoryProductsForModal.length > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedQAProductIds(factoryProductsForModal.map((p) => p.id))
+                          }
+                          className="btn btn-xs btn-ghost text-emerald-700 font-bold"
+                        >
+                          All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedQAProductIds([])}
+                          className="btn btn-xs btn-ghost text-slate-400 font-bold"
+                        >
+                          None
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {factoryProductsForModal.length === 0 ? (
+                    <div className="text-center py-3 text-slate-400 text-xs italic">
+                      No products found in this factory. You can still provision the inspector now and configure product assignments later.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pt-1">
+                      {factoryProductsForModal.map((prod) => {
+                        const isChecked = selectedQAProductIds.includes(prod.id);
+                        return (
+                          <label
+                            key={prod.id}
+                            className={`flex items-center gap-2 p-2 rounded-xl border text-xs cursor-pointer transition-colors ${
+                              isChecked
+                                ? "bg-white border-emerald-500 text-slate-900 font-bold shadow-2xs"
+                                : "bg-white/60 border-slate-200 text-slate-600 hover:bg-white"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedQAProductIds((prev) => [...prev, prod.id]);
+                                } else {
+                                  setSelectedQAProductIds((prev) =>
+                                    prev.filter((id) => id !== prod.id)
+                                  );
+                                }
+                              }}
+                              className="checkbox checkbox-xs checkbox-primary rounded-md"
+                            />
+                            <div className="truncate">
+                              <span className="block truncate">{prod.name}</span>
+                              <span className="text-[10px] text-slate-400 font-mono font-normal">
+                                {prod.sku}
+                              </span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Temporary Password
                 </label>
                 <div className="join w-full">
@@ -672,7 +1367,7 @@ export function OMClient({
                     required
                     value={userPassword}
                     onChange={(e) => setUserPassword(e.target.value)}
-                    className="join-item input input-bordered w-full text-sm font-mono rounded-l-xl"
+                    className="join-item input input-bordered w-full text-sm font-mono rounded-l-xl font-bold"
                   />
                   <button
                     type="button"
@@ -697,7 +1392,7 @@ export function OMClient({
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Forced password change is enabled for first login.
+                  User will be prompted to choose a permanent password on first login.
                 </p>
               </div>
 
@@ -705,14 +1400,14 @@ export function OMClient({
                 <button
                   type="button"
                   onClick={() => setUserModalOpen(false)}
-                  className="btn btn-sm btn-ghost rounded-xl"
+                  className="btn btn-sm btn-ghost rounded-xl font-bold"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={userSaving}
-                  className="btn btn-sm btn-primary rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                  className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl border-none shadow-xs"
                 >
                   {userSaving ? "Provisioning..." : "Provision Member"}
                 </button>

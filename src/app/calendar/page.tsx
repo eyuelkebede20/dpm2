@@ -108,6 +108,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       endDateStr={endDateStr}
       entries={data.entries}
       plans={data.plans}
+      products={data.products || []}
       specialDays={monthSpecialDays || []}
     />
   );

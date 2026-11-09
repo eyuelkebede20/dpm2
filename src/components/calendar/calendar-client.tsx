@@ -901,6 +901,8 @@ export function CalendarClient({
                         ? "bg-slate-900 text-white font-black shadow-md ring-2 ring-emerald-500"
                         : item.isCurrentToday
                         ? "border-2 border-emerald-500 bg-white text-slate-900"
+                        : item.isFuture
+                        ? "bg-slate-50/50 border border-slate-200/50 text-slate-300"
                         : isHoliday
                         ? "bg-amber-50/70 border border-amber-300/80 text-amber-900"
                         : item.isWorkDay
@@ -966,14 +968,30 @@ export function CalendarClient({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => router.push(`/entry?date=${activeDayDateStr}`)}
-                    className="btn btn-sm w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs font-bold gap-1.5 border-none"
+                    disabled={isSelectedDayFuture}
+                    onClick={() => !isSelectedDayFuture && router.push(`/entry?date=${activeDayDateStr}`)}
+                    className={`btn btn-sm w-full sm:w-auto rounded-xl font-bold gap-1.5 border-none ${
+                      isSelectedDayFuture
+                        ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                    }`}
+                    title={isSelectedDayFuture ? "Cannot input numbers for future dates" : "Edit Daily Numbers"}
                   >
                     <PenTool className="w-4 h-4" />
-                    <span>Edit Daily Numbers</span>
+                    <span>{isSelectedDayFuture ? "Input Disabled (Future Date)" : "Edit Daily Numbers"}</span>
                   </button>
                 </div>
               </div>
+
+              {/* Future Date Alert Notice */}
+              {isSelectedDayFuture && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-2.5 text-xs text-slate-600">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>
+                    <strong>Future Date:</strong> Production numbers cannot be entered for upcoming dates or future months.
+                  </span>
+                </div>
+              )}
 
               {/* Special Day / Holiday Banner */}
               {activeDayItem?.specialDay && (
@@ -1043,15 +1061,21 @@ export function CalendarClient({
 
                 {activeDaySummary.entries.length === 0 ? (
                   <div className="text-center py-6 sm:py-8 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-sm">
-                    No production report submitted for this date.
-                    <div className="mt-2.5">
-                      <button
-                        onClick={() => router.push(`/entry?date=${activeDayDateStr}`)}
-                        className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold border-none"
-                      >
-                        Create Report for this Date
-                      </button>
-                    </div>
+                    {isSelectedDayFuture ? (
+                      <span>Future date — production input is inactive and not permitted yet.</span>
+                    ) : (
+                      <>
+                        No production report submitted for this date.
+                        <div className="mt-2.5">
+                          <button
+                            onClick={() => router.push(`/entry?date=${activeDayDateStr}`)}
+                            className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold border-none"
+                          >
+                            Create Report for this Date
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
@@ -1203,6 +1227,8 @@ export function CalendarClient({
                       ? "ring-2 ring-slate-900 border-slate-900 bg-emerald-50/40 shadow-sm"
                       : item.isCurrentToday
                       ? "border-emerald-500 bg-white shadow-2xs"
+                      : item.isFuture
+                      ? "bg-slate-50/60 border-slate-200/60 text-slate-400"
                       : isHoliday
                       ? "bg-amber-50/60 border-amber-200 hover:border-amber-400 text-amber-900"
                       : item.isWorkDay
@@ -1217,6 +1243,8 @@ export function CalendarClient({
                         className={`text-xs sm:text-sm md:text-base font-black font-mono tabular-nums inline-block leading-none ${
                           item.isCurrentToday
                             ? "text-emerald-700 font-extrabold"
+                            : item.isFuture
+                            ? "text-slate-400"
                             : isHoliday
                             ? "text-amber-900"
                             : "text-slate-900 group-hover:text-emerald-700"
@@ -1231,7 +1259,11 @@ export function CalendarClient({
 
                     {/* Status Pill on Day Tile */}
                     <div>
-                      {isHoliday ? (
+                      {item.isFuture ? (
+                        <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-100 px-1 py-0.5 rounded leading-none">
+                          Future
+                        </span>
+                      ) : isHoliday ? (
                         <span className="text-[8px] sm:text-[9px] font-black text-amber-800 bg-amber-100 px-1 py-0.5 rounded leading-none">
                           <span className="sm:hidden">✦</span>
                           <span className="hidden sm:inline">Holiday</span>
@@ -1339,6 +1371,8 @@ export function CalendarClient({
                     <div className="text-xs sm:text-sm md:text-base font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
                       {hasEntries ? (
                         <span>{summary.totalFG.toLocaleString()} pcs output</span>
+                      ) : item.isFuture ? (
+                        <span className="text-slate-400 italic">Future date — input disabled</span>
                       ) : isHoliday ? (
                         <span className="text-amber-800 font-extrabold flex items-center gap-1">
                           <PartyPopper className="w-3.5 h-3.5" />
@@ -1413,11 +1447,17 @@ export function CalendarClient({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => router.push(`/entry?date=${activeDayDateStr}`)}
-                  className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs font-bold border-none"
+                  disabled={isSelectedDayFuture}
+                  onClick={() => !isSelectedDayFuture && router.push(`/entry?date=${activeDayDateStr}`)}
+                  className={`btn btn-sm rounded-xl font-bold border-none ${
+                    isSelectedDayFuture
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                      : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                  }`}
+                  title={isSelectedDayFuture ? "Cannot input numbers for future dates" : "Edit Report"}
                 >
                   <PenTool className="w-3.5 h-3.5 mr-1" />
-                  Edit Report
+                  {isSelectedDayFuture ? "Input Disabled" : "Edit Report"}
                 </button>
                 <button
                   type="button"
@@ -1431,6 +1471,16 @@ export function CalendarClient({
 
             {/* Drawer Body */}
             <div className="p-4 sm:p-5 space-y-5">
+              {/* Future Date Alert Notice */}
+              {isSelectedDayFuture && (
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center gap-2.5 text-xs text-slate-600">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>
+                    <strong>Future Date:</strong> Production numbers cannot be entered for upcoming dates or future months.
+                  </span>
+                </div>
+              )}
+
               {/* Special Day / Holiday Banner */}
               {activeDayItem?.specialDay && (
                 <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 flex items-center gap-2.5">
@@ -1493,15 +1543,21 @@ export function CalendarClient({
 
                 {activeDaySummary.entries.length === 0 ? (
                   <div className="text-center py-8 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-sm">
-                    No production report recorded for this date.
-                    <div className="mt-3">
-                      <button
-                        onClick={() => router.push(`/entry?date=${activeDayDateStr}`)}
-                        className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold border-none"
-                      >
-                        Enter Report for this Date
-                      </button>
-                    </div>
+                    {isSelectedDayFuture ? (
+                      <span>Future date — production input is inactive and not permitted yet.</span>
+                    ) : (
+                      <>
+                        No production report recorded for this date.
+                        <div className="mt-3">
+                          <button
+                            onClick={() => router.push(`/entry?date=${activeDayDateStr}`)}
+                            className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold border-none"
+                          >
+                            Enter Report for this Date
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">

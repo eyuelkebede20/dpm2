@@ -5,6 +5,7 @@ import {
   getQAProductMatrixData,
   getOMSpecialDays,
   getOMDowntimeReasons,
+  getOMLines,
 } from "@/actions/om-actions";
 import { OMClient } from "./om-client";
 
@@ -13,11 +14,15 @@ export const dynamic = "force-dynamic";
 export default async function OMPage() {
   await requireAuthPage(["om", "sys_admin"]);
 
-  const factories = await getOMFactories();
-  const factoryUsers = await getOMUsers();
-  const matrixData = await getQAProductMatrixData();
-  const specialDays = await getOMSpecialDays();
-  const downtimeReasons = await getOMDowntimeReasons();
+  const [factories, factoryUsers, matrixData, specialDays, downtimeReasons, linesList] =
+    await Promise.all([
+      getOMFactories(),
+      getOMUsers(),
+      getQAProductMatrixData(),
+      getOMSpecialDays(),
+      getOMDowntimeReasons(),
+      getOMLines().catch(() => []),
+    ]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -36,6 +41,7 @@ export default async function OMPage() {
         matrixData={matrixData}
         initialSpecialDays={specialDays}
         initialDowntimeReasons={downtimeReasons}
+        linesList={linesList}
       />
     </div>
   );

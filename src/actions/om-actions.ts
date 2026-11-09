@@ -12,8 +12,12 @@ import {
   qaAssignments,
   specialDays,
   downtimeReasons,
+  lines,
+  plans,
+  reportEntries,
+  industryProfile,
 } from "@/db/schema";
-import { eq, and, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, gte, lte } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
 import { revalidatePath } from "next/cache";
 
@@ -90,6 +94,7 @@ const provisionUserSchema = z
       .max(128),
     role: z.enum(["fm", "qa"]),
     factoryId: z.string().min(1, "Factory must be selected"),
+    assignedProductIds: z.array(z.string()).optional(),
   })
   .strict();
 
@@ -139,7 +144,7 @@ export async function provisionFactoryUserAction(rawInput: unknown) {
     return { success: false, error: parsed.error.errors[0]?.message || "Invalid input" };
   }
 
-  const { name, email, password, role, factoryId } = parsed.data;
+  const { name, email, password, role, factoryId, assignedProductIds } = parsed.data;
 
   // Verify factory ownership if OM
   if (user.role === "om") {
@@ -194,6 +199,16 @@ export async function provisionFactoryUserAction(rawInput: unknown) {
         factoryId,
         userId: newUserId,
       });
+
+      // 4. If QA and product assignments provided, assign them
+      if (role === "qa" && assignedProductIds && assignedProductIds.length > 0) {
+        for (const prodId of assignedProductIds) {
+          await tx.insert(qaAssignments).values({
+            qaUserId: newUserId,
+            productId: prodId,
+          });
+        }
+      }
     });
 
     revalidatePath("/om");
@@ -849,5 +864,132 @@ export async function updateDowntimeReasonAction(id: string, rawInput: unknown) 
     return { success: false, error: "Failed to update downtime reason" };
   }
 }
+
+// -------------------------------------------------------------
+// Plant Lines & Calendar Inspection
+// -------------------------------------------------------------
+export async function getOMLines() {
+  const user = await requireUser();
+  if (user.role !== "om" && user.role !== "sys_admin") {
+    throw new Error("Forbidden");
+  }
+
+  const query = db
+    .select({
+      id: lines.id,
+      factoryId: lines.factoryId,
+      name: lines.name,
+      code: lines.code,
+      active: lines.active,
+      createdAt: lines.createdAt,
+    })
+    .from(lines);
+
+  if (user.role === "om") {
+    return await query
+      .innerJoin(factories, eq(factories.id, lines.factoryId))
+      .where(eq(factories.omId, user.id))
+      .orderBy(asc(lines.name));
+  }
+  return await query.orderBy(asc(lines.name));
+}
+
+export async function getOMFactoryCalendarDataAction(
+  factoryId: string,
+  startDateStr: string,
+  endDateStr: string
+) {
+  const user = await requireUser();
+  if (user.role !== "om" && user.role !== "sys_admin") {
+    return { success: false, error: "Forbidden" };
+  }
+
+  if (user.role === "om") {
+    const [factory] = await db
+      .select({ id: factories.id })
+      .from(factories)
+      .where(and(eq(factories.id, factoryId), eq(factories.omId, user.id)))
+      .limit(1);
+
+    if (!factory) {
+      return { success: false, error: "Unauthorized or factory not found" };
+    }
+  }
+
+  try {
+    const [profile] = await db.select().from(industryProfile).limit(1);
+    const workingDays = profile?.workingDays || [1, 2, 3, 4, 5, 6];
+
+    const entries = await db
+      .select({
+        id: reportEntries.id,
+        date: reportEntries.date,
+        lineId: reportEntries.lineId,
+        lineName: lines.name,
+        productId: reportEntries.productId,
+        productName: products.name,
+        finishedGood: reportEntries.finishedGood,
+        rework: reportEntries.rework,
+        reject: reportEntries.reject,
+        scrap: reportEntries.scrap,
+        wip: reportEntries.wip,
+        downtimeMinutes: reportEntries.downtimeMinutes,
+        issueNote: reportEntries.issueNote,
+      })
+      .from(reportEntries)
+      .innerJoin(lines, eq(lines.id, reportEntries.lineId))
+      .innerJoin(products, eq(products.id, reportEntries.productId))
+      .where(
+        and(
+          eq(lines.factoryId, factoryId),
+          gte(reportEntries.date, startDateStr),
+          lte(reportEntries.date, endDateStr)
+        )
+      );
+
+    const factoryPlans = await db
+      .select({
+        lineId: plans.lineId,
+        productId: plans.productId,
+        startDate: plans.startDate,
+        endDate: plans.endDate,
+        plannedQty: plans.plannedQty,
+      })
+      .from(plans)
+      .innerJoin(lines, eq(lines.id, plans.lineId))
+      .where(eq(lines.factoryId, factoryId));
+
+    const monthSpecialDays = await db
+      .select({
+        id: specialDays.id,
+        date: specialDays.date,
+        nameEn: specialDays.nameEn,
+        nameAm: specialDays.nameAm,
+        type: specialDays.type,
+        isWorkingDay: specialDays.isWorkingDay,
+      })
+      .from(specialDays)
+      .where(
+        and(
+          gte(specialDays.date, startDateStr),
+          lte(specialDays.date, endDateStr)
+        )
+      );
+
+    return {
+      success: true,
+      data: {
+        workingDays,
+        entries,
+        plans: factoryPlans,
+        specialDays: monthSpecialDays,
+      },
+    };
+  } catch (err: any) {
+    console.error("getOMFactoryCalendarDataAction error:", err);
+    return { success: false, error: err.message || "Failed to load factory calendar data" };
+  }
+}
+
 
 

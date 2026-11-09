@@ -19,6 +19,8 @@ import {
   Sparkles,
   Command,
   X,
+  Boxes,
+  Filter,
 } from "lucide-react";
 import { StepperInput } from "@/components/ui/stepper-input";
 import { calculateDailyTarget, calculateVariance } from "@/lib/target";
@@ -104,6 +106,8 @@ export function DailyEntryClient({
     JSON.stringify(initialRows)
   );
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [selectedProductFilter, setSelectedProductFilter] = useState<string>("all");
+  const [groupMode, setGroupMode] = useState<"product" | "line">("product");
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{
     type: "success" | "error";
@@ -352,7 +356,134 @@ export function DailyEntryClient({
   };
   handleSaveAllRef.current = handleSaveAll;
 
-  // Aggregated totals
+  // Available unique products in factory
+  const availableProducts = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; sku: string }>();
+    rows.forEach((r) => {
+      if (!map.has(r.productId)) {
+        map.set(r.productId, { id: r.productId, name: r.productName, sku: r.sku });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows]);
+
+  // Product performance breakdown for today
+  const productSummaries = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        productId: string;
+        productName: string;
+        sku: string;
+        totalFG: number;
+        totalTarget: number;
+        hasTarget: boolean;
+        netVariance: number;
+        totalRework: number;
+        totalReject: number;
+        totalScrap: number;
+        totalWIP: number;
+        totalDowntime: number;
+        linesCount: number;
+      }
+    >();
+
+    rows.forEach((r) => {
+      const existing = map.get(r.productId) || {
+        productId: r.productId,
+        productName: r.productName,
+        sku: r.sku,
+        totalFG: 0,
+        totalTarget: 0,
+        hasTarget: false,
+        netVariance: 0,
+        totalRework: 0,
+        totalReject: 0,
+        totalScrap: 0,
+        totalWIP: 0,
+        totalDowntime: 0,
+        linesCount: 0,
+      };
+
+      existing.totalFG += r.entry.finishedGood || 0;
+      existing.totalRework += r.entry.rework || 0;
+      existing.totalReject += r.entry.reject || 0;
+      existing.totalScrap += r.entry.scrap || 0;
+      existing.totalWIP += r.entry.wip || 0;
+      existing.totalDowntime += r.entry.downtimeMinutes || 0;
+      existing.linesCount += 1;
+
+      const targetRes = calculateDailyTarget(
+        r.plan,
+        selectedDate,
+        workingDays,
+        specialDaysList
+      );
+      if (targetRes.hasTarget) {
+        existing.totalTarget += targetRes.dailyTarget;
+        existing.hasTarget = true;
+      }
+
+      existing.netVariance = existing.hasTarget ? existing.totalFG - existing.totalTarget : 0;
+      map.set(r.productId, existing);
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.productName.localeCompare(b.productName));
+  }, [rows, selectedDate, workingDays, specialDaysList]);
+
+  // Filtered rows based on selected product
+  const displayedRows = useMemo(() => {
+    if (selectedProductFilter === "all") return rows;
+    return rows.filter((r) => r.productId === selectedProductFilter);
+  }, [rows, selectedProductFilter]);
+
+  // Rows grouped by product for "By Product" display mode
+  const productGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        product: { id: string; name: string; sku: string };
+        summary: (typeof productSummaries)[0];
+        items: { row: GridRowData; globalIndex: number }[];
+      }
+    >();
+
+    rows.forEach((row, globalIndex) => {
+      if (selectedProductFilter !== "all" && row.productId !== selectedProductFilter) {
+        return;
+      }
+
+      if (!groups.has(row.productId)) {
+        const sum = productSummaries.find((s) => s.productId === row.productId) || {
+          productId: row.productId,
+          productName: row.productName,
+          sku: row.sku,
+          totalFG: 0,
+          totalTarget: 0,
+          hasTarget: false,
+          netVariance: 0,
+          totalRework: 0,
+          totalReject: 0,
+          totalScrap: 0,
+          totalWIP: 0,
+          totalDowntime: 0,
+          linesCount: 0,
+        };
+
+        groups.set(row.productId, {
+          product: { id: row.productId, name: row.productName, sku: row.sku },
+          summary: sum,
+          items: [],
+        });
+      }
+
+      groups.get(row.productId)!.items.push({ row, globalIndex });
+    });
+
+    return Array.from(groups.values());
+  }, [rows, selectedProductFilter, productSummaries]);
+
+  // Aggregated totals (reflects filtered rows when a product is selected)
   let totalFG = 0;
   let totalTarget = 0;
   let hasAnyTarget = false;
@@ -362,7 +493,7 @@ export function DailyEntryClient({
   let totalWIP = 0;
   let totalDowntime = 0;
 
-  rows.forEach((r) => {
+  displayedRows.forEach((r) => {
     totalFG += r.entry.finishedGood || 0;
     totalRework += r.entry.rework || 0;
     totalReject += r.entry.reject || 0;
@@ -395,6 +526,370 @@ export function DailyEntryClient({
 
   const parsedDate = parseISO(selectedDate);
   const formattedFriendlyDate = format(parsedDate, "EEEE, MMMM d, yyyy");
+
+  const renderTableRow = (row: GridRowData, globalIndex: number) => {
+    const targetRes = calculateDailyTarget(
+      row.plan,
+      selectedDate,
+      workingDays,
+      specialDaysList
+    );
+    const varianceRes = targetRes.hasTarget
+      ? calculateVariance(
+          row.entry.finishedGood,
+          targetRes.dailyTarget
+        )
+      : null;
+
+    return (
+      <tr
+        key={`${row.lineId}_${row.productId}`}
+        className="hover:bg-slate-50/70 transition-colors"
+      >
+        {/* Frozen Line & Product Column */}
+        <td className="py-3 px-4 sticky left-0 bg-white z-10 sticky-col-shadow">
+          <div className="font-bold text-slate-900">
+            {row.lineName}
+          </div>
+          <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+            <span className="font-medium text-slate-700">
+              {row.productName}
+            </span>
+            <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-slate-600 border border-slate-200/50">
+              {row.sku}
+            </span>
+          </div>
+        </td>
+
+        {/* Daily Target */}
+        <td className="py-3 px-3">
+          {targetRes.hasTarget ? (
+            <div>
+              <span className="font-mono font-bold tabular-nums text-slate-900">
+                {targetRes.displayTarget.toLocaleString()}
+              </span>
+              <span className="text-[10px] text-slate-400 block font-mono">
+                Plan: {row.plan?.plannedQty.toLocaleString()}
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-400 italic">
+              {targetRes.reason === "non_working_day"
+                ? "Day Off"
+                : "No plan"}
+            </span>
+          )}
+        </td>
+
+        {/* Finished Good (Primary Entry) */}
+        <td className="py-3 px-3 bg-indigo-50/20">
+          <StepperInput
+            value={row.entry.finishedGood}
+            onChange={(val) =>
+              updateRowField(globalIndex, "finishedGood", val)
+            }
+            quickAdds={[1, 5, 10, 50]}
+            className="w-36"
+          />
+        </td>
+
+        {/* Live Variance */}
+        <td className="py-3 px-3">
+          {varianceRes ? (
+            <div className="flex flex-col items-start gap-0.5">
+              <span
+                className={`text-xs font-black font-mono tabular-nums px-2 py-0.5 rounded-md ${
+                  varianceRes.isPositive
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    : "bg-rose-100 text-rose-800 border border-rose-200"
+                }`}
+              >
+                {varianceRes.varianceFormatted}
+              </span>
+              {varianceRes.percentOfTarget !== null && (
+                <span className="text-[10px] font-bold text-slate-400">
+                  {varianceRes.percentOfTarget}%
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-slate-300 font-mono text-xs">
+              −
+            </span>
+          )}
+        </td>
+
+        {/* Rework */}
+        <td className="py-3 px-3">
+          <StepperInput
+            value={row.entry.rework}
+            onChange={(val) =>
+              updateRowField(globalIndex, "rework", val)
+            }
+            quickAdds={[1, 5]}
+            className="w-28"
+          />
+        </td>
+
+        {/* Reject */}
+        <td className="py-3 px-3">
+          <StepperInput
+            value={row.entry.reject}
+            onChange={(val) =>
+              updateRowField(globalIndex, "reject", val)
+            }
+            quickAdds={[1, 5]}
+            className="w-28"
+          />
+        </td>
+
+        {/* Scrap */}
+        <td className="py-3 px-3">
+          <StepperInput
+            value={row.entry.scrap}
+            onChange={(val) =>
+              updateRowField(globalIndex, "scrap", val)
+            }
+            quickAdds={[1, 5]}
+            className="w-28"
+          />
+        </td>
+
+        {/* WIP */}
+        <td className="py-3 px-3">
+          <StepperInput
+            value={row.entry.wip}
+            onChange={(val) => updateRowField(globalIndex, "wip", val)}
+            quickAdds={[5, 10, 25]}
+            className="w-28"
+          />
+        </td>
+
+        {/* Downtime (min) */}
+        <td className="py-3 px-3">
+          <StepperInput
+            value={row.entry.downtimeMinutes}
+            onChange={(val) =>
+              updateRowField(globalIndex, "downtimeMinutes", val)
+            }
+            quickAdds={[5, 15, 30]}
+            className="w-28"
+          />
+        </td>
+
+        {/* Issue Notes */}
+        <td className="py-3 px-4 min-w-[280px]">
+          <div className="space-y-1.5">
+            <input
+              type="text"
+              placeholder="Note stoppage or quality issue..."
+              value={row.entry.issueNote || ""}
+              onChange={(e) =>
+                updateRowField(globalIndex, "issueNote", e.target.value)
+              }
+              className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500"
+            />
+            {downtimeReasons && downtimeReasons.length > 0 && (
+              <div className="flex flex-col gap-0.5">
+                <label
+                  htmlFor={`downtime-template-${globalIndex}`}
+                  className="text-[10px] font-bold text-slate-500 whitespace-nowrap"
+                >
+                  OM Reason Template (የመዘግየት ምክንያት):
+                </label>
+                <select
+                  id={`downtime-template-${globalIndex}`}
+                  aria-label="OM Reason Template (የመዘግየት ምክንያት)"
+                  value={row.entry.downtimeReasonId || ""}
+                  onChange={(e) =>
+                    handleSelectDowntimeReason(globalIndex, e.target.value)
+                  }
+                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white"
+                >
+                  <option value="">Select reason template...</option>
+                  {downtimeReasons.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.code}: {r.nameEn} ({r.nameAm})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const renderCard = (row: GridRowData, globalIndex: number) => {
+    const targetRes = calculateDailyTarget(
+      row.plan,
+      selectedDate,
+      workingDays,
+      specialDaysList
+    );
+    const varianceRes = targetRes.hasTarget
+      ? calculateVariance(
+          row.entry.finishedGood,
+          targetRes.dailyTarget
+        )
+      : null;
+
+    return (
+      <div
+        key={`card_${row.lineId}_${row.productId}`}
+        className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4"
+      >
+        {/* Card Header */}
+        <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+          <div>
+            <div className="font-extrabold text-base text-slate-900">
+              {row.lineName}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-sm font-semibold text-slate-700">
+                {row.productName}
+              </span>
+              <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-600">
+                {row.sku}
+              </span>
+            </div>
+          </div>
+
+          {/* Target & Variance Pill */}
+          <div className="text-right">
+            <span className="text-xs text-slate-400 block">
+              Target: {targetRes.hasTarget ? targetRes.displayTarget : "None"}
+            </span>
+            {varianceRes && (
+              <span
+                className={`text-xs font-black font-mono px-2 py-0.5 rounded-md inline-block mt-1 ${
+                  varianceRes.isPositive
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-rose-100 text-rose-800"
+                }`}
+              >
+                {varianceRes.varianceFormatted}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Steppers Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="bg-indigo-50/30 p-2.5 rounded-xl border border-indigo-100">
+            <label className="text-[11px] font-extrabold text-indigo-900 uppercase block mb-1">
+              Finished Good
+            </label>
+            <StepperInput
+              value={row.entry.finishedGood}
+              onChange={(val) => updateRowField(globalIndex, "finishedGood", val)}
+              quickAdds={[1, 5, 10]}
+            />
+          </div>
+
+          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
+            <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
+              Rework
+            </label>
+            <StepperInput
+              value={row.entry.rework}
+              onChange={(val) => updateRowField(globalIndex, "rework", val)}
+              quickAdds={[1, 5]}
+            />
+          </div>
+
+          <div className="bg-rose-50/40 p-2.5 rounded-xl border border-rose-100">
+            <label className="text-[11px] font-extrabold text-rose-800 uppercase block mb-1">
+              Reject
+            </label>
+            <StepperInput
+              value={row.entry.reject}
+              onChange={(val) => updateRowField(globalIndex, "reject", val)}
+              quickAdds={[1, 5]}
+            />
+          </div>
+
+          <div className="bg-amber-50/40 p-2.5 rounded-xl border border-amber-100">
+            <label className="text-[11px] font-extrabold text-amber-800 uppercase block mb-1">
+              Scrap
+            </label>
+            <StepperInput
+              value={row.entry.scrap}
+              onChange={(val) => updateRowField(globalIndex, "scrap", val)}
+              quickAdds={[1, 5]}
+            />
+          </div>
+
+          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
+            <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
+              WIP
+            </label>
+            <StepperInput
+              value={row.entry.wip}
+              onChange={(val) => updateRowField(globalIndex, "wip", val)}
+              quickAdds={[5, 10]}
+            />
+          </div>
+
+          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
+            <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
+              Downtime (min)
+            </label>
+            <StepperInput
+              value={row.entry.downtimeMinutes}
+              onChange={(val) =>
+                updateRowField(globalIndex, "downtimeMinutes", val)
+              }
+              quickAdds={[5, 15]}
+            />
+          </div>
+        </div>
+
+        {/* Issue Note */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-extrabold text-slate-600 uppercase block">
+            Issue Note & Reason
+          </label>
+          <input
+            type="text"
+            placeholder="Add issue note or stoppage remark..."
+            value={row.entry.issueNote || ""}
+            onChange={(e) =>
+              updateRowField(globalIndex, "issueNote", e.target.value)
+            }
+            className="input input-sm input-bordered w-full text-xs rounded-xl"
+          />
+          {downtimeReasons && downtimeReasons.length > 0 && (
+            <div className="flex flex-col gap-0.5">
+              <label
+                htmlFor={`card-downtime-template-${globalIndex}`}
+                className="text-[10px] font-bold text-slate-500 whitespace-nowrap"
+              >
+                OM Reason Template (የመዘግየት ምክንያት):
+              </label>
+              <select
+                id={`card-downtime-template-${globalIndex}`}
+                aria-label="OM Reason Template (የመዘግየት ምክንያት)"
+                value={row.entry.downtimeReasonId || ""}
+                onChange={(e) =>
+                  handleSelectDowntimeReason(globalIndex, e.target.value)
+                }
+                className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white"
+              >
+                <option value="">Select reason template...</option>
+                {downtimeReasons.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.code}: {r.nameEn} ({r.nameAm})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36">
@@ -431,8 +926,57 @@ export function DailyEntryClient({
           )}
         </div>
 
-        {/* Date Selector & Mode Toggle */}
+        {/* Product Filter & Date Selector & Mode Toggle */}
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {/* Product Filter Dropdown */}
+          {availableProducts.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+              <Boxes className="w-3.5 h-3.5 text-indigo-600 ml-1.5 shrink-0" />
+              <select
+                value={selectedProductFilter}
+                onChange={(e) => setSelectedProductFilter(e.target.value)}
+                className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6"
+                aria-label="Filter by Product"
+              >
+                <option value="all">All Products ({availableProducts.length})</option>
+                {availableProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Group Mode Toggle: By Product vs By Line */}
+          <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setGroupMode("product")}
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 ${
+                groupMode === "product"
+                  ? "bg-white text-indigo-700 shadow-2xs"
+                  : "btn-ghost text-slate-500"
+              }`}
+              title="Display Based on Product"
+            >
+              <Boxes className="w-3 h-3" />
+              <span>By Product</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setGroupMode("line")}
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 ${
+                groupMode === "line"
+                  ? "bg-white text-indigo-700 shadow-2xs"
+                  : "btn-ghost text-slate-500"
+              }`}
+              title="Flat Line View"
+            >
+              <span>By Line</span>
+            </button>
+          </div>
+
           {/* View Mode Switcher */}
           <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
             <button
@@ -657,13 +1201,118 @@ export function DailyEntryClient({
         </div>
       </div>
 
+      {/* Product Performance Strip */}
+      {productSummaries.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs mb-6">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Boxes className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Product Performance Overview</span>
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Click pill to filter views
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+            {/* All Products Pill */}
+            <button
+              type="button"
+              onClick={() => setSelectedProductFilter("all")}
+              className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
+                selectedProductFilter === "all"
+                  ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs"
+                  : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
+              }`}
+            >
+              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                All Products
+              </div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="font-mono font-black text-sm text-slate-900">
+                  {rows.reduce((sum, r) => sum + (r.entry.finishedGood || 0), 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-400">pcs</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                {productSummaries.length} active {productSummaries.length === 1 ? "product" : "products"}
+              </div>
+            </button>
+
+            {/* Individual Product Pills */}
+            {productSummaries.map((prod) => {
+              const isSelected = selectedProductFilter === prod.productId;
+              return (
+                <button
+                  key={prod.productId}
+                  type="button"
+                  onClick={() =>
+                    setSelectedProductFilter(isSelected ? "all" : prod.productId)
+                  }
+                  className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
+                    isSelected
+                      ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs"
+                      : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
+                      {prod.productName}
+                    </span>
+                    <span className="text-[9px] font-mono font-bold bg-white px-1.5 py-0.2 rounded text-slate-600 border border-slate-200">
+                      {prod.sku}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-mono font-black text-sm text-slate-900">
+                        {prod.totalFG.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-400">pcs</span>
+                    </div>
+
+                    {prod.hasTarget ? (
+                      <span
+                        className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded-md ${
+                          prod.netVariance >= 0
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        {prod.netVariance >= 0 ? `+${prod.netVariance}` : `${prod.netVariance}`}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No target</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 gap-2">
+                    <span>
+                      {prod.hasTarget
+                        ? `Target: ${Math.round(prod.totalTarget).toLocaleString()}`
+                        : "Ad-hoc"}
+                    </span>
+                    <span className="text-slate-400">
+                      • {prod.linesCount} {prod.linesCount === 1 ? "line" : "lines"}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Entry Grid - Table View */}
       {viewMode === "table" ? (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
           <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-slate-800">
-                Active Production Lines & Products ({rows.length})
+                {groupMode === "product"
+                  ? `Grouped By Product (${productGroups.length} ${productGroups.length === 1 ? "group" : "groups"})`
+                  : `Active Production Lines (${displayedRows.length})`}
               </span>
               <span className="text-xs text-slate-400 hidden sm:inline">
                 • Frozen line column • Tab/Enter jumps field • Ctrl+S to save
