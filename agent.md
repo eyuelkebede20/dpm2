@@ -176,13 +176,36 @@ Also cover per element type:
 
 Maintain `docs/qa/ui-checklist.md` listing each screen and its tested controls. A screen is not done while items are unchecked.
 
-### 7.3 Build Gate (Before Every Commit)
+### 7.3 Build Gate & Multi-Agent Coordination Protocol
+
+#### Standard Single-Agent Gate (Before Final PR/Commit)
 
 ```bash
-install → lint → format:check → typecheck → test → build
+lint → typecheck → test → build
 ```
 
 Zero warnings. Zero failing tests. Zero new type errors. Report the actual result summary.
+
+#### Multi-Agent / Parallel Subagent Execution Protocol (CRITICAL)
+
+When multiple agents or subagents are spawned concurrently:
+
+1. **NEVER run `build` (`next build` / `pnpm build`) in parallel or inside individual subagents.**
+   Concurrent Next.js builds fight over file locks on Windows, wipe out `.next` manifests, and crash the live development server and other subagents with `ENOENT: no such file or directory` errors.
+2. **Subagents execute scoped tests and typechecks only:**
+   - Run scoped unit/component tests: `pnpm vitest run <scoped-path>`
+   - Run typecheck: `pnpm typecheck` or `pnpm tsc --noEmit`
+   - Lint / format checks.
+   - **Do NOT run `next build` or `pnpm build` inside subagents.**
+3. **Subagents wait for one another:**
+   - Each subagent completes its scoped tasks, verifies its tests and typechecks pass, and signals completion back to the orchestrating/parent agent.
+   - Subagents do NOT trigger global builds or deployment tasks independently.
+4. **The Last Agent / Orchestrating Agent runs the build:**
+   - Only AFTER all subagents have finished their work and all changes are gathered, the **final coordinating agent** runs:
+     1. Full test suite: `pnpm test`
+     2. TypeScript typecheck: `pnpm typecheck`
+     3. Single unified production build: `pnpm build`
+   - This guarantees that production compilation happens exactly **once**, linearly, without race conditions, file locking, or manifest corruption.
 
 ---
 
@@ -282,9 +305,9 @@ Work on **one item at a time**, in order. Do not start the next item until the c
 3. Update LEARNINGS.md
 4. Create scoped branch
 5. Plan small steps
-6. For each step: write test → implement → run build gate → commit
+6. For each step: write test → implement → run scoped tests & typecheck (NEVER run parallel builds) → commit
 7. Test every button/flow + error states; update ui-checklist.md
 8. Round of Subtraction + design-token check
-9. Full build gate; update docs and LEARNINGS.md
+9. Full build gate: in multi-agent workflows, wait for ALL agents to complete; the last coordinating agent runs the final test suite and single production build (`pnpm test` → `pnpm build`); update docs and LEARNINGS.md
 10. Open PR with checklist; start next backlog item only after Done
 ```
