@@ -34,28 +34,36 @@ export function ImpersonationBanner({ impersonatedUser }: ImpersonationBannerPro
   };
 
   return (
-    <div className="bg-amber-500 text-amber-950 px-4 py-2 text-sm font-medium flex items-center justify-between shadow-inner">
-      <div className="flex items-center gap-2 max-w-7xl mx-auto w-full justify-between">
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="w-5 h-5 flex-shrink-0 animate-pulse text-amber-900" />
-          <span>
-            <strong>Dev Mode Active:</strong> You are currently impersonating{" "}
-            <span className="font-bold underline">{impersonatedUser.name}</span> (
-            <span className="uppercase text-xs font-mono font-bold tracking-wider">
-              {impersonatedUser.role}
+    <aside
+      aria-label="Developer Impersonation Warning"
+      className="relative z-50 bg-amber-500 text-amber-950 px-4 py-2 text-sm font-medium border-b border-amber-600/40 shadow-xs"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 max-w-7xl mx-auto w-full">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-xl bg-amber-600/30 flex items-center justify-center shrink-0">
+            <ShieldAlert className="w-4 h-4 animate-pulse text-amber-950" />
+          </div>
+          <div className="text-xs sm:text-sm leading-relaxed truncate sm:overflow-visible sm:whitespace-normal">
+            <span className="inline-block font-black uppercase tracking-wider text-[10px] bg-amber-950/15 text-amber-950 px-2 py-0.5 rounded-md mr-1.5 border border-amber-950/20">
+              Dev Mode Active
+            </span>
+            <span>
+              Impersonating <span className="font-black underline underline-offset-2">{impersonatedUser.name}</span>
             </span>{" "}
-            - {impersonatedUser.email})
-          </span>
+            <span className="text-xs font-medium text-amber-950/80">
+              (<span className="uppercase font-mono font-bold tracking-wider">{impersonatedUser.role}</span> &bull; {impersonatedUser.email})
+            </span>
+          </div>
         </div>
         <button
           onClick={handleStopImpersonation}
           disabled={loading}
-          className="btn btn-xs bg-amber-900 text-white hover:bg-black border-none gap-1 ml-4"
+          className="btn btn-xs bg-amber-950 hover:bg-black text-amber-50 border-none gap-1.5 font-bold rounded-xl shadow-2xs self-end sm:self-auto shrink-0 transition-all active:scale-95 px-3 py-1"
         >
           <LogOut className="w-3.5 h-3.5" />
-          {loading ? "Reverting..." : "Exit Impersonation"}
+          <span>{loading ? "Reverting..." : "Exit Impersonation"}</span>
         </button>
       </div>
-    </div>
+    </aside>
   );
 }

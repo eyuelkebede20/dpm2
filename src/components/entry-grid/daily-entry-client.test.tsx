@@ -244,4 +244,178 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
     fireEvent.change(select, { target: { value: "dtr_2" } });
     expect(noteInput.value).toBe("[DOW-02: Machine Fault] ");
   });
+
+  it("renders Weekly Planned and Left from Weekly Planned and dynamically recalculates remaining balance when finished goods change", () => {
+    const rowsWithPlan: GridRowData[] = [
+      {
+        lineId: "line_1",
+        lineName: "Sewing Line 1",
+        productId: "prod_1",
+        productName: "T-Shirt",
+        sku: "TS-01",
+        plan: {
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          plannedQty: 2500,
+          weeklyPlanned: 2500,
+          priorFinishedGood: 500,
+        },
+        entry: {
+          finishedGood: 100,
+          rework: 0,
+          reject: 0,
+          scrap: 0,
+          wip: 0,
+          downtimeMinutes: 0,
+          issueNote: null,
+        },
+      },
+    ];
+
+    render(
+      <DailyEntryClient
+        initialDate="2026-11-08"
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        initialRows={rowsWithPlan}
+        userRole="fm"
+      />
+    );
+
+    // Verify headers
+    expect(screen.getByText("Weekly Planned")).toBeDefined();
+    expect(screen.getByText("Left from Weekly Planned")).toBeDefined();
+
+    // Prior 500 + current 100 = 600 total produced. Remaining: 2500 - 600 = 1900.
+    expect(screen.getByText("1,900")).toBeDefined();
+    expect(screen.getByText("600 produced")).toBeDefined();
+
+    // Increase finished good by 1 (using +1 quick-add or stepper)
+    const incBtns = screen.getAllByRole("button", { name: /increase quantity/i });
+    fireEvent.click(incBtns[0]); // FG is now 101 -> total 601 -> Left: 1899
+
+    expect(screen.getByText("1,899")).toBeDefined();
+    expect(screen.getByText("601 produced")).toBeDefined();
+  });
+
+  it("filters rows and displays product performance strip", () => {
+    const multiProductRows: GridRowData[] = [
+      {
+        lineId: "line_1",
+        lineName: "Sewing Line 1",
+        productId: "prod_1",
+        productName: "T-Shirt",
+        sku: "TS-01",
+        plan: {
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          plannedQty: 2500,
+        },
+        entry: {
+          finishedGood: 120,
+          rework: 0,
+          reject: 0,
+          scrap: 0,
+          wip: 0,
+          downtimeMinutes: 0,
+          issueNote: null,
+        },
+      },
+      {
+        lineId: "line_2",
+        lineName: "Sewing Line 2",
+        productId: "prod_2",
+        productName: "Denim Jeans",
+        sku: "DJ-02",
+        plan: {
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          plannedQty: 1000,
+        },
+        entry: {
+          finishedGood: 80,
+          rework: 0,
+          reject: 0,
+          scrap: 0,
+          wip: 0,
+          downtimeMinutes: 0,
+          issueNote: null,
+        },
+      },
+    ];
+
+    render(
+      <DailyEntryClient
+        initialDate="2026-11-08"
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        initialRows={multiProductRows}
+        userRole="fm"
+      />
+    );
+
+    // Verify Product Performance Overview Strip is rendered
+    expect(screen.getByText(/Product Performance Overview/i)).toBeDefined();
+    expect(screen.getByText("All Products")).toBeDefined();
+
+    // Verify Product filter dropdown
+    const productFilter = screen.getByLabelText(/Filter by Product/i) as HTMLSelectElement;
+    expect(productFilter).toBeDefined();
+
+    // Select Denim Jeans
+    fireEvent.change(productFilter, { target: { value: "prod_2" } });
+
+    // Sewing Line 2 should be displayed, and Sewing Line 1 hidden
+    expect(screen.getByText("Sewing Line 2")).toBeDefined();
+    expect(screen.queryByText("Sewing Line 1")).toBeNull();
+  });
+
+  it("toggles between 'By Product' and 'By Line' grouping modes", () => {
+    const multiProductRows: GridRowData[] = [
+      {
+        lineId: "line_1",
+        lineName: "Sewing Line 1",
+        productId: "prod_1",
+        productName: "T-Shirt",
+        sku: "TS-01",
+        plan: null,
+        entry: {
+          finishedGood: 100,
+          rework: 0,
+          reject: 0,
+          scrap: 0,
+          wip: 0,
+          downtimeMinutes: 0,
+          issueNote: null,
+        },
+      },
+    ];
+
+    render(
+      <DailyEntryClient
+        initialDate="2026-11-08"
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        initialRows={multiProductRows}
+        userRole="fm"
+      />
+    );
+
+    const byProductBtn = screen.getByTitle(/Display Based on Product/i);
+    const byLineBtn = screen.getByTitle(/Flat Line View/i);
+
+    expect(byProductBtn).toBeDefined();
+    expect(byLineBtn).toBeDefined();
+
+    // Switch to By Line
+    fireEvent.click(byLineBtn);
+    expect(screen.getByText(/Active Production Lines/i)).toBeDefined();
+
+    // Switch back to By Product
+    fireEvent.click(byProductBtn);
+    expect(screen.getByText(/Grouped By Product/i)).toBeDefined();
+  });
 });

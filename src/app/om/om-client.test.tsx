@@ -179,7 +179,7 @@ describe("Button Interaction Tests - OMClient", () => {
 
     // Submit form
     const submitBtn = screen.getByRole("button", { name: /provision member/i });
-    fireEvent.click(submitBtn);
+    fireEvent.submit(submitBtn.closest("form")!);
 
     await waitFor(() => {
       expect(omActions.provisionFactoryUserAction).toHaveBeenCalledWith(
@@ -226,5 +226,165 @@ describe("Button Interaction Tests - OMClient", () => {
         assigned: false,
       });
     });
+  });
+
+  it("clicks on Operating Plant card to drill into Plant Operations Hub and navigates sub-tabs", async () => {
+    renderOM();
+
+    // Click on Hawassa Plant card button
+    const plantCard = screen.getByRole("button", { name: /hawassa plant/i });
+    fireEvent.click(plantCard);
+
+    // Verify Plant Hub header is visible
+    await waitFor(() => {
+      expect(screen.getByText("Plant Operations Hub")).toBeDefined();
+    });
+    expect(screen.getByText(/Plant Hub ID: fac_1/i)).toBeDefined();
+
+    // Verify sub-tabs exist
+    expect(screen.getByRole("button", { name: /calendar & production/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /plant team/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /qa matrix/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /lines & products/i })).toBeDefined();
+
+    // Switch to Plant Team sub-tab
+    const plantTeamTab = screen.getByRole("button", { name: /plant team/i });
+    fireEvent.click(plantTeamTab);
+    expect(screen.getByText("Tadesse FM")).toBeDefined();
+
+    // Switch to QA Matrix sub-tab
+    const qaMatrixTab = screen.getByRole("button", { name: /qa matrix/i });
+    fireEvent.click(qaMatrixTab);
+    expect(screen.getByText(/Bethlehem QA/i)).toBeDefined();
+
+    // Switch to Lines & Products sub-tab
+    const linesTab = screen.getByRole("button", { name: /lines & products/i });
+    fireEvent.click(linesTab);
+    expect(screen.getByText("Standard Bottle")).toBeDefined();
+
+    // Click Back to Plants button
+    const backBtn = screen.getByRole("button", { name: /back to plants/i });
+    fireEvent.click(backBtn);
+    await waitFor(() => {
+      expect(screen.getByText("Operating Plants")).toBeDefined();
+    });
+  });
+
+  it("provisions a new QA inspector with assigned QA products from inside the Plant Hub", async () => {
+    renderOM();
+
+    // Drill into factory
+    const plantCard = screen.getByRole("button", { name: /hawassa plant/i });
+    fireEvent.click(plantCard);
+
+    await waitFor(() => {
+      expect(screen.getByText("Plant Operations Hub")).toBeDefined();
+    });
+
+    // Click "+ Add Personnel to Plant"
+    const addBtn = screen.getByRole("button", { name: /\+ add personnel to plant/i });
+    fireEvent.click(addBtn);
+
+    expect(screen.getByRole("heading", { name: /provision team member & set qa/i })).toBeDefined();
+
+    // Fill form
+    const nameInput = screen.getByPlaceholderText(/e\.g\. Abebe Kebede/i);
+    const emailInput = screen.getByPlaceholderText(/name@company\.com/i);
+    fireEvent.change(nameInput, { target: { value: "Almaz QA" } });
+    fireEvent.change(emailInput, { target: { value: "almaz@dpm.local" } });
+
+    // Change role to QA Inspector
+    const roleSelect = screen.getByLabelText(/^role$/i);
+    fireEvent.change(roleSelect, { target: { value: "qa" } });
+
+    // Expect QA product assignment section to be displayed
+    await waitFor(() => {
+      expect(screen.getByText(/Set QA Product Inspections/i)).toBeDefined();
+    });
+    expect(screen.getByText("Standard Bottle")).toBeDefined();
+
+    // Check the product checkbox
+    const prodCheckbox = screen.getByLabelText(/Standard Bottle/i);
+    fireEvent.click(prodCheckbox);
+
+    // Submit form
+    const submitBtn = screen.getByRole("button", { name: /provision member/i });
+    fireEvent.submit(submitBtn.closest("form")!);
+
+    await waitFor(() => {
+      expect(omActions.provisionFactoryUserAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Almaz QA",
+          email: "almaz@dpm.local",
+          role: "qa",
+          factoryId: "fac_1",
+          assignedProductIds: ["prod_1"],
+        })
+      );
+    });
+  });
+
+  it("filters users via search input and role filter in Factory Teams (Users) tab", () => {
+    const multiUsers = [
+      {
+        id: "usr_fm_1",
+        name: "Tadesse FM",
+        email: "tadesse@dpm.local",
+        role: "fm",
+        active: true,
+        mustChangePassword: true,
+        createdAt: new Date(),
+        factoryId: "fac_1",
+        factoryName: "Hawassa Plant",
+      },
+      {
+        id: "usr_qa_1",
+        name: "Bethlehem QA",
+        email: "bethlehem@dpm.local",
+        role: "qa",
+        active: true,
+        mustChangePassword: false,
+        createdAt: new Date(),
+        factoryId: "fac_1",
+        factoryName: "Hawassa Plant",
+      },
+    ];
+
+    render(
+      <OMClient
+        factories={sampleFactories}
+        factoryUsers={multiUsers}
+        matrixData={sampleMatrix}
+      />
+    );
+
+    // Switch to Factory Teams (Users) tab
+    const teamsTab = screen.getByRole("button", { name: /factory teams/i });
+    fireEvent.click(teamsTab);
+
+    // Search input should be rendered
+    const searchInput = screen.getByPlaceholderText(/Search personnel by name, email, role, or plant/i) as HTMLInputElement;
+    expect(searchInput).toBeDefined();
+
+    // Type "Bethlehem" in search input
+    fireEvent.change(searchInput, { target: { value: "Bethlehem" } });
+
+    // Bethlehem QA should be visible, Tadesse FM should be filtered out
+    expect(screen.getByText("Bethlehem QA")).toBeDefined();
+    expect(screen.queryByText("Tadesse FM")).toBeNull();
+
+    // Clear search using clear button
+    const clearBtn = screen.getByTitle("Clear search");
+    fireEvent.click(clearBtn);
+
+    expect(screen.getByText("Tadesse FM")).toBeDefined();
+    expect(screen.getByText("Bethlehem QA")).toBeDefined();
+
+    // Filter by Role
+    const roleSelect = screen.getByLabelText("Filter by Role") as HTMLSelectElement;
+    fireEvent.change(roleSelect, { target: { value: "fm" } });
+
+    expect(screen.getByText("Tadesse FM")).toBeDefined();
+    expect(screen.queryByText("Bethlehem QA")).toBeNull();
   });
 });

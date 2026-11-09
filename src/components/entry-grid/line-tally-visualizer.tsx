@@ -62,12 +62,12 @@ export function LineTallyVisualizer({
     <div
       className={`rounded-2xl border transition-all ${
         isOverTarget
-          ? "bg-emerald-50/60 border-emerald-300 shadow-2xs"
-          : "bg-slate-50/80 border-slate-200/90"
+          ? "bg-emerald-50/70 border-emerald-300 shadow-2xs"
+          : "bg-slate-50/90 border-slate-200/90"
       } p-3 sm:p-4 ${className}`}
     >
       {/* Top Header: Target status & Completion */}
-      <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200/70">
+      <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-200/80">
         <div className="flex items-center gap-1.5 flex-wrap">
           <div
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider ${
@@ -81,13 +81,13 @@ export function LineTallyVisualizer({
           </div>
 
           {isOverTarget ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-2xs animate-pulse">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-2xs leading-relaxed animate-pulse">
               <Sparkles className="w-2.5 h-2.5" />
               +{overTargetPercent.toFixed(1)}% OVER (ትርፍ)
             </span>
           ) : hasTarget ? (
             <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono tabular-nums leading-relaxed ${
                 fgPercent >= 90
                   ? "bg-emerald-100 text-emerald-800"
                   : fgPercent >= 75
@@ -104,7 +104,7 @@ export function LineTallyVisualizer({
           )}
         </div>
 
-        <div className="text-right flex items-baseline gap-1.5 font-mono">
+        <div className="text-right flex items-baseline gap-1.5 font-mono tabular-nums">
           <span className="text-xs sm:text-sm font-black text-emerald-800 tabular-nums">
             {finishedGood.toLocaleString()}
           </span>
@@ -169,7 +169,7 @@ export function LineTallyVisualizer({
             </div>
 
             {/* Micro Legend */}
-            <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold mt-1 px-1 flex-wrap gap-2">
+            <div className="flex items-center justify-between text-[10px] text-slate-500 font-semibold mt-1 px-1 flex-wrap gap-2 leading-relaxed">
               <div className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-xs bg-emerald-500 inline-block" />
                 <span>Good ({finishedGood})</span>
@@ -195,7 +195,7 @@ export function LineTallyVisualizer({
         )}
       </div>
 
-      {/* Quick Tally Green Buttons Strip (just like in ../dpm) */}
+      {/* Quick Tally Green Buttons Strip */}
       {showQuickButtons && onIncrement && (
         <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex items-center justify-between gap-2 flex-wrap">
           <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
@@ -207,7 +207,7 @@ export function LineTallyVisualizer({
             <button
               type="button"
               onClick={() => onIncrement(-10)}
-              className="text-[11px] font-bold font-mono px-2 py-1 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 active:scale-95 transition-all border border-slate-200/80"
+              className="text-[11px] font-bold font-mono px-2 py-1.5 min-h-[36px] min-w-[36px] rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 active:scale-95 transition-all border border-slate-200/80 touch-manipulation"
               title="Minus 10"
             >
               −10
@@ -215,7 +215,7 @@ export function LineTallyVisualizer({
             <button
               type="button"
               onClick={() => onIncrement(1)}
-              className="text-[11px] font-black font-mono px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border-2 border-emerald-300 hover:border-emerald-600 active:scale-95 transition-all shadow-2xs hover:shadow-xs"
+              className="text-[11px] font-black font-mono px-2.5 py-1.5 min-h-[36px] min-w-[36px] rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border-2 border-emerald-300 hover:border-emerald-600 active:scale-95 transition-all shadow-2xs hover:shadow-xs touch-manipulation"
               title="Add 1 Good Unit"
             >
               +1
@@ -223,7 +223,7 @@ export function LineTallyVisualizer({
             <button
               type="button"
               onClick={() => onIncrement(5)}
-              className="text-[11px] font-black font-mono px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border-2 border-emerald-300 hover:border-emerald-600 active:scale-95 transition-all shadow-2xs hover:shadow-xs"
+              className="text-[11px] font-black font-mono px-2.5 py-1.5 min-h-[36px] min-w-[36px] rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border-2 border-emerald-300 hover:border-emerald-600 active:scale-95 transition-all shadow-2xs hover:shadow-xs touch-manipulation"
               title="Add 5 Good Units"
             >
               +5
@@ -231,7 +231,7 @@ export function LineTallyVisualizer({
             <button
               type="button"
               onClick={() => onIncrement(10)}
-              className="text-[11px] font-black font-mono px-2.5 py-1 rounded-xl bg-emerald-100 hover:bg-emerald-600 text-emerald-900 hover:text-white border-2 border-emerald-400 hover:border-emerald-600 active:scale-95 transition-all shadow-2xs hover:shadow-xs"
+              className="text-[11px] font-black font-mono px-2.5 py-1.5 min-h-[36px] min-w-[36px] rounded-xl bg-emerald-100 hover:bg-emerald-600 text-emerald-900 hover:text-white border-2 border-emerald-400 hover:border-emerald-600 active:scale-95 transition-all shadow-2xs hover:shadow-xs touch-manipulation"
               title="Add 10 Good Units"
             >
               +10
@@ -239,7 +239,7 @@ export function LineTallyVisualizer({
             <button
               type="button"
               onClick={() => onIncrement(50)}
-              className="text-[11px] font-black font-mono px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-emerald-600 hover:border-emerald-700 active:scale-95 transition-all shadow-xs"
+              className="text-[11px] font-black font-mono px-3 py-1.5 min-h-[36px] min-w-[42px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-emerald-600 hover:border-emerald-700 active:scale-95 transition-all shadow-xs touch-manipulation"
               title="Add 50 Good Units"
             >
               +50
@@ -247,7 +247,7 @@ export function LineTallyVisualizer({
             <button
               type="button"
               onClick={() => onIncrement(100)}
-              className="text-[11px] font-black font-mono px-3 py-1 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white border-2 border-emerald-700 active:scale-95 transition-all shadow-xs"
+              className="text-[11px] font-black font-mono px-3 py-1.5 min-h-[36px] min-w-[44px] rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white border-2 border-emerald-700 active:scale-95 transition-all shadow-xs touch-manipulation"
               title="Add 100 Good Units"
             >
               +100

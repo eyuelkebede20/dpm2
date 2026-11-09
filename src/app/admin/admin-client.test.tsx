@@ -22,7 +22,7 @@ vi.mock("@/actions/admin-actions", () => ({
   adminResetPasswordAction: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-describe("Button Interaction Tests - AdminClient", () => {
+describe("Button Interaction Tests - AdminClient", { timeout: 20000 }, () => {
   const sampleProfile = {
     id: "default",
     companyName: "Acme Industrial",

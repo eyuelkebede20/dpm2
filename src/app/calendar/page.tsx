@@ -4,6 +4,7 @@ import { CalendarClient } from "@/components/calendar/calendar-client";
 import { format, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import {
   gregorianToEth,
+  ethToGregorian,
   getEthiopianMonthRange,
 } from "@/lib/ethiopian-calendar";
 import { db } from "@/db";
@@ -63,6 +64,9 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     const range = getEthiopianMonthRange(ethYear, ethMonth);
     startDateStr = range.from;
     endDateStr = range.to;
+    if (!resolved.month) {
+      gregMonthStr = ethToGregorian(ethYear, ethMonth, 15).slice(0, 7);
+    }
   } else {
     const currentGregMonth = format(today, "yyyy-MM");
     // Disallow future months: clamp to current Gregorian month
@@ -72,6 +76,11 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     const monthDate = parseISO(`${gregMonthStr}-01`);
     startDateStr = format(startOfMonth(monthDate), "yyyy-MM-dd");
     endDateStr = format(endOfMonth(monthDate), "yyyy-MM-dd");
+    if (!resolved.ey || !resolved.em) {
+      const midEth = gregorianToEth(`${gregMonthStr}-15`);
+      ethYear = midEth.year;
+      ethMonth = midEth.month;
+    }
   }
 
   const [data, monthSpecialDays] = await Promise.all([

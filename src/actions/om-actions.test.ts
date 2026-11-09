@@ -8,6 +8,7 @@ import {
   updateFactoryUserRoleAction,
   getQAProductMatrixData,
   toggleQAProductAssignmentAction,
+  getOMFactoryCalendarDataAction,
 } from "./om-actions";
 import * as authz from "@/lib/authz";
 import { db } from "@/db";
@@ -37,6 +38,7 @@ vi.mock("@/db", () => {
         if (vals.role) mockTxUsers.push(vals);
         else if (vals.providerId) mockTxAccounts.push(vals);
         else if (vals.factoryId && vals.userId) mockTxFactoryUsers.push(vals);
+        else if (vals.qaUserId) mockAssignmentsInserted.push(vals);
         return Promise.resolve([{ id: vals.id || "created" }]);
       }),
     })),
@@ -304,6 +306,39 @@ describe("OM Workflows - Operation Manager Operations", () => {
       expect(res.success).toBe(true);
       expect(mockTxUsers[0].role).toBe("qa");
     });
+
+    it("successfully provisions QA user with assigned product IDs in a single transaction", async () => {
+      mockSingleFactory = { id: "fac_1", omId: "usr_om_01" };
+
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([{ id: "fac_1" }]),
+          })),
+        })),
+      } as any).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      } as any);
+
+      const res = await provisionFactoryUserAction({
+        name: "Bethlehem QA",
+        email: "bethlehem_qa@dpm.local",
+        password: "TemporaryPassword123!",
+        role: "qa",
+        factoryId: "fac_1",
+        assignedProductIds: ["prod_1", "prod_2"],
+      });
+
+      expect(res.success).toBe(true);
+      expect(mockTxUsers[0].role).toBe("qa");
+      expect(mockAssignmentsInserted.length).toBe(2);
+      expect(mockAssignmentsInserted[0].productId).toBe("prod_1");
+      expect(mockAssignmentsInserted[1].productId).toBe("prod_2");
+    });
   });
 
   describe("toggleFactoryUserStatusAction", () => {
@@ -400,6 +435,84 @@ describe("OM Workflows - Operation Manager Operations", () => {
       const res = await updateFactoryUserRoleAction("usr_team_1", "fm");
       expect(res.success).toBe(false);
       expect(res.error).toContain("Forbidden");
+    });
+  });
+
+  describe("getOMFactoryCalendarDataAction", () => {
+    it("denies unauthorized roles like FM", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(fmUser);
+
+      const res = await getOMFactoryCalendarDataAction("fac_1", "2026-11-01", "2026-11-30");
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Forbidden");
+    });
+
+    it("denies OM if factory does not belong to OM", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      } as any);
+
+      const res = await getOMFactoryCalendarDataAction("fac_other", "2026-11-01", "2026-11-30");
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Unauthorized or factory not found");
+    });
+
+    it("returns working days, entries, plans, and special days for valid plant", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+
+      // 1. Factory check
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([{ id: "fac_1" }]),
+          })),
+        })),
+      } as any)
+      // 2. Industry profile
+      .mockReturnValueOnce({
+        from: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue([{ workingDays: [1, 2, 3, 4, 5] }]),
+        })),
+      } as any)
+      // 3. Entries
+      .mockReturnValueOnce({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            { id: "ent_1", date: "2026-11-05", finishedGood: 120 },
+          ]),
+        })),
+      } as any)
+      // 4. Plans
+      .mockReturnValueOnce({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            { lineId: "line_1", plannedQty: 500 },
+          ]),
+        })),
+      } as any)
+      // 5. Special days
+      .mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([
+            { id: "sd_1", date: "2026-11-10", nameEn: "Plant Inspection Day" },
+          ]),
+        })),
+      } as any);
+
+      const res = await getOMFactoryCalendarDataAction("fac_1", "2026-11-01", "2026-11-30");
+      expect(res.success).toBe(true);
+      expect(res.data?.workingDays).toEqual([1, 2, 3, 4, 5]);
+      expect(res.data?.entries.length).toBe(1);
+      expect(res.data?.plans.length).toBe(1);
+      expect(res.data?.specialDays.length).toBe(1);
     });
   });
 });

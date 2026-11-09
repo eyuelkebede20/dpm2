@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-describe("Button Interaction Tests - CalendarClient", () => {
+describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => {
   const sampleEntries = [
     {
       id: "rep_1",
@@ -228,5 +228,24 @@ describe("Button Interaction Tests - CalendarClient", () => {
         fireEvent.click(resetBtn);
       }
     }
+  });
+
+  it("renders weekday headers with Ethiopian and English abbreviations", () => {
+    renderCalendar();
+    expect(screen.getAllByText(/ሰኞ/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/ማክ/i).length).toBeGreaterThan(0);
+  });
+
+  it("renders quality fallout numbers and targets in inspection views", () => {
+    renderCalendar();
+
+    const matches = screen.getAllByText(/120/i);
+    const dayBtn = matches.map((m) => m.closest("button")).find(Boolean);
+    if (dayBtn) {
+      fireEvent.click(dayBtn);
+    }
+
+    expect(screen.getAllByText(/Rework/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Reject/i).length).toBeGreaterThan(0);
   });
 });

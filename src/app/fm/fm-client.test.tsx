@@ -20,6 +20,7 @@ vi.mock("@/actions/fm-actions", () => ({
   toggleProductActiveAction: vi.fn().mockResolvedValue({ success: true }),
   toggleLineProductAction: vi.fn().mockResolvedValue({ success: true }),
   createPlanAction: vi.fn().mockResolvedValue({ success: true }),
+  updatePlanAction: vi.fn().mockResolvedValue({ success: true }),
 }));
 
 describe("Button Interaction Tests - FMClient", () => {
@@ -249,6 +250,35 @@ describe("Button Interaction Tests - FMClient", () => {
         productId: "prod_1",
         linked: false,
       });
+    });
+  });
+
+  it("opens, edits, and submits 'Edit Production Plan' modal via Edit button", async () => {
+    renderFM();
+
+    // Find Edit button on plan
+    const editBtns = screen.getAllByRole("button", { name: /edit/i });
+    fireEvent.click(editBtns[0]);
+
+    expect(screen.getByRole("heading", { name: /edit production plan/i })).toBeDefined();
+
+    // Cancel modal
+    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
+    fireEvent.click(cancelBtn);
+    expect(screen.queryByRole("heading", { name: /edit production plan/i })).toBeNull();
+
+    // Reopen and submit
+    fireEvent.click(editBtns[0]);
+    const saveChangesBtn = screen.getByRole("button", { name: /save changes/i });
+    fireEvent.click(saveChangesBtn);
+
+    await waitFor(() => {
+      expect(fmActions.updatePlanAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "plan_1",
+          plannedQty: 50000,
+        })
+      );
     });
   });
 });

@@ -41,7 +41,7 @@ describe("Button Interaction Tests - QAClient", () => {
       date: "2026-03-24",
       checked: 200,
       defects: 4,
-      note: "Minor label wrinkle",
+      note: "Minor label wrinkle / የክዳን መላላት",
       createdAt: new Date(),
       productName: "Water 1L Bottle",
       productSku: "WAT-1L",
@@ -142,5 +142,45 @@ describe("Button Interaction Tests - QAClient", () => {
 
     const submitBtn = screen.getByRole("button", { name: /submit inspection report/i }) as HTMLButtonElement;
     expect(submitBtn.disabled).toBe(true);
+  });
+
+  it("renders summary statistics cards for Total Checked, Defect Rate, and Passed Units", () => {
+    renderQA();
+
+    // Summary cards exist
+    expect(screen.getByText("Total Checked")).toBeDefined();
+    expect(screen.getByText("Defect Rate")).toBeDefined();
+    expect(screen.getByText("Passed Units")).toBeDefined();
+
+    // In sampleInspections: checked = 200, defects = 4 => passed = 196, rate = 2.0%
+    expect(screen.getAllByText("200").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("2.0%")).toBeDefined();
+    expect(screen.getByText("196")).toBeDefined();
+    expect(screen.getByText(/98% pass rate/i)).toBeDefined();
+  });
+
+  it("toggles pass/fail verdict between 'Pass (Spec OK)' and 'Defects Found'", () => {
+    renderQA();
+
+    const defectInput = screen.getAllByRole("spinbutton")[1] as HTMLInputElement;
+    expect(defectInput.value).toBe("0");
+
+    const failToggleBtn = screen.getByRole("button", { name: /defects found/i });
+    const passToggleBtn = screen.getByRole("button", { name: /pass \(spec ok\)/i });
+
+    // Tap Defects Found -> should set defects to at least 1
+    fireEvent.click(failToggleBtn);
+    expect(defectInput.value).toBe("1");
+
+    // Tap Pass (Spec OK) -> should reset defects to 0
+    fireEvent.click(passToggleBtn);
+    expect(defectInput.value).toBe("0");
+  });
+
+  it("displays past inspection notes with Amharic / Ethiopic defect descriptions", () => {
+    renderQA();
+
+    // Confirms Amharic defect note renders properly
+    expect(screen.getByText(/Minor label wrinkle \/ የክዳን መላላት/i)).toBeDefined();
   });
 });

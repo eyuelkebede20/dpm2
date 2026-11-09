@@ -300,7 +300,7 @@ export async function getPlans() {
 
   if (lineIds.length === 0) return [];
 
-  return await db
+  const rawPlans = await db
     .select({
       id: plans.id,
       lineId: plans.lineId,
@@ -318,6 +318,37 @@ export async function getPlans() {
     .innerJoin(products, eq(plans.productId, products.id))
     .where(eq(lines.factoryId, factory.id))
     .orderBy(desc(plans.startDate));
+
+  // Compute cumulative produced finished goods and left from weekly planned
+  const allEntries = await db
+    .select({
+      lineId: reportEntries.lineId,
+      productId: reportEntries.productId,
+      date: reportEntries.date,
+      finishedGood: reportEntries.finishedGood,
+    })
+    .from(reportEntries);
+
+  return rawPlans.map((p) => {
+    const totalProduced = allEntries
+      .filter(
+        (e) =>
+          e.lineId === p.lineId &&
+          e.productId === p.productId &&
+          e.date >= p.startDate &&
+          e.date <= p.endDate
+      )
+      .reduce((sum, e) => sum + (e.finishedGood || 0), 0);
+
+    const leftFromWeeklyPlanned = Math.max(0, p.plannedQty - totalProduced);
+
+    return {
+      ...p,
+      weeklyPlanned: p.plannedQty,
+      totalProduced,
+      leftFromWeeklyPlanned,
+    };
+  });
 }
 
 export async function createPlanAction(rawInput: unknown) {
@@ -353,6 +384,122 @@ export async function createPlanAction(rawInput: unknown) {
   } catch (err: any) {
     console.error("Create plan error:", err);
     return { success: false, error: "Failed to create production plan" };
+  }
+}
+
+const updatePlanSchema = z
+  .object({
+    id: z.string().min(1, "Plan ID is required"),
+    lineId: z.string().min(1, "Line is required"),
+    productId: z.string().min(1, "Product is required"),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date format (YYYY-MM-DD)"),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date format (YYYY-MM-DD)"),
+    plannedQty: z.number().int().positive("Planned quantity must be greater than 0"),
+  })
+  .strict()
+  .refine((data) => data.startDate <= data.endDate, {
+    message: "End date must be on or after start date",
+    path: ["endDate"],
+  });
+
+export async function updatePlanAction(rawInput: unknown) {
+  const user = await requireUser();
+  const factory = await getFMFactory();
+
+  const allowed = await can(user, "update", {
+    type: "plan",
+    factoryId: factory.id,
+  });
+  if (!allowed) return { success: false, error: "Forbidden" };
+
+  const parsed = updatePlanSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message || "Invalid input" };
+  }
+
+  const { id, lineId, productId, startDate, endDate, plannedQty } = parsed.data;
+
+  try {
+    await db
+      .update(plans)
+      .set({
+        lineId,
+        productId,
+        startDate,
+        endDate,
+        plannedQty,
+      })
+      .where(eq(plans.id, id));
+
+    revalidatePath("/fm");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Update plan error:", err);
+    return { success: false, error: "Failed to update production plan" };
+  }
+}
+
+export async function deletePlanAction(planId: string) {
+  const user = await requireUser();
+  const factory = await getFMFactory();
+
+  const allowed = await can(user, "delete", {
+    type: "plan",
+    factoryId: factory.id,
+  });
+  if (!allowed) return { success: false, error: "Forbidden" };
+
+  try {
+    await db.delete(plans).where(eq(plans.id, planId));
+    revalidatePath("/fm");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Delete plan error:", err);
+    return { success: false, error: "Failed to delete production plan" };
+  }
+}
+
+const createStoreTransactionSchema = z
+  .object({
+    productId: z.string().min(1, "Product is required"),
+    delta: z.number().int().refine((val) => val !== 0, "Quantity change cannot be zero"),
+    notes: z.string().max(200).optional(),
+  })
+  .strict();
+
+export async function createStoreTransactionAction(rawInput: unknown) {
+  const user = await requireUser();
+  const factory = await getFMFactory();
+
+  const allowed = await can(user, "create", {
+    type: "stock_ledger",
+    factoryId: factory.id,
+  });
+  if (!allowed) return { success: false, error: "Forbidden" };
+
+  const parsed = createStoreTransactionSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message || "Invalid input" };
+  }
+
+  const { productId, delta } = parsed.data;
+
+  try {
+    const txId = `stk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    await db.insert(stockLedger).values({
+      id: txId,
+      factoryId: factory.id,
+      productId,
+      delta,
+      reportEntryId: null,
+    });
+
+    revalidatePath("/fm/store");
+    revalidatePath("/fm");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Create store transaction error:", err);
+    return { success: false, error: "Failed to record stock transaction" };
   }
 }
 

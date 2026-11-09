@@ -23,6 +23,7 @@ import {
 interface RoleOption {
   role: "sys_admin" | "om" | "fm" | "qa";
   label: string;
+  amharicLabel: string;
   defaultName: string;
   defaultEmail: string;
   description: string;
@@ -35,6 +36,7 @@ const PRIMARY_ROLES: RoleOption[] = [
   {
     role: "sys_admin",
     label: "Sys Admin",
+    amharicLabel: "የስርዓት አስተዳዳሪ",
     defaultName: "System Administrator",
     defaultEmail: "admin@dpm.local",
     description: "Industry Profile & Operation Managers",
@@ -45,6 +47,7 @@ const PRIMARY_ROLES: RoleOption[] = [
   {
     role: "om",
     label: "Operation Mgr",
+    amharicLabel: "ኦፕሬሽን ስራ አስኪያጅ",
     defaultName: "Solomon Tadesse (OM)",
     defaultEmail: "om@dpm.local",
     description: "Factories, Staffing & QA Assignments",
@@ -55,6 +58,7 @@ const PRIMARY_ROLES: RoleOption[] = [
   {
     role: "fm",
     label: "Factory Mgr",
+    amharicLabel: "ፋብሪካ ስራ አስኪያጅ",
     defaultName: "Abebe Kebede (FM)",
     defaultEmail: "fm@dpm.local",
     description: "Lines, Plans, Daily Grid & Store Stock",
@@ -65,6 +69,7 @@ const PRIMARY_ROLES: RoleOption[] = [
   {
     role: "qa",
     label: "QA Inspector",
+    amharicLabel: "የጥራት ተቆጣጣሪ",
     defaultName: "Hanna Worku (QA)",
     defaultEmail: "qa@dpm.local",
     description: "Inspections & Defect Tracking",
@@ -208,12 +213,12 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
   });
 
   return (
-    <div ref={popoverRef} className="fixed bottom-20 sm:bottom-5 right-4 sm:right-5 z-50 select-none">
+    <div ref={popoverRef} className="fixed bottom-20 sm:bottom-5 right-3 sm:right-5 z-50 select-none">
       {/* Expanded Popover */}
       {isOpen && (
-        <div className="mb-3 w-88 sm:w-[420px] bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl shadow-2xl overflow-hidden p-4 animate-in fade-in slide-in-from-bottom-3 duration-200">
+        <div className="mb-3 w-[calc(100vw-1.5rem)] max-w-sm sm:max-w-none sm:w-[420px] bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl shadow-2xl overflow-hidden p-4 sm:p-5 animate-in fade-in slide-in-from-bottom-3 duration-200 max-h-[85vh] flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
                 <Sparkles className="w-4 h-4" />
@@ -227,7 +232,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
                     DEV
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 font-medium">
+                <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
                   Instant 1-click server authentication (No password needed)
                 </p>
               </div>
@@ -245,13 +250,13 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
 
           {/* Error Banner */}
           {errorMsg && (
-            <div className="alert alert-error text-xs py-2 px-3 rounded-xl mb-3 bg-red-50 text-red-700 border border-red-200">
+            <div className="alert alert-error text-xs py-2 px-3 rounded-xl mb-3 bg-red-50 text-red-700 border border-red-200 shrink-0">
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Destination Landing Preference */}
-          <div className="mb-3 p-2 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+          <div className="mb-3 p-2 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
               <Compass className="w-3.5 h-3.5 text-indigo-600" />
               <span>After switch go to:</span>
@@ -296,8 +301,8 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
             </div>
           </div>
 
-          {/* Primary Role Cards */}
-          <div className="space-y-1.5">
+          {/* Primary Role Cards (Scrollable) */}
+          <div className="space-y-1.5 overflow-y-auto pr-0.5 flex-1 min-h-0">
             {PRIMARY_ROLES.map((item) => {
               const Icon = item.icon;
               const isActive = item.role === currentRole;
@@ -331,15 +336,20 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-sm font-black text-slate-900 leading-tight">
                           {item.label}
                         </span>
+                        {item.amharicLabel && (
+                          <span className="text-[11px] font-semibold text-slate-400 font-sans leading-relaxed">
+                            ({item.amharicLabel})
+                          </span>
+                        )}
                         <span className={`badge badge-xs text-[9px] uppercase tracking-wider ${item.badgeClass}`}>
                           {item.role}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
+                      <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5 leading-relaxed">
                         {item.defaultName} • <span className="font-mono text-slate-400">{item.defaultEmail}</span>
                       </div>
                     </div>
@@ -363,7 +373,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
           </div>
 
           {/* Expandable All Database Accounts Section */}
-          <div className="mt-3 pt-2.5 border-t border-slate-100">
+          <div className="mt-3 pt-2.5 border-t border-slate-100 shrink-0">
             <button
               type="button"
               onClick={() => setShowAllUsers((prev) => !prev)}
@@ -439,7 +449,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
           </div>
 
           {/* Quick Workspace Navigation & Sign Out Footer */}
-          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs shrink-0">
             <button
               type="button"
               disabled={switchingTo !== null}
@@ -458,20 +468,21 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
         </div>
       )}
 
-      {/* Floating Action Pill */}
+      {/* Floating Action Pill (Collapses neatly to a compact FAB on mobile) */}
       <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="group flex items-center gap-2.5 px-3.5 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white shadow-xl hover:shadow-2xl border border-slate-700 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+          className="group flex items-center gap-2 p-2.5 sm:px-3.5 sm:py-2.5 rounded-full bg-slate-900/95 hover:bg-slate-800 text-white shadow-xl hover:shadow-2xl border border-slate-700/80 backdrop-blur-md transition-all transform hover:-translate-y-0.5 active:translate-y-0 focus:outline-hidden"
           title="Switch Active Developer Role"
         >
-          <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+          <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white shrink-0 shadow-xs relative">
             <UserCheck className="w-3.5 h-3.5" />
+            <span className="sm:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs font-black">
-            <span className="text-slate-400 font-normal hidden sm:inline">Role:</span>
+          <div className="hidden sm:flex items-center gap-1.5 text-xs font-black">
+            <span className="text-slate-400 font-normal">Role:</span>
             <span className="text-white">
               {activeRoleOption?.label || currentRole?.toUpperCase() || "Select Role"}
             </span>
@@ -479,7 +490,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
           </div>
 
           <ChevronUp
-            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+            className={`w-4 h-4 text-slate-400 transition-transform duration-200 hidden sm:block ${
               isOpen ? "rotate-180 text-white" : ""
             }`}
           />

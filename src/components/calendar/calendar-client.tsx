@@ -18,29 +18,21 @@ import {
   ChevronRight,
   PenTool,
   X,
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  Globe,
+  Sparkles,
   Grid as GridIcon,
   List as ListIcon,
   CalendarDays,
-  Sparkles,
-  ArrowRight,
-  Filter,
-  CheckCircle2,
-  Clock,
+  AlertTriangle,
+  Globe,
   ChevronDown,
   PartyPopper,
-  CalendarCheck,
+  CheckCircle2,
 } from "lucide-react";
-import { calculateDailyTarget, calculateVariance, isWorkingDay, SpecialDayInput } from "@/lib/target";
+import { calculateDailyTarget, calculateVariance, isWorkingDay } from "@/lib/target";
 import {
   EthiopianDate,
   ETH_MONTH_NAMES_AM,
   ETH_MONTH_NAMES_EN,
-  ETH_WEEKDAYS_AM,
-  ETH_WEEKDAYS_EN,
   daysInMonthEth,
   ethToGregorian,
   gregorianToEth,
@@ -93,8 +85,20 @@ interface CalendarClientProps {
   endDateStr: string;
   entries: CalendarEntry[];
   plans: CalendarPlan[];
+  products?: { id: string; name: string }[];
   specialDays?: CalendarSpecialDay[];
 }
+
+// Responsive weekday definitions with Ethiopic and Gregorian scripts
+const WEEKDAY_HEADERS = [
+  { amFull: "ሰኞ", amShort: "ሰኞ", amMini: "ሰ", enFull: "Monday", enShort: "Mon", enMini: "M", isWeekend: false },
+  { amFull: "ማክሰኞ", amShort: "ማክ", amMini: "ማ", enFull: "Tuesday", enShort: "Tue", enMini: "T", isWeekend: false },
+  { amFull: "ረቡዕ", amShort: "ረቡ", amMini: "ረ", enFull: "Wednesday", enShort: "Wed", enMini: "W", isWeekend: false },
+  { amFull: "ሐሙስ", amShort: "ሐሙ", amMini: "ሐ", enFull: "Thursday", enShort: "Thu", enMini: "T", isWeekend: false },
+  { amFull: "አርብ", amShort: "አር", amMini: "አ", enFull: "Friday", enShort: "Fri", enMini: "F", isWeekend: false },
+  { amFull: "ቅዳሜ", amShort: "ቅዳ", amMini: "ቅ", enFull: "Saturday", enShort: "Sat", enMini: "S", isWeekend: false },
+  { amFull: "እሁድ", amShort: "እሁ", amMini: "እ", enFull: "Sunday", enShort: "Sun", enMini: "S", isWeekend: true },
+];
 
 export function CalendarClient({
   factoryId,
@@ -108,6 +112,7 @@ export function CalendarClient({
   endDateStr,
   entries,
   plans,
+  products = [],
   specialDays = [],
 }: CalendarClientProps) {
   const router = useRouter();
@@ -123,12 +128,22 @@ export function CalendarClient({
   const [showMonthJumper, setShowMonthJumper] = useState<boolean>(false);
   const [calendarViewMode, setCalendarViewMode] = useState<"compact" | "grid" | "list">("grid");
 
+  // Keep state synchronized with incoming server navigation props
+  useEffect(() => {
+    setCalType(initialCalType);
+  }, [initialCalType]);
+
+  useEffect(() => {
+    setEthYear(initialEthYear);
+    setEthMonth(initialEthMonth);
+  }, [initialEthYear, initialEthMonth]);
+
   // Today in both calendars
   const todayGC = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
   const currentGregMonthStr = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const todayEC = useMemo(() => gregorianToEth(todayGC), [todayGC]);
 
-  // Is Next Month in the future? Next month and months following are disabled/inactive!
+  // Disable future months navigation
   const isNextMonthDisabled = useMemo(() => {
     if (calType === "ethiopian") {
       return ethYear > todayEC.year || (ethYear === todayEC.year && ethMonth >= todayEC.month);
@@ -148,17 +163,18 @@ export function CalendarClient({
     setActiveDayDateStr(todayGC);
   }, [todayGC]);
 
-  // Handle Calendar Switch
+  // Handle Seamless Calendar Switch
   const toggleCalendarType = (newType: "ethiopian" | "gregorian") => {
     setCalType(newType);
     if (newType === "ethiopian") {
       router.push(`/calendar?cal=ethiopian&ey=${ethYear}&em=${ethMonth}`);
     } else {
-      router.push(`/calendar?cal=gregorian&month=${initialGregMonthStr}`);
+      const midGreg = ethToGregorian(ethYear, ethMonth, 15).slice(0, 7);
+      router.push(`/calendar?cal=gregorian&month=${midGreg || initialGregMonthStr}`);
     }
   };
 
-  // Month navigation
+  // Month navigation (Ethiopian 13 months with Meskerem 1 <-> Pagume 13 wrap)
   const handlePrevMonth = () => {
     if (calType === "ethiopian") {
       let nextM = ethMonth - 1;
@@ -313,7 +329,7 @@ export function CalendarClient({
     }
   }, [calType, ethYear, ethMonth, startDateStr, endDateStr, workingDays, todayGC, language, specialDays]);
 
-  // Grid start alignment offset: Standard Monday start (Mon=0, Tue=1, ..., Sun=6)
+  // Standard Monday start alignment (Mon=0, Tue=1, ..., Sun=6)
   const firstDayDow = gridDays.length > 0 ? gridDays[0].dayOfWeek : 1;
   const leadingBlanks = (firstDayDow + 6) % 7;
 
@@ -361,7 +377,7 @@ export function CalendarClient({
     return map;
   }, [gridDays, filteredEntries, plans, workingDays, specialDays]);
 
-  // Month-wide Totals
+  // Month-wide Performance Totals
   const monthTotals = useMemo(() => {
     let output = 0;
     let target = 0;
@@ -403,7 +419,7 @@ export function CalendarClient({
     ? gridDays.find((g) => g.gregorianDateStr === activeDayDateStr)
     : null;
 
-  // Header Title
+  // Header Title with proper leading for Ge'ez script
   const headerTitle = useMemo(() => {
     if (calType === "ethiopian") {
       const mName = language === "am" ? ETH_MONTH_NAMES_AM[ethMonth] : ETH_MONTH_NAMES_EN[ethMonth];
@@ -429,15 +445,15 @@ export function CalendarClient({
         {/* Row A: Factory Brand + Title + Direct Emerald Entry Button */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 leading-relaxed">
               <span className="font-extrabold text-slate-700">{factoryName}</span>
               <span>•</span>
-              <span className="text-emerald-700 font-extrabold flex items-center gap-1">
+              <span className="text-emerald-700 font-extrabold flex items-center gap-1 leading-relaxed">
                 <Sparkles className="w-3.5 h-3.5" />
                 {calType === "ethiopian" ? "የኢትዮጵያ ካላንደር (13 ወራት)" : "Gregorian Calendar"}
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-0.5 flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-0.5 flex items-center gap-2 leading-relaxed">
               <CalendarIcon className="w-6 h-6 text-emerald-600 shrink-0" />
               <span>Calendar & Production</span>
             </h1>
@@ -452,7 +468,7 @@ export function CalendarClient({
                   router.push(`/entry?date=${activeDayDateStr || todayGC}`);
                 }
               }}
-              className={`btn btn-sm w-full sm:w-auto font-bold rounded-xl shadow-xs border-none gap-1.5 transition-all ${
+              className={`btn btn-sm w-full sm:w-auto font-bold rounded-xl shadow-xs border-none gap-1.5 transition-all min-h-[44px] ${
                 isSelectedDayFuture
                   ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95"
@@ -465,16 +481,16 @@ export function CalendarClient({
           </div>
         </div>
 
-        {/* Row B: Responsive Controls Ribbon */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 pt-1">
+        {/* Row B: Responsive Controls Ribbon (Wraps cleanly on mobile: flex-wrap sm:flex-nowrap gap-2) */}
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 pt-1">
           {/* Calendar System Switcher & Language Switcher */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             {/* Dual Calendar Mode Toggle */}
-            <div className="join flex-1 sm:flex-initial border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
+            <div className="join border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
               <button
                 type="button"
                 onClick={() => toggleCalendarType("ethiopian")}
-                className={`btn btn-sm join-item flex-1 sm:flex-initial text-xs font-extrabold ${
+                className={`btn btn-sm join-item text-xs font-extrabold min-h-[40px] px-3.5 ${
                   calType === "ethiopian"
                     ? "bg-slate-900 text-white hover:bg-black border-none"
                     : "btn-ghost text-slate-600"
@@ -485,7 +501,7 @@ export function CalendarClient({
               <button
                 type="button"
                 onClick={() => toggleCalendarType("gregorian")}
-                className={`btn btn-sm join-item flex-1 sm:flex-initial text-xs font-extrabold ${
+                className={`btn btn-sm join-item text-xs font-extrabold min-h-[40px] px-3.5 ${
                   calType === "gregorian"
                     ? "bg-slate-900 text-white hover:bg-black border-none"
                     : "btn-ghost text-slate-600"
@@ -500,7 +516,7 @@ export function CalendarClient({
               <button
                 type="button"
                 onClick={() => setLanguage((l) => (l === "am" ? "en" : "am"))}
-                className="btn btn-sm btn-outline rounded-xl text-xs font-bold shrink-0"
+                className="btn btn-sm btn-outline rounded-xl text-xs font-bold shrink-0 min-h-[40px] leading-relaxed"
                 title="Toggle Amharic / English Labels"
               >
                 {language === "am" ? "ፊደል (አማ)" : "English"}
@@ -509,17 +525,17 @@ export function CalendarClient({
 
             <button
               onClick={handleToday}
-              className="btn btn-sm btn-outline rounded-xl text-xs font-bold shrink-0"
+              className="btn btn-sm btn-outline rounded-xl text-xs font-bold shrink-0 min-h-[40px]"
             >
               Today
             </button>
           </div>
 
           {/* Month Stepper & Jumper */}
-          <div className="join w-full md:w-auto border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white flex items-center justify-between">
+          <div className="join w-full sm:w-auto border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white flex items-center justify-between">
             <button
               onClick={handlePrevMonth}
-              className="btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[38px] flex items-center justify-center"
+              className="btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[42px] min-w-[44px] flex items-center justify-center touch-manipulation"
               title="Previous Month"
               aria-label="Previous Month"
             >
@@ -529,11 +545,11 @@ export function CalendarClient({
             <button
               type="button"
               onClick={() => calType === "ethiopian" && setShowMonthJumper(true)}
-              className="join-item px-3 sm:px-4 flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-slate-900 hover:bg-slate-50 transition-colors flex-1 md:flex-initial min-h-[38px]"
+              className="join-item px-3 sm:px-4 flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-slate-900 hover:bg-slate-50 transition-colors flex-1 sm:flex-initial min-h-[42px] leading-relaxed"
             >
-              <span className="truncate">{headerTitle}</span>
+              <span className="truncate leading-relaxed">{headerTitle}</span>
               {calType === "ethiopian" ? (
-                <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-bold shrink-0 flex items-center gap-0.5">
+                <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-bold shrink-0 flex items-center gap-0.5 leading-relaxed">
                   13M
                   <ChevronDown className="w-3 h-3 text-emerald-700" />
                 </span>
@@ -545,7 +561,7 @@ export function CalendarClient({
             <button
               onClick={handleNextMonth}
               disabled={isNextMonthDisabled}
-              className={`btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[38px] flex items-center justify-center transition-all ${
+              className={`btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[42px] min-w-[44px] flex items-center justify-center transition-all touch-manipulation ${
                 isNextMonthDisabled
                   ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
                   : ""
@@ -642,7 +658,7 @@ export function CalendarClient({
       {/* ============================================================= */}
       {/* 3. RESPONSIVE FILTER & VIEW MODE TOOLBAR                      */}
       {/* ============================================================= */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mb-3 sm:mb-4 bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs">
+      <div className="flex flex-wrap sm:flex-nowrap items-stretch sm:items-center justify-between gap-2.5 mb-3 sm:mb-4 bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs">
         {/* Date Range & Dropdown Filters */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -656,7 +672,7 @@ export function CalendarClient({
             <select
               value={selectedLineFilter}
               onChange={(e) => setSelectedLineFilter(e.target.value)}
-              className="select select-xs sm:select-sm select-bordered rounded-xl text-xs font-semibold h-7 sm:h-8 min-h-0 flex-1 sm:flex-initial"
+              className="select select-xs sm:select-sm select-bordered rounded-xl text-xs font-semibold h-8 min-h-0 flex-1 sm:flex-initial"
             >
               <option value="all">All Lines</option>
               {availableLines.map((l) => (
@@ -671,7 +687,7 @@ export function CalendarClient({
             <select
               value={selectedProductFilter}
               onChange={(e) => setSelectedProductFilter(e.target.value)}
-              className="select select-xs sm:select-sm select-bordered rounded-xl text-xs font-semibold h-7 sm:h-8 min-h-0 flex-1 sm:flex-initial"
+              className="select select-xs sm:select-sm select-bordered rounded-xl text-xs font-semibold h-8 min-h-0 flex-1 sm:flex-initial"
             >
               <option value="all">All Products</option>
               {availableProducts.map((p) => (
@@ -696,12 +712,12 @@ export function CalendarClient({
           )}
         </div>
 
-        {/* View Switcher: Compact, Grid, List (Equal Width on Mobile) */}
+        {/* View Switcher: Compact, Grid, List (Cleanly wrapped on mobile) */}
         <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200 w-full sm:w-auto grid grid-cols-3 sm:flex">
           <button
             type="button"
             onClick={() => setCalendarViewMode("compact")}
-            className={`btn btn-xs join-item rounded-lg font-bold gap-1 flex items-center justify-center ${
+            className={`btn btn-xs sm:btn-sm join-item rounded-lg font-bold gap-1 flex items-center justify-center min-h-[36px] sm:min-h-[32px] ${
               calendarViewMode === "compact"
                 ? "bg-white text-emerald-800 shadow-2xs"
                 : "btn-ghost text-slate-600"
@@ -715,7 +731,7 @@ export function CalendarClient({
           <button
             type="button"
             onClick={() => setCalendarViewMode("grid")}
-            className={`btn btn-xs join-item rounded-lg font-bold gap-1 flex items-center justify-center ${
+            className={`btn btn-xs sm:btn-sm join-item rounded-lg font-bold gap-1 flex items-center justify-center min-h-[36px] sm:min-h-[32px] ${
               calendarViewMode === "grid"
                 ? "bg-white text-emerald-800 shadow-2xs"
                 : "btn-ghost text-slate-600"
@@ -729,7 +745,7 @@ export function CalendarClient({
           <button
             type="button"
             onClick={() => setCalendarViewMode("list")}
-            className={`btn btn-xs join-item rounded-lg font-bold gap-1 flex items-center justify-center ${
+            className={`btn btn-xs sm:btn-sm join-item rounded-lg font-bold gap-1 flex items-center justify-center min-h-[36px] sm:min-h-[32px] ${
               calendarViewMode === "list"
                 ? "bg-white text-emerald-800 shadow-2xs"
                 : "btn-ghost text-slate-600"
@@ -743,17 +759,17 @@ export function CalendarClient({
       </div>
 
       {/* ============================================================= */}
-      {/* 4. 13-MONTH QUICK JUMPER MODAL                                */}
+      {/* 4. 13-MONTH QUICK JUMPER MODAL (MESKEREM - PAGUME)            */}
       {/* ============================================================= */}
       {showMonthJumper && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 leading-relaxed">
                   {language === "am" ? "የኢትዮጵያ ወር እና ዓመት ይምረጡ" : "Select Ethiopian Month & Year"}
                 </h3>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-500 leading-relaxed">
                   13 Ethiopian Months (12 × 30 days + Pagume 5/6)
                 </span>
               </div>
@@ -767,7 +783,7 @@ export function CalendarClient({
 
             {/* Year Selector Strip */}
             <div className="my-3 sm:my-4">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 leading-relaxed">
                 Year (ዓ.ም)
               </span>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -779,11 +795,11 @@ export function CalendarClient({
                       type="button"
                       disabled={isFutureYear}
                       onClick={() => !isFutureYear && setEthYear(y)}
-                      className={`btn btn-xs rounded-xl font-mono font-bold flex-1 ${
+                      className={`btn btn-xs sm:btn-sm rounded-xl font-mono font-bold flex-1 min-h-[36px] ${
                         isFutureYear
                           ? "opacity-30 cursor-not-allowed bg-slate-100 text-slate-400 border-none"
                           : ethYear === y
-                          ? "bg-emerald-600 text-white border-none"
+                          ? "bg-emerald-600 text-white border-none shadow-xs"
                           : "btn-outline text-slate-600"
                       }`}
                       title={isFutureYear ? "Future Year (Disabled)" : undefined}
@@ -810,7 +826,7 @@ export function CalendarClient({
                     type="button"
                     disabled={isFutureMonth}
                     onClick={() => !isFutureMonth && jumpToEthMonth(ethYear, m)}
-                    className={`p-2.5 rounded-2xl border text-center transition-all ${
+                    className={`p-2.5 sm:p-3 rounded-2xl border text-center transition-all min-h-[64px] flex flex-col items-center justify-center ${
                       isFutureMonth
                         ? "border-slate-200 bg-slate-100/70 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none"
                         : isSelected
@@ -819,14 +835,14 @@ export function CalendarClient({
                     }`}
                     title={isFutureMonth ? `${mNameEn} (Disabled - Future Month)` : mNameEn}
                   >
-                    <div className="text-sm font-bold">{mNameAm}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{mNameEn}</div>
+                    <div className="text-sm sm:text-base font-bold leading-relaxed">{mNameAm}</div>
+                    <div className="text-[10px] sm:text-xs text-slate-400 font-mono leading-normal">{mNameEn}</div>
                     {isFutureMonth ? (
-                      <span className="text-[8px] bg-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                      <span className="text-[8px] bg-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
                         ወደፊት (Disabled)
                       </span>
                     ) : m === 13 ? (
-                      <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                      <span className="text-[9px] sm:text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
                         Pagume
                       </span>
                     ) : null}
@@ -865,21 +881,24 @@ export function CalendarClient({
               </div>
             </div>
 
-            {/* Weekday Headers */}
+            {/* Weekday Headers with Abbreviated Day Names & Proper Ethiopic Leading */}
             <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs font-black uppercase text-slate-500 mb-1.5">
-              <div>{language === "am" ? "ሰኞ" : "Mon"}</div>
-              <div>{language === "am" ? "ማክ" : "Tue"}</div>
-              <div>{language === "am" ? "ረቡ" : "Wed"}</div>
-              <div>{language === "am" ? "ሐሙ" : "Thu"}</div>
-              <div>{language === "am" ? "አር" : "Fri"}</div>
-              <div>{language === "am" ? "ቅዳ" : "Sat"}</div>
-              <div className="text-slate-400">{language === "am" ? "እሁ" : "Sun"}</div>
+              {WEEKDAY_HEADERS.map((day, idx) => (
+                <div key={`c_head_${idx}`} className={`py-1 ${day.isWeekend ? "text-slate-400" : ""}`}>
+                  <span className="sm:hidden leading-relaxed">
+                    {language === "am" ? day.amShort : day.enShort}
+                  </span>
+                  <span className="hidden sm:inline leading-relaxed">
+                    {language === "am" ? day.amFull : day.enShort}
+                  </span>
+                </div>
+              ))}
             </div>
 
-            {/* Compact Day Cells */}
+            {/* Compact Day Cells (Touch Target >= 44x44px) */}
             <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {Array.from({ length: leadingBlanks }).map((_, idx) => (
-                <div key={`cblank_${idx}`} className="aspect-square rounded-xl bg-slate-50/40" />
+                <div key={`cblank_${idx}`} className="aspect-square min-h-[44px] min-w-[44px] rounded-xl bg-slate-50/40" />
               ))}
 
               {gridDays.map((item) => {
@@ -896,29 +915,35 @@ export function CalendarClient({
                     key={`c_${item.gregorianDateStr}`}
                     type="button"
                     onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                    className={`aspect-square min-h-[44px] sm:min-h-[56px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 ${
+                    className={`aspect-square min-h-[44px] min-w-[44px] sm:min-h-[56px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 touch-manipulation ${
                       isSelected
                         ? "bg-slate-900 text-white font-black shadow-md ring-2 ring-emerald-500"
                         : item.isCurrentToday
-                        ? "border-2 border-emerald-500 bg-white text-slate-900"
+                        ? "border-2 border-emerald-500 bg-white text-slate-900 shadow-xs"
                         : item.isFuture
                         ? "bg-slate-50/50 border border-slate-200/50 text-slate-300"
                         : isHoliday
-                        ? "bg-amber-50/70 border border-amber-300/80 text-amber-900"
+                        ? "bg-amber-50/80 border border-amber-300 text-amber-900 font-bold"
                         : item.isWorkDay
                         ? "bg-white border border-slate-200/80 hover:border-emerald-300 text-slate-800"
                         : "bg-slate-100/70 border border-slate-200/50 text-slate-400"
                     }`}
                   >
+                    {/* Primary Date Number */}
                     <span className="text-xs sm:text-sm font-bold font-mono tabular-nums leading-none">
                       {item.primaryNumber}
                     </span>
 
-                    {/* Micro label for Gregorian date if Ethiopian or vice-versa */}
+                    {/* Secondary Date Micro-Label (Clear Distinction) */}
                     <span
-                      className={`text-[9px] font-mono leading-none mt-0.5 hidden sm:inline ${
-                        isSelected ? "text-slate-300" : isHoliday ? "text-amber-700" : "text-slate-400"
+                      className={`text-[8px] sm:text-[9px] font-mono leading-relaxed mt-0.5 block truncate max-w-full ${
+                        isSelected
+                          ? "text-slate-300"
+                          : isHoliday
+                          ? "text-amber-700"
+                          : "text-slate-400"
                       }`}
+                      title={calType === "ethiopian" ? `Gregorian: ${item.secondaryLabel}` : `Ethiopian: ${item.secondaryLabel}`}
                     >
                       {item.secondaryLabel}
                     </span>
@@ -957,10 +982,11 @@ export function CalendarClient({
                   <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">
                     Selected Date Inspection
                   </span>
-                  <h2 className="text-base sm:text-xl font-black text-slate-900 mt-0.5">
-                    {formatEthDate(gregorianToEth(activeDayDateStr), "full_am")}
+                  <h2 className="text-base sm:text-xl font-black text-slate-900 mt-0.5 leading-relaxed">
+                    {formatEthDate(gregorianToEth(activeDayDateStr), language === "am" ? "full_am" : "full_en")}
                   </h2>
-                  <span className="text-xs text-slate-500 font-mono">
+                  <span className="text-xs text-slate-500 font-mono flex items-center gap-1 mt-0.5">
+                    <Globe className="w-3.5 h-3.5 text-slate-400" />
                     {format(parseISO(activeDayDateStr), "EEEE, MMMM d, yyyy")}
                   </span>
                 </div>
@@ -970,7 +996,7 @@ export function CalendarClient({
                     type="button"
                     disabled={isSelectedDayFuture}
                     onClick={() => !isSelectedDayFuture && router.push(`/entry?date=${activeDayDateStr}`)}
-                    className={`btn btn-sm w-full sm:w-auto rounded-xl font-bold gap-1.5 border-none ${
+                    className={`btn btn-sm w-full sm:w-auto rounded-xl font-bold gap-1.5 border-none min-h-[40px] ${
                       isSelectedDayFuture
                         ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                         : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
@@ -995,15 +1021,29 @@ export function CalendarClient({
 
               {/* Special Day / Holiday Banner */}
               {activeDayItem?.specialDay && (
-                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 flex items-center gap-2.5">
-                  <PartyPopper className="w-4 h-4 text-amber-700 shrink-0" />
-                  <div className="text-xs">
-                    <span className="font-extrabold text-amber-900">
-                      {activeDayItem.specialDay.nameEn} ({activeDayItem.specialDay.nameAm})
-                    </span>
-                    <span className="text-amber-700 ml-1.5 font-medium">
-                      • {activeDayItem.specialDay.isWorkingDay ? "Factory Working Day" : "Public Holiday (Factory Off)"}
-                    </span>
+                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 sm:p-3.5 flex items-start gap-2.5">
+                  <PartyPopper className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-relaxed">
+                    <div className="font-extrabold text-amber-900 text-xs sm:text-sm leading-relaxed">
+                      {activeDayItem.specialDay.nameEn}
+                      {activeDayItem.specialDay.nameAm && (
+                        <span className="ml-1.5 text-amber-800 font-bold leading-relaxed">
+                          ({activeDayItem.specialDay.nameAm})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-amber-700 mt-0.5 font-medium leading-relaxed flex items-center gap-1.5">
+                      <span
+                        className={`badge badge-xs font-bold leading-relaxed ${
+                          activeDayItem.specialDay.isWorkingDay ? "badge-info" : "badge-warning"
+                        }`}
+                      >
+                        {activeDayItem.specialDay.isWorkingDay ? "Working Holiday" : "Public Holiday"}
+                      </span>
+                      <span>
+                        • {activeDayItem.specialDay.isWorkingDay ? "Factory Operating as Scheduled" : "Factory Closed (Scheduled Off)"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1182,148 +1222,170 @@ export function CalendarClient({
       {/* 6. VIEW MODE: FLUID MONTH GRID VIEW (100% RESPONSIVE)         */}
       {/* ============================================================= */}
       {calendarViewMode === "grid" && (
-        <div className="w-full">
-          {/* Weekday Column Headers (Mon -> Sun) */}
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 text-center text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 my-1.5 sm:my-2">
-            <div className="py-0.5">{language === "am" ? "ሰኞ" : "Mon"}</div>
-            <div className="py-0.5">{language === "am" ? "ማክ" : "Tue"}</div>
-            <div className="py-0.5">{language === "am" ? "ረቡ" : "Wed"}</div>
-            <div className="py-0.5">{language === "am" ? "ሐሙ" : "Thu"}</div>
-            <div className="py-0.5">{language === "am" ? "አር" : "Fri"}</div>
-            <div className="py-0.5">{language === "am" ? "ቅዳ" : "Sat"}</div>
-            <div className="py-0.5 text-slate-400">
-              {language === "am" ? "እሁ" : "Sun"}
+        <div className="w-full overflow-x-auto pb-2 -mx-1 px-1 sm:mx-0 sm:px-0">
+          <div className="min-w-[320px] sm:min-w-0">
+            {/* Weekday Column Headers with Abbreviated Day Names & Ethiopic Leading */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 text-center text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500 my-1.5 sm:my-2">
+              {WEEKDAY_HEADERS.map((day, idx) => (
+                <div key={`g_head_${idx}`} className={`py-1 ${day.isWeekend ? "text-slate-400" : ""}`}>
+                  <span className="sm:hidden leading-relaxed">
+                    {language === "am" ? day.amShort : day.enShort}
+                  </span>
+                  <span className="hidden sm:inline lg:hidden leading-relaxed">
+                    {language === "am" ? day.amShort : day.enShort}
+                  </span>
+                  <span className="hidden lg:inline leading-relaxed">
+                    {language === "am" ? day.amFull : day.enFull}
+                  </span>
+                </div>
+              ))}
             </div>
-          </div>
 
-          {/* Calendar Month Grid: Seamlessly responsive without horizontal scrolling */}
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2">
-            {/* Leading blanks */}
-            {Array.from({ length: leadingBlanks }).map((_, idx) => (
-              <div
-                key={`blank_${idx}`}
-                className="min-h-[56px] sm:min-h-[76px] md:min-h-[98px] lg:min-h-[115px] rounded-xl sm:rounded-2xl bg-slate-50/40 border border-transparent"
-              />
-            ))}
+            {/* Calendar Month Grid: Touch Target >= 44x44px, Clear Dual Calendar Distinction */}
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2">
+              {/* Leading blanks */}
+              {Array.from({ length: leadingBlanks }).map((_, idx) => (
+                <div
+                  key={`blank_${idx}`}
+                  className="min-h-[56px] sm:min-h-[76px] md:min-h-[98px] lg:min-h-[115px] rounded-xl sm:rounded-2xl bg-slate-50/40 border border-transparent"
+                />
+              ))}
 
-            {/* Day Tiles */}
-            {gridDays.map((item) => {
-              const summary = daySummaryMap.get(item.gregorianDateStr);
-              const isSelected = activeDayDateStr === item.gregorianDateStr;
-              const hasTarget = summary?.hasTarget;
-              const netVar = summary?.netVariance || 0;
-              const isPositive = netVar >= 0;
-              const varFormatted = isPositive ? `+${Math.round(netVar)}` : `${Math.round(netVar)}`;
-              const hasEntries = summary && summary.entries.length > 0;
-              const isHoliday = !!item.specialDay && !item.specialDay.isWorkingDay;
+              {/* Day Tiles */}
+              {gridDays.map((item) => {
+                const summary = daySummaryMap.get(item.gregorianDateStr);
+                const isSelected = activeDayDateStr === item.gregorianDateStr;
+                const hasTarget = summary?.hasTarget;
+                const netVar = summary?.netVariance || 0;
+                const isPositive = netVar >= 0;
+                const varFormatted = isPositive ? `+${Math.round(netVar)}` : `${Math.round(netVar)}`;
+                const hasEntries = summary && summary.entries.length > 0;
+                const isHoliday = !!item.specialDay && !item.specialDay.isWorkingDay;
 
-              return (
-                <button
-                  key={item.gregorianDateStr}
-                  type="button"
-                  onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                  className={`w-full min-h-[56px] sm:min-h-[76px] md:min-h-[98px] lg:min-h-[115px] p-1 sm:p-2 md:p-2.5 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer group active:scale-98 ${
-                    isSelected
-                      ? "ring-2 ring-slate-900 border-slate-900 bg-emerald-50/40 shadow-sm"
-                      : item.isCurrentToday
-                      ? "border-emerald-500 bg-white shadow-2xs"
-                      : item.isFuture
-                      ? "bg-slate-50/60 border-slate-200/60 text-slate-400"
-                      : isHoliday
-                      ? "bg-amber-50/60 border-amber-200 hover:border-amber-400 text-amber-900"
-                      : item.isWorkDay
-                      ? "bg-white border-slate-200 hover:border-emerald-300 hover:shadow-2xs text-slate-800"
-                      : "bg-slate-100/60 border-slate-200 text-slate-400"
-                  }`}
-                >
-                  {/* Day Header */}
-                  <div className="flex items-start justify-between w-full">
-                    <div>
-                      <span
-                        className={`text-xs sm:text-sm md:text-base font-black font-mono tabular-nums inline-block leading-none ${
-                          item.isCurrentToday
-                            ? "text-emerald-700 font-extrabold"
-                            : item.isFuture
-                            ? "text-slate-400"
-                            : isHoliday
-                            ? "text-amber-900"
-                            : "text-slate-900 group-hover:text-emerald-700"
-                        }`}
-                      >
-                        {item.primaryNumber}
-                      </span>
-                      <span className="hidden sm:block text-[9px] md:text-[10px] text-slate-400 font-mono mt-0.5 leading-none">
-                        {item.secondaryLabel}
-                      </span>
-                    </div>
-
-                    {/* Status Pill on Day Tile */}
-                    <div>
-                      {item.isFuture ? (
-                        <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-100 px-1 py-0.5 rounded leading-none">
-                          Future
-                        </span>
-                      ) : isHoliday ? (
-                        <span className="text-[8px] sm:text-[9px] font-black text-amber-800 bg-amber-100 px-1 py-0.5 rounded leading-none">
-                          <span className="sm:hidden">✦</span>
-                          <span className="hidden sm:inline">Holiday</span>
-                        </span>
-                      ) : !item.isWorkDay ? (
-                        <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-200/60 px-1 py-0.5 rounded leading-none">
-                          Off
-                        </span>
-                      ) : item.isCurrentToday ? (
-                        <span className="text-[8px] sm:text-[9px] font-black text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded leading-none">
-                          Today
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  {/* Production Number & Variance Badge */}
-                  <div className="w-full my-0.5 sm:my-1">
-                    {hasEntries ? (
-                      <>
-                        <div className="text-[11px] sm:text-xs md:text-sm lg:text-base font-black text-slate-900 font-mono tabular-nums tracking-tight leading-tight">
-                          {summary.totalFG.toLocaleString()}
-                          <span className="hidden sm:inline text-[9px] font-normal text-slate-400 ml-0.5">
-                            pcs
+                return (
+                  <button
+                    key={item.gregorianDateStr}
+                    type="button"
+                    onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
+                    className={`w-full min-h-[56px] sm:min-h-[76px] md:min-h-[98px] lg:min-h-[115px] p-1 sm:p-2 md:p-2.5 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer group active:scale-98 touch-manipulation ${
+                      isSelected
+                        ? "ring-2 ring-slate-900 border-slate-900 bg-emerald-50/40 shadow-sm"
+                        : item.isCurrentToday
+                        ? "border-emerald-500 bg-white shadow-2xs"
+                        : item.isFuture
+                        ? "bg-slate-50/60 border-slate-200/60 text-slate-400"
+                        : isHoliday
+                        ? "bg-amber-50/80 border-amber-300 hover:border-amber-400 text-amber-900"
+                        : item.isWorkDay
+                        ? "bg-white border-slate-200 hover:border-emerald-300 hover:shadow-2xs text-slate-800"
+                        : "bg-slate-100/60 border-slate-200 text-slate-400"
+                    }`}
+                  >
+                    {/* Day Header */}
+                    <div className="flex items-start justify-between w-full">
+                      <div className="flex flex-col">
+                        <div className="flex items-baseline gap-1">
+                          <span
+                            className={`text-xs sm:text-sm md:text-base font-black font-mono tabular-nums inline-block leading-none ${
+                              item.isCurrentToday
+                                ? "text-emerald-700 font-extrabold"
+                                : item.isFuture
+                                ? "text-slate-400"
+                                : isHoliday
+                                ? "text-amber-900"
+                                : "text-slate-900 group-hover:text-emerald-700"
+                            }`}
+                          >
+                            {item.primaryNumber}
                           </span>
                         </div>
 
-                        {/* Variance badge */}
-                        {hasTarget ? (
-                          <div className="mt-0.5 flex items-center">
-                            <span
-                              className={`text-[9px] sm:text-[10px] md:text-[11px] font-black font-mono tabular-nums px-1 sm:px-1.5 py-0.2 rounded ${
-                                isPositive
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-rose-100 text-rose-800"
-                              }`}
-                            >
-                              {varFormatted}
+                        {/* Distinct Secondary Calendar Date with EC / GC prefix */}
+                        <span
+                          className={`text-[8px] sm:text-[9px] md:text-[10px] font-mono leading-relaxed truncate max-w-full block ${
+                            isSelected
+                              ? "text-emerald-700 font-semibold"
+                              : isHoliday
+                              ? "text-amber-800/80"
+                              : "text-slate-400"
+                          }`}
+                          title={calType === "ethiopian" ? `Gregorian: ${item.secondaryLabel}` : `Ethiopian: ${item.secondaryLabel}`}
+                        >
+                          <span className="opacity-70 text-[7px] sm:text-[8px] mr-0.5">
+                            {calType === "ethiopian" ? "GC" : "EC"}
+                          </span>
+                          {item.secondaryLabel}
+                        </span>
+                      </div>
+
+                      {/* Status Pill on Day Tile */}
+                      <div>
+                        {item.isFuture ? (
+                          <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-100 px-1 py-0.5 rounded leading-none">
+                            Future
+                          </span>
+                        ) : isHoliday ? (
+                          <span className="text-[8px] sm:text-[9px] font-black text-amber-800 bg-amber-100 px-1 py-0.5 rounded leading-none">
+                            <span className="sm:hidden">✦</span>
+                            <span className="hidden sm:inline leading-relaxed">Holiday</span>
+                          </span>
+                        ) : !item.isWorkDay ? (
+                          <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-200/60 px-1 py-0.5 rounded leading-none">
+                            Off
+                          </span>
+                        ) : item.isCurrentToday ? (
+                          <span className="text-[8px] sm:text-[9px] font-black text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded leading-none">
+                            Today
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* Production Number & Variance Badge */}
+                    <div className="w-full my-0.5 sm:my-1">
+                      {hasEntries ? (
+                        <>
+                          <div className="text-[11px] sm:text-xs md:text-sm lg:text-base font-black text-slate-900 font-mono tabular-nums tracking-tight leading-tight">
+                            {summary.totalFG.toLocaleString()}
+                            <span className="hidden sm:inline text-[9px] font-normal text-slate-400 ml-0.5">
+                              pcs
                             </span>
                           </div>
-                        ) : (
-                          <span className="hidden sm:inline text-[9px] text-slate-400 font-mono">
-                            No plan
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-[10px] sm:text-xs text-slate-300 font-mono">
-                        {item.isWorkDay ? "−" : ""}
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Micro action visible on desktop */}
-                  <div className="hidden lg:block text-[9px] text-emerald-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                    Inspect →
-                  </div>
-                </button>
-              );
-            })}
+                          {/* Variance badge */}
+                          {hasTarget ? (
+                            <div className="mt-0.5 flex items-center">
+                              <span
+                                className={`text-[9px] sm:text-[10px] md:text-[11px] font-black font-mono tabular-nums px-1 sm:px-1.5 py-0.2 rounded ${
+                                  isPositive
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-rose-100 text-rose-800"
+                                }`}
+                              >
+                                {varFormatted}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="hidden sm:inline text-[9px] text-slate-400 font-mono">
+                              No plan
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-[10px] sm:text-xs text-slate-300 font-mono">
+                          {item.isWorkDay ? "−" : ""}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Micro action visible on desktop */}
+                    <div className="hidden lg:block text-[9px] text-emerald-700 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                      Inspect →
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -1347,13 +1409,13 @@ export function CalendarClient({
                 key={`list_${item.gregorianDateStr}`}
                 type="button"
                 onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                className={`w-full p-3 sm:p-4 rounded-2xl border transition-all text-left flex items-center justify-between shadow-2xs ${
+                className={`w-full p-3 sm:p-4 rounded-2xl border transition-all text-left flex items-center justify-between shadow-2xs touch-manipulation ${
                   isSelected
                     ? "ring-2 ring-slate-900 bg-emerald-50/40 border-slate-900"
                     : item.isCurrentToday
                     ? "border-emerald-500 bg-white"
                     : isHoliday
-                    ? "bg-amber-50/50 border-amber-200"
+                    ? "bg-amber-50/80 border-amber-300"
                     : "bg-white border-slate-200 hover:border-emerald-200"
                 }`}
               >
@@ -1374,9 +1436,16 @@ export function CalendarClient({
                       ) : item.isFuture ? (
                         <span className="text-slate-400 italic">Future date — input disabled</span>
                       ) : isHoliday ? (
-                        <span className="text-amber-800 font-extrabold flex items-center gap-1">
-                          <PartyPopper className="w-3.5 h-3.5" />
-                          {item.specialDay?.nameEn}
+                        <span className="text-amber-800 font-extrabold flex items-center gap-1 leading-relaxed">
+                          <PartyPopper className="w-3.5 h-3.5 shrink-0" />
+                          <span className="leading-relaxed">
+                            {item.specialDay?.nameEn}
+                            {item.specialDay?.nameAm && (
+                              <span className="ml-1 font-semibold text-amber-700 leading-relaxed">
+                                ({item.specialDay.nameAm})
+                              </span>
+                            )}
+                          </span>
                         </span>
                       ) : item.isWorkDay ? (
                         <span className="text-slate-500">No report recorded</span>
@@ -1425,21 +1494,22 @@ export function CalendarClient({
 
           {/* Drawer Container (Desktop: right slide-over, Mobile: native bottom sheet) */}
           <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] rounded-t-3xl sm:bottom-auto sm:top-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-full sm:w-[500px] sm:rounded-none bg-white shadow-2xl flex flex-col z-10 overflow-y-auto border-t sm:border-t-0 sm:border-l border-slate-200 pb-safe animate-in slide-in-from-bottom sm:slide-in-from-right duration-200">
-            {/* Mobile Drag Indicator */}
+            {/* Mobile Drag Handle Indicator */}
             <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mt-3 sm:hidden" />
 
-            {/* Drawer Header */}
+            {/* Drawer Header with Full Dual Dates */}
             <div className="p-4 sm:p-5 border-b border-slate-200 bg-white/95 backdrop-blur z-20 flex items-center justify-between sticky top-0">
               <div>
-                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 leading-relaxed">
                   <span>{factoryName}</span>
                   <span>•</span>
-                  <span className="text-emerald-700 font-extrabold">Day Inspection</span>
+                  <span className="text-emerald-700 font-extrabold leading-relaxed">Day Inspection</span>
                 </span>
-                <h3 className="text-base sm:text-xl font-black text-slate-900 mt-0.5">
-                  {formatEthDate(gregorianToEth(activeDayDateStr), "full_am")}
+                <h3 className="text-base sm:text-xl font-black text-slate-900 mt-0.5 leading-relaxed">
+                  {formatEthDate(gregorianToEth(activeDayDateStr), language === "am" ? "full_am" : "full_en")}
                 </h3>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                  <Globe className="w-3.5 h-3.5 text-slate-400" />
                   {format(parseISO(activeDayDateStr), "EEEE, MMMM d, yyyy")}
                 </span>
               </div>
@@ -1449,7 +1519,7 @@ export function CalendarClient({
                   type="button"
                   disabled={isSelectedDayFuture}
                   onClick={() => !isSelectedDayFuture && router.push(`/entry?date=${activeDayDateStr}`)}
-                  className={`btn btn-sm rounded-xl font-bold border-none ${
+                  className={`btn btn-sm rounded-xl font-bold border-none min-h-[38px] ${
                     isSelectedDayFuture
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                       : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
@@ -1481,22 +1551,36 @@ export function CalendarClient({
                 </div>
               )}
 
-              {/* Special Day / Holiday Banner */}
+              {/* Special Day / Holiday Banner with Proper Ethiopic Leading */}
               {activeDayItem?.specialDay && (
-                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3 flex items-center gap-2.5">
-                  <PartyPopper className="w-4 h-4 text-amber-700 shrink-0" />
-                  <div className="text-xs">
-                    <span className="font-extrabold text-amber-900">
-                      {activeDayItem.specialDay.nameEn} ({activeDayItem.specialDay.nameAm})
-                    </span>
-                    <span className="text-amber-700 ml-1.5 font-medium">
-                      • {activeDayItem.specialDay.isWorkingDay ? "Factory Working Day" : "Public Holiday (Factory Off)"}
-                    </span>
+                <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-2.5">
+                  <PartyPopper className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-relaxed">
+                    <div className="font-extrabold text-amber-900 text-sm leading-relaxed">
+                      {activeDayItem.specialDay.nameEn}
+                      {activeDayItem.specialDay.nameAm && (
+                        <span className="ml-1.5 text-amber-800 font-bold leading-relaxed">
+                          ({activeDayItem.specialDay.nameAm})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-amber-700 mt-0.5 font-medium leading-relaxed flex items-center gap-1.5">
+                      <span
+                        className={`badge badge-xs font-bold leading-relaxed ${
+                          activeDayItem.specialDay.isWorkingDay ? "badge-info" : "badge-warning"
+                        }`}
+                      >
+                        {activeDayItem.specialDay.isWorkingDay ? "Working Holiday" : "Public Holiday"}
+                      </span>
+                      <span>
+                        • {activeDayItem.specialDay.isWorkingDay ? "Factory Operating as Scheduled" : "Factory Closed (Scheduled Off)"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* Day Performance Card */}
+              {/* Day Performance Card: Output, Target, Variance */}
               <div className="card bg-slate-50 border border-slate-200 p-4 rounded-2xl">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1512,7 +1596,7 @@ export function CalendarClient({
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                       Target & Variance
                     </span>
-                    <div className="flex items-baseline gap-2 mt-0.5">
+                    <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
                       <span className="text-lg font-bold text-slate-700 font-mono tabular-nums">
                         {activeDaySummary.hasTarget
                           ? Math.round(activeDaySummary.totalTarget).toLocaleString()

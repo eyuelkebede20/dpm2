@@ -879,7 +879,6 @@ export async function getOMLines() {
       id: lines.id,
       factoryId: lines.factoryId,
       name: lines.name,
-      code: lines.code,
       active: lines.active,
       createdAt: lines.createdAt,
     })

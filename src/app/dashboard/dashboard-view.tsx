@@ -35,6 +35,20 @@ interface DashboardViewProps {
   calendarSystem?: string;
 }
 
+const roleBadgeStyles: Record<string, string> = {
+  sys_admin: "bg-rose-50 text-rose-700 border-rose-200",
+  om: "bg-indigo-50 text-indigo-700 border-indigo-200",
+  fm: "bg-teal-50 text-teal-700 border-teal-200",
+  qa: "bg-amber-50 text-amber-700 border-amber-200",
+};
+
+const roleAmharicLabels: Record<string, string> = {
+  sys_admin: "የስርዓት አስተዳዳሪ",
+  om: "ኦፕሬሽን ስራ አስኪያጅ",
+  fm: "ፋብሪካ ስራ አስኪያጅ",
+  qa: "የጥራት ተቆጣጣሪ",
+};
+
 export function DashboardView({
   user,
   adminData,
@@ -48,68 +62,74 @@ export function DashboardView({
   const ethToday = isEth ? gregorianToEth(new Date()) : null;
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-6 sm:space-y-8 pb-16">
       {/* Welcome Banner */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-7 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div>
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="badge badge-sm uppercase text-[10px] font-black tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full">
-              {user.role}
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span
+              className={`badge badge-sm uppercase text-[10px] font-black tracking-wider border px-2.5 py-0.5 rounded-full ${
+                roleBadgeStyles[user.role] || "bg-slate-100 text-slate-700 border-slate-200"
+              }`}
+            >
+              {user.role} {roleAmharicLabels[user.role] ? `• ${roleAmharicLabels[user.role]}` : ""}
             </span>
             <span className="text-xs text-slate-300">•</span>
-            <span className="text-xs text-slate-600 font-semibold flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <div className="text-xs text-slate-600 font-semibold flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               {isEth && ethToday ? (
-                <>
+                <span className="leading-relaxed flex items-center gap-1.5 flex-wrap">
                   <span className="font-bold text-slate-800">
                     🇪🇹 {formatEthDate(ethToday, "full_am")}
                   </span>
                   <span className="text-slate-400 font-medium hidden sm:inline">
                     ({formatEthDate(ethToday, "full_en")})
                   </span>
-                </>
+                </span>
               ) : (
-                new Date().toLocaleDateString(undefined, {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })
+                <span>
+                  {new Date().toLocaleDateString(undefined, {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </span>
               )}
-            </span>
+            </div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 leading-tight">
             Welcome back, {user.name}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium leading-relaxed">
             {factoryName ? `Managing ${factoryName}` : "Operational overview and real-time plant KPIs"}
           </p>
         </div>
 
         {/* Quick action buttons per role */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           {user.role === "fm" && (
             <>
               <Link
                 href="/entry"
-                className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5"
+                className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5 transition-transform active:scale-95"
               >
                 <PenTool className="w-4 h-4" />
-                Daily Entry
+                <span>Daily Entry</span>
               </Link>
               <Link
                 href="/calendar"
                 className="btn btn-sm btn-outline rounded-xl border-slate-300 text-slate-700 hover:bg-slate-100 font-bold gap-1.5"
               >
                 <Calendar className="w-4 h-4" />
-                Calendar
+                <span>Calendar</span>
               </Link>
               <Link
                 href="/fm/store"
                 className="btn btn-sm btn-ghost rounded-xl text-slate-600 hover:text-slate-900 font-bold gap-1.5"
               >
                 <Warehouse className="w-4 h-4" />
-                Store
+                <span>Store</span>
               </Link>
             </>
           )}
@@ -118,17 +138,17 @@ export function DashboardView({
             <>
               <Link
                 href="/om"
-                className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5"
+                className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5 transition-transform active:scale-95"
               >
                 <Building2 className="w-4 h-4" />
-                Manage Plants
+                <span>Manage Plants</span>
               </Link>
               <Link
                 href="/calendar"
                 className="btn btn-sm btn-outline rounded-xl border-slate-300 text-slate-700 hover:bg-slate-100 font-bold gap-1.5"
               >
                 <Calendar className="w-4 h-4" />
-                Calendar
+                <span>Calendar</span>
               </Link>
             </>
           )}
@@ -136,20 +156,20 @@ export function DashboardView({
           {user.role === "qa" && (
             <Link
               href="/qa"
-              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5"
+              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5 transition-transform active:scale-95"
             >
               <ClipboardCheck className="w-4 h-4" />
-              New Inspection
+              <span>New Inspection</span>
             </Link>
           )}
 
           {user.role === "sys_admin" && (
             <Link
               href="/admin"
-              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5"
+              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5 transition-transform active:scale-95"
             >
               <Shield className="w-4 h-4" />
-              Admin Portal
+              <span>Admin Portal</span>
             </Link>
           )}
         </div>
@@ -159,9 +179,9 @@ export function DashboardView({
       {/* 1. SYS ADMIN DASHBOARD                                        */}
       {/* ------------------------------------------------------------- */}
       {user.role === "sys_admin" && adminData && (
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Operating Plants
               </span>
@@ -176,7 +196,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Operation Managers
               </span>
@@ -188,7 +208,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Factory Managers
               </span>
@@ -200,7 +220,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 QA Inspectors
               </span>
@@ -271,10 +291,10 @@ export function DashboardView({
       {/* 2. OPERATION MANAGER DASHBOARD                                */}
       {/* ------------------------------------------------------------- */}
       {user.role === "om" && omData && (
-        <div className="space-y-8">
-          {/* MTD Aggregate Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs">
+        <div className="space-y-6 sm:space-y-8">
+          {/* MTD Aggregate Stats (1 col on mobile, 2/3 cols on tablet/desktop) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Month-to-Date Output
               </span>
@@ -287,7 +307,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Monthly Planned Target
               </span>
@@ -300,7 +320,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs transition-all hover:shadow-xs sm:col-span-2 lg:col-span-1">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Overall Plan Achievement
               </span>
@@ -333,19 +353,19 @@ export function DashboardView({
           </div>
 
           {/* Factories Comparison Table */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs">
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
             <div className="pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h2 className="text-base font-black text-slate-900">
                   Factory Performance Comparison
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Breakdown by manufacturing facility for {omData.startOfMonth} → {omData.endOfMonth}
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Breakdown by manufacturing facility for {omData.startOfMonth} &rarr; {omData.endOfMonth}
                 </p>
               </div>
               <Link
                 href="/om"
-                className="btn btn-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-bold"
+                className="btn btn-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-xl font-bold self-start sm:self-auto"
               >
                 Configure Facilities
               </Link>
@@ -420,10 +440,10 @@ export function DashboardView({
         const dateDisplay = isEth ? formatEthDate(gregorianToEth(todaySafe), "full_am") : todaySafe;
 
         return (
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
           {/* Today's Submission Status Callout */}
           {lineBreakdowns.length === 0 ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-5 h-5" />
@@ -432,47 +452,47 @@ export function DashboardView({
                   <h3 className="font-black text-slate-900 text-base">
                     Today&apos;s Daily Report is Pending
                   </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">
+                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
                     No production counts submitted yet for {dateDisplay}. Enter today&apos;s numbers to update inventory.
                   </p>
                 </div>
               </div>
               <Link
                 href="/entry"
-                className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-none rounded-2xl px-5 font-bold shadow-xs whitespace-nowrap"
+                className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white border-none rounded-2xl px-5 font-bold shadow-xs whitespace-nowrap self-start sm:self-auto transition-transform active:scale-95"
               >
                 <PenTool className="w-4 h-4 mr-1" />
-                Enter Today&apos;s Numbers
+                <span>Enter Today&apos;s Numbers</span>
               </Link>
             </div>
           ) : (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-black text-slate-900 text-base">
-                    Today&apos;s Numbers Submitted & Synced
+                    Today&apos;s Numbers Submitted &amp; Synced
                   </h3>
-                  <p className="text-xs text-slate-600 mt-0.5">
+                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
                     {lineBreakdowns.length} production lines recorded for {dateDisplay}. Store stock ledger updated.
                   </p>
                 </div>
               </div>
               <Link
                 href="/entry"
-                className="btn btn-sm btn-outline border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-2xl px-5 font-bold"
+                className="btn btn-sm btn-outline border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-2xl px-5 font-bold self-start sm:self-auto"
               >
                 <PenTool className="w-4 h-4 mr-1" />
-                Review / Edit
+                <span>Review / Edit</span>
               </Link>
             </div>
           )}
 
-          {/* Today's Target vs Actual Hero Card */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+          {/* Today's Target vs Actual Hero Cards (1 col mobile, 2 sm, 4 lg desktop) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Today&apos;s Finished Output
               </span>
@@ -496,7 +516,7 @@ export function DashboardView({
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Month-to-Date Output
               </span>
@@ -509,7 +529,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Today&apos;s Losses (Rew / Rej / Scrap)
               </span>
@@ -523,7 +543,7 @@ export function DashboardView({
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Current Work-in-Progress (WIP)
               </span>
@@ -538,13 +558,13 @@ export function DashboardView({
           </div>
 
           {/* Today's Line-by-Line Breakdown */}
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs">
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
             <div className="pb-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-black text-slate-900">
                   Today&apos;s Line Production Breakdown ({fmData.todayStr})
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 leading-relaxed">
                   Detailed entries submitted for today
                 </p>
               </div>
@@ -609,9 +629,9 @@ export function DashboardView({
       {/* 4. QA INSPECTOR DASHBOARD                                     */}
       {/* ------------------------------------------------------------- */}
       {user.role === "qa" && qaData && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+        <div className="space-y-6 sm:space-y-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Today&apos;s Defect Rate
               </span>
@@ -631,7 +651,7 @@ export function DashboardView({
               </span>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Inspections Logged Today
               </span>
@@ -641,7 +661,7 @@ export function DashboardView({
               <p className="text-xs text-slate-400 mt-2 font-medium">Audit batches completed</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Total Samples Checked
               </span>
@@ -651,7 +671,7 @@ export function DashboardView({
               <p className="text-xs text-slate-400 mt-2 font-medium">Units audited</p>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs">
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs transition-all hover:shadow-xs">
               <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                 Defective Units Found
               </span>
@@ -662,13 +682,13 @@ export function DashboardView({
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-2xs">
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
             <div className="pb-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-black text-slate-900">
                   Today&apos;s Quality Inspection Reports
                 </h2>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 leading-relaxed">
                   Sample records submitted on {qaData.todayStr}
                 </p>
               </div>

@@ -93,40 +93,40 @@ export function LoginClient() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md">
         {/* Logo and Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex p-3 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100 mb-4">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex p-3.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100 mb-4 transition-transform hover:scale-105">
             <Boxes className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
             Sign in to DPM
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Daily Production & Quality Operations
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium leading-relaxed">
+            ዕለታዊ የምርት እና ጥራት አስተዳደር &bull; Daily Production &amp; Quality Operations
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8">
           {error && (
-            <div className="alert alert-error mb-6 text-sm py-3 px-4 rounded-xl flex items-start gap-3 bg-red-50 text-red-700 border border-red-200">
+            <div className="alert alert-error mb-6 text-sm py-3 px-4 rounded-xl flex items-start gap-3 bg-red-50 text-red-700 border border-red-200 animate-in fade-in duration-150">
               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600" />
-              <span>{error}</span>
+              <span className="leading-relaxed">{error}</span>
             </div>
           )}
 
           {lockoutTimer > 0 && (
-            <div className="alert alert-warning mb-6 text-sm py-3 px-4 rounded-xl flex items-center gap-3 bg-amber-50 text-amber-800 border border-amber-200">
+            <div className="alert alert-warning mb-6 text-sm py-3 px-4 rounded-xl flex items-center gap-3 bg-amber-50 text-amber-800 border border-amber-200 animate-in fade-in duration-150">
               <Clock className="w-5 h-5 flex-shrink-0 text-amber-600 animate-spin" />
-              <span>Rate limited. Cooldown active: {lockoutTimer}s remaining.</span>
+              <span className="leading-relaxed">Rate limited. Cooldown active: {lockoutTimer}s remaining.</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -141,13 +141,13 @@ export function LoginClient() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="input input-bordered w-full pl-10 text-sm bg-slate-50 focus:bg-white rounded-xl focus:border-indigo-600"
+                  className="input input-bordered w-full pl-10 text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
                 Password
               </label>
               <div className="relative">
@@ -161,7 +161,7 @@ export function LoginClient() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="input input-bordered w-full pl-10 text-sm bg-slate-50 focus:bg-white rounded-xl focus:border-indigo-600"
+                  className="input input-bordered w-full pl-10 text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
                 />
               </div>
             </div>
@@ -169,10 +169,10 @@ export function LoginClient() {
             <button
               type="submit"
               disabled={loading || lockoutTimer > 0}
-              className="btn btn-primary w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 border-none text-white font-medium shadow-md shadow-indigo-100 mt-2"
+              className="btn btn-primary w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 border-none text-white font-bold shadow-md shadow-indigo-100 mt-2 py-3 transition-all"
             >
               {loading ? (
-                <span className="loading loading-spinner loading-sm"></span>
+                <span className="loading loading-spinner loading-sm" />
               ) : (
                 "Sign In"
               )}
@@ -181,7 +181,7 @@ export function LoginClient() {
 
           {/* 1-Click Quick-Fill Demo Bar */}
           <div className="mt-6 pt-5 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2 text-center">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2.5 text-center">
               Quick demo credentials
             </span>
             <div className="grid grid-cols-2 gap-2">
@@ -191,7 +191,7 @@ export function LoginClient() {
                   setEmail("admin@factory.et");
                   setPassword("AdminSecret123!");
                 }}
-                className="btn btn-xs btn-outline rounded-lg text-[11px] font-bold hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition-colors py-2"
               >
                 🔴 Sys Admin
               </button>
@@ -201,7 +201,7 @@ export function LoginClient() {
                   setEmail("om@factory.et");
                   setPassword("OmPassword123!");
                 }}
-                className="btn btn-xs btn-outline rounded-lg text-[11px] font-bold hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300"
+                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 transition-colors py-2"
               >
                 🔵 Operation Mgr
               </button>
@@ -211,7 +211,7 @@ export function LoginClient() {
                   setEmail("fm@factory.et");
                   setPassword("FmPassword123!");
                 }}
-                className="btn btn-xs btn-outline rounded-lg text-[11px] font-bold hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300"
+                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 transition-colors py-2"
               >
                 🟢 Factory Mgr
               </button>
@@ -221,7 +221,7 @@ export function LoginClient() {
                   setEmail("qa@factory.et");
                   setPassword("QaPassword123!");
                 }}
-                className="btn btn-xs btn-outline rounded-lg text-[11px] font-bold hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300"
+                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-colors py-2"
               >
                 🟡 QA Inspector
               </button>
@@ -229,8 +229,8 @@ export function LoginClient() {
           </div>
 
           {/* Security info */}
-          <div className="mt-5 text-[11px] text-slate-400 text-center">
-            <p>Protected by argon2id hashing and strict rate limiting.</p>
+          <div className="mt-5 text-[11px] text-slate-400 text-center leading-relaxed">
+            <p>Protected by Argon2id password hashing and brute-force lockout safeguards.</p>
           </div>
         </div>
       </div>

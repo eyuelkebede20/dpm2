@@ -47,10 +47,10 @@ export function Navbar({ user }: NavbarProps) {
 
   const roleBadgeColor =
     {
-      sys_admin: "bg-rose-100 text-rose-800 border-rose-200",
-      om: "bg-indigo-100 text-indigo-800 border-indigo-200",
-      fm: "bg-teal-100 text-teal-800 border-teal-200",
-      qa: "bg-amber-100 text-amber-800 border-amber-200",
+      sys_admin: "bg-rose-50 text-rose-700 border-rose-200",
+      om: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      fm: "bg-teal-50 text-teal-700 border-teal-200",
+      qa: "bg-amber-50 text-amber-700 border-amber-200",
     }[user.role] || "bg-slate-100 text-slate-700 border-slate-200";
 
   const roleLabel =
@@ -60,6 +60,14 @@ export function Navbar({ user }: NavbarProps) {
       fm: "Factory Mgr",
       qa: "QA Inspector",
     }[user.role] || user.role;
+
+  const roleAmharicDesc =
+    {
+      sys_admin: "የስርዓት አስተዳዳሪ",
+      om: "ኦፕሬሽን ስራ አስኪያጅ",
+      fm: "ፋብሪካ ስራ አስኪያጅ",
+      qa: "የጥራት ተቆጣጣሪ",
+    }[user.role] || "";
 
   const navLinks = [
     {
@@ -195,6 +203,7 @@ export function Navbar({ user }: NavbarProps) {
 
               {/* Sign Out (Desktop) */}
               <button
+                type="button"
                 onClick={handleSignOut}
                 disabled={signingOut}
                 className="hidden md:inline-flex btn btn-ghost btn-sm text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl gap-1.5 font-bold"
@@ -232,38 +241,47 @@ export function Navbar({ user }: NavbarProps) {
         <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
             onClick={() => setMobileMenuOpen(false)}
           />
 
           {/* Drawer Body */}
-          <div className="relative bg-white rounded-t-3xl shadow-2xl p-6 z-10 max-h-[85vh] overflow-y-auto border-t border-slate-200 space-y-6">
+          <div className="relative bg-white rounded-t-3xl shadow-2xl p-6 z-10 max-h-[85vh] overflow-y-auto border-t border-slate-200 space-y-6 animate-in slide-in-from-bottom duration-200 ease-out">
+            {/* Top Grab Bar Handle */}
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto -mt-2 mb-3" />
+
             {/* Drawer Header & User Pill */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-xs shrink-0">
                   <User className="w-5 h-5" />
                 </div>
-                <div>
-                  <div className="font-bold text-slate-900 text-base leading-tight">
+                <div className="min-w-0">
+                  <div className="font-bold text-slate-900 text-base leading-tight truncate">
                     {user.name}
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${roleBadgeColor}`}
                     >
                       {roleLabel}
                     </span>
-                    <span className="text-xs text-slate-400 font-mono truncate max-w-[150px]">
-                      {user.email}
-                    </span>
+                    {roleAmharicDesc && (
+                      <span className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                        ({roleAmharicDesc})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400 font-mono truncate max-w-[200px] mt-0.5">
+                    {user.email}
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700"
+                className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700 shrink-0"
+                aria-label="Close navigation menu"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -312,6 +330,7 @@ export function Navbar({ user }: NavbarProps) {
             {/* Sign Out Action in Mobile Drawer */}
             <div className="pt-2 border-t border-slate-100">
               <button
+                type="button"
                 onClick={handleSignOut}
                 disabled={signingOut}
                 className="w-full btn btn-outline btn-error rounded-2xl flex items-center justify-center gap-2 font-bold py-3"

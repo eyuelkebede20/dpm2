@@ -17,16 +17,14 @@ import {
   LayoutGrid,
   Table as TableIcon,
   Sparkles,
-  Command,
   X,
   Boxes,
-  Filter,
 } from "lucide-react";
 import { StepperInput } from "@/components/ui/stepper-input";
+import { LineTallyVisualizer } from "./line-tally-visualizer";
 import { calculateDailyTarget, calculateVariance } from "@/lib/target";
 import { saveDailyReportEntryAction } from "@/actions/report-actions";
 import {
-  EthiopianDate,
   ETH_MONTH_NAMES_AM,
   ETH_MONTH_NAMES_EN,
   gregorianToEth,
@@ -45,6 +43,11 @@ export interface GridRowData {
     startDate: string;
     endDate: string;
     plannedQty: number;
+    weeklyPlanned?: number;
+    priorFinishedGood?: number;
+    cumulativeProduced?: number;
+    leftFromWeeklyPlanned?: number;
+    dailyTarget?: number;
   } | null;
   entry: {
     finishedGood: number;
@@ -100,7 +103,6 @@ export function DailyEntryClient({
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const todayStr = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
   const isNextDayDisabled = selectedDate >= todayStr;
-  const isSelectedDateFuture = selectedDate > todayStr;
   const [rows, setRows] = useState<GridRowData[]>(initialRows);
   const [initialSnapshot, setInitialSnapshot] = useState<string>(
     JSON.stringify(initialRows)
@@ -527,6 +529,10 @@ export function DailyEntryClient({
   const parsedDate = parseISO(selectedDate);
   const formattedFriendlyDate = format(parsedDate, "EEEE, MMMM d, yyyy");
 
+  const hasWeeklyPlan = useMemo(() => {
+    return rows.some((r) => r.plan?.weeklyPlanned !== undefined);
+  }, [rows]);
+
   const renderTableRow = (row: GridRowData, globalIndex: number) => {
     const targetRes = calculateDailyTarget(
       row.plan,
@@ -548,17 +554,51 @@ export function DailyEntryClient({
       >
         {/* Frozen Line & Product Column */}
         <td className="py-3 px-4 sticky left-0 bg-white z-10 sticky-col-shadow">
-          <div className="font-bold text-slate-900">
+          <div className="font-bold text-slate-900 leading-relaxed truncate max-w-[200px] sm:max-w-none">
             {row.lineName}
           </div>
-          <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-            <span className="font-medium text-slate-700">
+          <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 leading-relaxed flex-wrap">
+            <span className="font-medium text-slate-700 truncate max-w-[150px] sm:max-w-none">
               {row.productName}
             </span>
             <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-slate-600 border border-slate-200/50">
               {row.sku}
             </span>
           </div>
+        </td>
+
+        {/* Weekly Planned */}
+        <td className="py-3 px-3">
+          {row.plan?.weeklyPlanned !== undefined ? (
+            <span className="font-mono font-bold tabular-nums text-slate-900">
+              {row.plan.weeklyPlanned.toLocaleString()}
+            </span>
+          ) : (
+            <span className="text-slate-300 font-mono text-xs">—</span>
+          )}
+        </td>
+
+        {/* Left from Weekly Planned */}
+        <td className="py-3 px-3">
+          {row.plan?.weeklyPlanned !== undefined ? (
+            (() => {
+              const totalProduced =
+                (row.plan.priorFinishedGood || 0) + row.entry.finishedGood;
+              const left = Math.max(0, row.plan.weeklyPlanned - totalProduced);
+              return (
+                <div className="flex flex-col items-start gap-0.5 font-mono">
+                  <span className="font-black tabular-nums text-slate-900 text-xs">
+                    {left.toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold tabular-nums">
+                    {totalProduced.toLocaleString()} produced
+                  </span>
+                </div>
+              );
+            })()
+          ) : (
+            <span className="text-slate-300 font-mono text-xs">—</span>
+          )}
         </td>
 
         {/* Daily Target */}
@@ -568,7 +608,7 @@ export function DailyEntryClient({
               <span className="font-mono font-bold tabular-nums text-slate-900">
                 {targetRes.displayTarget.toLocaleString()}
               </span>
-              <span className="text-[10px] text-slate-400 block font-mono">
+              <span className="text-[10px] text-slate-400 block font-mono tabular-nums">
                 Plan: {row.plan?.plannedQty.toLocaleString()}
               </span>
             </div>
@@ -582,13 +622,15 @@ export function DailyEntryClient({
         </td>
 
         {/* Finished Good (Primary Entry) */}
-        <td className="py-3 px-3 bg-indigo-50/20">
+        <td className="py-3 px-3 bg-emerald-50/20">
           <StepperInput
             value={row.entry.finishedGood}
             onChange={(val) =>
               updateRowField(globalIndex, "finishedGood", val)
             }
             quickAdds={[1, 5, 10, 50]}
+            themeColor="emerald"
+            size="md"
             className="w-36"
           />
         </td>
@@ -607,7 +649,7 @@ export function DailyEntryClient({
                 {varianceRes.varianceFormatted}
               </span>
               {varianceRes.percentOfTarget !== null && (
-                <span className="text-[10px] font-bold text-slate-400">
+                <span className="text-[10px] font-bold font-mono tabular-nums text-slate-400">
                   {varianceRes.percentOfTarget}%
                 </span>
               )}
@@ -627,6 +669,8 @@ export function DailyEntryClient({
               updateRowField(globalIndex, "rework", val)
             }
             quickAdds={[1, 5]}
+            themeColor="slate"
+            size="md"
             className="w-28"
           />
         </td>
@@ -639,6 +683,8 @@ export function DailyEntryClient({
               updateRowField(globalIndex, "reject", val)
             }
             quickAdds={[1, 5]}
+            themeColor="rose"
+            size="md"
             className="w-28"
           />
         </td>
@@ -651,6 +697,8 @@ export function DailyEntryClient({
               updateRowField(globalIndex, "scrap", val)
             }
             quickAdds={[1, 5]}
+            themeColor="amber"
+            size="md"
             className="w-28"
           />
         </td>
@@ -661,6 +709,8 @@ export function DailyEntryClient({
             value={row.entry.wip}
             onChange={(val) => updateRowField(globalIndex, "wip", val)}
             quickAdds={[5, 10, 25]}
+            themeColor="blue"
+            size="md"
             className="w-28"
           />
         </td>
@@ -673,6 +723,8 @@ export function DailyEntryClient({
               updateRowField(globalIndex, "downtimeMinutes", val)
             }
             quickAdds={[5, 15, 30]}
+            themeColor="amber"
+            size="md"
             className="w-28"
           />
         </td>
@@ -687,13 +739,13 @@ export function DailyEntryClient({
               onChange={(e) =>
                 updateRowField(globalIndex, "issueNote", e.target.value)
               }
-              className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500"
+              className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500 leading-relaxed"
             />
             {downtimeReasons && downtimeReasons.length > 0 && (
               <div className="flex flex-col gap-0.5">
                 <label
                   htmlFor={`downtime-template-${globalIndex}`}
-                  className="text-[10px] font-bold text-slate-500 whitespace-nowrap"
+                  className="text-[10px] font-bold text-slate-500 whitespace-nowrap leading-relaxed"
                 >
                   OM Reason Template (የመዘግየት ምክንያት):
                 </label>
@@ -704,12 +756,12 @@ export function DailyEntryClient({
                   onChange={(e) =>
                     handleSelectDowntimeReason(globalIndex, e.target.value)
                   }
-                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white"
+                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white leading-relaxed"
                 >
                   <option value="">Select reason template...</option>
                   {downtimeReasons.map((r) => (
                     <option key={r.id} value={r.id}>
-                      {r.code}: {r.nameEn} ({r.nameAm})
+                      {r.code}: {r.nameEn} {r.nameAm ? `(${r.nameAm})` : ""}
                     </option>
                   ))}
                 </select>
@@ -738,16 +790,16 @@ export function DailyEntryClient({
     return (
       <div
         key={`card_${row.lineId}_${row.productId}`}
-        className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4"
+        className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4 transition-all"
       >
         {/* Card Header */}
-        <div className="flex items-start justify-between pb-3 border-b border-slate-100">
-          <div>
-            <div className="font-extrabold text-base text-slate-900">
+        <div className="flex items-start justify-between pb-3 border-b border-slate-100 gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="font-extrabold text-base text-slate-900 leading-relaxed truncate">
               {row.lineName}
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-sm font-semibold text-slate-700">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-sm font-semibold text-slate-700 leading-relaxed truncate">
                 {row.productName}
               </span>
               <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-600">
@@ -757,16 +809,16 @@ export function DailyEntryClient({
           </div>
 
           {/* Target & Variance Pill */}
-          <div className="text-right">
-            <span className="text-xs text-slate-400 block">
-              Target: {targetRes.hasTarget ? targetRes.displayTarget : "None"}
+          <div className="text-right shrink-0">
+            <span className="text-xs text-slate-400 block font-mono tabular-nums">
+              Target: {targetRes.hasTarget ? targetRes.displayTarget.toLocaleString() : "None"}
             </span>
             {varianceRes && (
               <span
-                className={`text-xs font-black font-mono px-2 py-0.5 rounded-md inline-block mt-1 ${
+                className={`text-xs font-black font-mono tabular-nums px-2 py-0.5 rounded-md inline-block mt-1 ${
                   varianceRes.isPositive
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-rose-100 text-rose-800"
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                    : "bg-rose-100 text-rose-800 border border-rose-200"
                 }`}
               >
                 {varianceRes.varianceFormatted}
@@ -775,96 +827,137 @@ export function DailyEntryClient({
           </div>
         </div>
 
-        {/* Steppers Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="bg-indigo-50/30 p-2.5 rounded-xl border border-indigo-100">
-            <label className="text-[11px] font-extrabold text-indigo-900 uppercase block mb-1">
-              Finished Good
-            </label>
+        {/* Visual Line Tally Progress Bar */}
+        <LineTallyVisualizer
+          compact={true}
+          showQuickButtons={false}
+          plannedQty={targetRes.hasTarget ? targetRes.dailyTarget : (row.plan?.plannedQty || 0)}
+          finishedGood={row.entry.finishedGood}
+          rework={row.entry.rework}
+          reject={row.entry.reject}
+          scrap={row.entry.scrap}
+          wip={row.entry.wip}
+          className="py-2 px-3 bg-slate-50/70"
+        />
+
+        {/* Mobile-Optimized Steppers Grid (touch targets >= 44x44) */}
+        <div className="space-y-3">
+          {/* Hero Finished Good Stepper */}
+          <div className="bg-gradient-to-r from-emerald-50/70 via-indigo-50/30 to-emerald-50/50 p-3 rounded-2xl border border-emerald-200 shadow-2xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5 leading-relaxed">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Finished Good (ጥሩ ምርት)</span>
+              </label>
+              <span className="text-[10px] font-bold text-emerald-700 font-mono">
+                Primary Output
+              </span>
+            </div>
             <StepperInput
               value={row.entry.finishedGood}
               onChange={(val) => updateRowField(globalIndex, "finishedGood", val)}
-              quickAdds={[1, 5, 10]}
+              quickAdds={[1, 5, 10, 50]}
+              themeColor="emerald"
+              size="lg"
+              className="w-full"
             />
           </div>
 
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-            <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
-              Rework
-            </label>
-            <StepperInput
-              value={row.entry.rework}
-              onChange={(val) => updateRowField(globalIndex, "rework", val)}
-              quickAdds={[1, 5]}
-            />
-          </div>
+          {/* Secondary Numeric Inputs Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+            <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/80">
+              <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1 leading-relaxed">
+                Rework (ድጋሚ)
+              </label>
+              <StepperInput
+                value={row.entry.rework}
+                onChange={(val) => updateRowField(globalIndex, "rework", val)}
+                quickAdds={[1, 5]}
+                themeColor="slate"
+                size="lg"
+                className="w-full"
+              />
+            </div>
 
-          <div className="bg-rose-50/40 p-2.5 rounded-xl border border-rose-100">
-            <label className="text-[11px] font-extrabold text-rose-800 uppercase block mb-1">
-              Reject
-            </label>
-            <StepperInput
-              value={row.entry.reject}
-              onChange={(val) => updateRowField(globalIndex, "reject", val)}
-              quickAdds={[1, 5]}
-            />
-          </div>
+            <div className="bg-rose-50/50 p-2.5 rounded-xl border border-rose-100">
+              <label className="text-[11px] font-extrabold text-rose-800 uppercase block mb-1 leading-relaxed">
+                Reject (ውድቅ)
+              </label>
+              <StepperInput
+                value={row.entry.reject}
+                onChange={(val) => updateRowField(globalIndex, "reject", val)}
+                quickAdds={[1, 5]}
+                themeColor="rose"
+                size="lg"
+                className="w-full"
+              />
+            </div>
 
-          <div className="bg-amber-50/40 p-2.5 rounded-xl border border-amber-100">
-            <label className="text-[11px] font-extrabold text-amber-800 uppercase block mb-1">
-              Scrap
-            </label>
-            <StepperInput
-              value={row.entry.scrap}
-              onChange={(val) => updateRowField(globalIndex, "scrap", val)}
-              quickAdds={[1, 5]}
-            />
-          </div>
+            <div className="bg-amber-50/50 p-2.5 rounded-xl border border-amber-100">
+              <label className="text-[11px] font-extrabold text-amber-800 uppercase block mb-1 leading-relaxed">
+                Scrap (ቆሻሻ)
+              </label>
+              <StepperInput
+                value={row.entry.scrap}
+                onChange={(val) => updateRowField(globalIndex, "scrap", val)}
+                quickAdds={[1, 5]}
+                themeColor="amber"
+                size="lg"
+                className="w-full"
+              />
+            </div>
 
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-            <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
-              WIP
-            </label>
-            <StepperInput
-              value={row.entry.wip}
-              onChange={(val) => updateRowField(globalIndex, "wip", val)}
-              quickAdds={[5, 10]}
-            />
-          </div>
+            <div className="bg-blue-50/40 p-2.5 rounded-xl border border-blue-100">
+              <label className="text-[11px] font-extrabold text-blue-900 uppercase block mb-1 leading-relaxed">
+                WIP (በሂደት)
+              </label>
+              <StepperInput
+                value={row.entry.wip}
+                onChange={(val) => updateRowField(globalIndex, "wip", val)}
+                quickAdds={[5, 10]}
+                themeColor="blue"
+                size="lg"
+                className="w-full"
+              />
+            </div>
 
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-            <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
-              Downtime (min)
-            </label>
-            <StepperInput
-              value={row.entry.downtimeMinutes}
-              onChange={(val) =>
-                updateRowField(globalIndex, "downtimeMinutes", val)
-              }
-              quickAdds={[5, 15]}
-            />
+            <div className="bg-amber-50/40 p-2.5 rounded-xl border border-amber-200/80 col-span-2 sm:col-span-1">
+              <label className="text-[11px] font-extrabold text-amber-900 uppercase block mb-1 leading-relaxed">
+                Downtime (ደቂቃ)
+              </label>
+              <StepperInput
+                value={row.entry.downtimeMinutes}
+                onChange={(val) =>
+                  updateRowField(globalIndex, "downtimeMinutes", val)
+                }
+                quickAdds={[5, 15]}
+                themeColor="amber"
+                size="lg"
+                className="w-full"
+              />
+            </div>
           </div>
         </div>
 
-        {/* Issue Note */}
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-extrabold text-slate-600 uppercase block">
-            Issue Note & Reason
+        {/* Issue Note & OM Reason */}
+        <div className="space-y-1.5 pt-1">
+          <label className="text-[11px] font-extrabold text-slate-600 uppercase block leading-relaxed">
+            Issue Note & Reason (ማስታወሻና የመዘግየት ምክንያት)
           </label>
           <input
             type="text"
-            placeholder="Add issue note or stoppage remark..."
+            placeholder="Note stoppage or quality issue..."
             value={row.entry.issueNote || ""}
             onChange={(e) =>
               updateRowField(globalIndex, "issueNote", e.target.value)
             }
-            className="input input-sm input-bordered w-full text-xs rounded-xl"
+            className="input input-sm sm:input-md input-bordered w-full text-xs sm:text-sm rounded-xl focus:outline-hidden focus:border-indigo-500 leading-relaxed"
           />
           {downtimeReasons && downtimeReasons.length > 0 && (
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 pt-0.5">
               <label
                 htmlFor={`card-downtime-template-${globalIndex}`}
-                className="text-[10px] font-bold text-slate-500 whitespace-nowrap"
+                className="text-[10px] font-bold text-slate-500 whitespace-nowrap leading-relaxed"
               >
                 OM Reason Template (የመዘግየት ምክንያት):
               </label>
@@ -875,12 +968,12 @@ export function DailyEntryClient({
                 onChange={(e) =>
                   handleSelectDowntimeReason(globalIndex, e.target.value)
                 }
-                className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white"
+                className="select select-sm select-bordered w-full text-xs font-medium text-slate-700 rounded-xl bg-slate-50 focus:bg-white leading-relaxed touch-target"
               >
                 <option value="">Select reason template...</option>
                 {downtimeReasons.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.code}: {r.nameEn} ({r.nameAm})
+                    {r.code}: {r.nameEn} {r.nameAm ? `(${r.nameAm})` : ""}
                   </option>
                 ))}
               </select>
@@ -908,10 +1001,10 @@ export function DailyEntryClient({
           </h1>
           {isEth && ethDate ? (
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="badge badge-neutral text-xs font-bold px-2.5 py-1 rounded-lg">
+              <span className="badge badge-neutral text-xs font-bold px-2.5 py-1 rounded-lg leading-relaxed font-sans">
                 🇪🇹 {formatEthDate(ethDate, "full_am")}
               </span>
-              <span className="text-xs text-slate-600 font-semibold">
+              <span className="text-xs text-slate-600 font-semibold leading-relaxed">
                 {formatEthDate(ethDate, "full_en")}
               </span>
               <span className="text-slate-300">•</span>
@@ -927,7 +1020,7 @@ export function DailyEntryClient({
         </div>
 
         {/* Product Filter & Date Selector & Mode Toggle */}
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* Product Filter Dropdown */}
           {availableProducts.length > 0 && (
             <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
@@ -953,7 +1046,7 @@ export function DailyEntryClient({
             <button
               type="button"
               onClick={() => setGroupMode("product")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 ${
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
                 groupMode === "product"
                   ? "bg-white text-indigo-700 shadow-2xs"
                   : "btn-ghost text-slate-500"
@@ -966,7 +1059,7 @@ export function DailyEntryClient({
             <button
               type="button"
               onClick={() => setGroupMode("line")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 ${
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
                 groupMode === "line"
                   ? "bg-white text-indigo-700 shadow-2xs"
                   : "btn-ghost text-slate-500"
@@ -977,33 +1070,35 @@ export function DailyEntryClient({
             </button>
           </div>
 
-          {/* View Mode Switcher */}
+          {/* View Mode Switcher (Table View vs Cards View) */}
           <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
             <button
               type="button"
               onClick={() => setViewMode("table")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 ${
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
                 viewMode === "table"
                   ? "bg-white text-slate-900 shadow-2xs"
                   : "btn-ghost text-slate-500"
               }`}
               title="Table View"
+              aria-label="Table View"
             >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Table</span>
+              <TableIcon className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden xs:inline">Table</span>
             </button>
             <button
               type="button"
               onClick={() => setViewMode("cards")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 ${
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
                 viewMode === "cards"
                   ? "bg-white text-slate-900 shadow-2xs"
                   : "btn-ghost text-slate-500"
               }`}
               title="Card View (Mobile Optimized)"
+              aria-label="Card View"
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Cards</span>
+              <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden xs:inline">Cards</span>
             </button>
           </div>
 
@@ -1013,11 +1108,11 @@ export function DailyEntryClient({
               <button
                 type="button"
                 onClick={() => setShowEthPicker(true)}
-                className="btn btn-xs sm:btn-sm bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-lg font-bold gap-1 px-2.5 mr-0.5"
+                className="btn btn-xs sm:btn-sm min-h-[32px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-lg font-bold gap-1 px-2.5 mr-0.5 leading-relaxed touch-manipulation"
                 title="ቀን ምረጥ / Select Ethiopian Date"
               >
                 <span>🇪🇹</span>
-                <span>
+                <span className="leading-relaxed">
                   {ethDate.day} {ETH_MONTH_NAMES_AM[ethDate.month]} {ethDate.year}
                 </span>
               </button>
@@ -1030,20 +1125,22 @@ export function DailyEntryClient({
                   format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
                 )
               }
-              className="btn btn-sm btn-ghost px-2 text-slate-600 hover:text-slate-900"
+              className="btn btn-sm btn-ghost min-h-[32px] min-w-[32px] px-2 text-slate-600 hover:text-slate-900 touch-manipulation"
               title="Previous Day"
+              aria-label="Previous Day"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
             <div className="flex items-center gap-1.5 px-2">
-              <CalendarIcon className="w-4 h-4 text-indigo-600" />
+              <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
               <input
                 type="date"
                 value={selectedDate}
                 max={todayStr}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className="text-xs sm:text-sm font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+                className="text-xs sm:text-sm font-bold font-mono text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+                aria-label="Select Gregorian Date"
               />
             </div>
 
@@ -1056,12 +1153,13 @@ export function DailyEntryClient({
                   format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
                 )
               }
-              className={`btn btn-sm btn-ghost px-2 ${
+              className={`btn btn-sm btn-ghost min-h-[32px] min-w-[32px] px-2 touch-manipulation ${
                 isNextDayDisabled
                   ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
                   : "text-slate-600 hover:text-slate-900"
               }`}
               title={isNextDayDisabled ? "Cannot navigate to future dates" : "Next Day"}
+              aria-label="Next Day"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -1073,7 +1171,7 @@ export function DailyEntryClient({
                   format(subDays(new Date(), 1), "yyyy-MM-dd")
                 )
               }
-              className="btn btn-xs btn-ghost text-slate-600 rounded-lg text-[11px] font-bold"
+              className="btn btn-xs btn-ghost text-slate-600 rounded-lg text-[11px] font-bold min-h-[32px] px-2 touch-manipulation"
             >
               Yest
             </button>
@@ -1081,7 +1179,7 @@ export function DailyEntryClient({
             <button
               type="button"
               onClick={() => handleDateChange(format(new Date(), "yyyy-MM-dd"))}
-              className="btn btn-xs btn-outline btn-neutral rounded-lg text-[11px] font-bold"
+              className="btn btn-xs btn-outline btn-neutral rounded-lg text-[11px] font-bold min-h-[32px] px-2 touch-manipulation"
             >
               Today
             </button>
@@ -1091,18 +1189,24 @@ export function DailyEntryClient({
 
       {/* Special Off-Day Holiday Banner */}
       {specialDay && !specialDay.isWorkingDay && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2.5 rounded-xl flex items-center justify-between text-sm shadow-sm mb-4">
-          <div className="flex items-center gap-2 font-semibold">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2.5 rounded-xl flex items-center justify-between text-sm shadow-xs mb-4">
+          <div className="flex items-center gap-2 font-semibold flex-wrap">
             <span className="text-lg">🎉</span>
-            <span>Special Off-Day: {specialDay.nameEn} ({specialDay.nameAm})</span>
-            <span className="badge badge-sm badge-outline border-emerald-500 text-emerald-700 uppercase font-mono">{specialDay.type}</span>
+            <span className="leading-relaxed">
+              Special Off-Day: {specialDay.nameEn} {specialDay.nameAm ? `(${specialDay.nameAm})` : ""}
+            </span>
+            <span className="badge badge-sm badge-outline border-emerald-500 text-emerald-700 uppercase font-mono">
+              {specialDay.type}
+            </span>
           </div>
-          <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2.5 py-1 rounded-full font-medium">Daily Target: 0</span>
+          <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2.5 py-1 rounded-full font-mono font-bold shrink-0">
+            Daily Target: 0
+          </span>
         </div>
       )}
 
       {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 my-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 my-6">
         <div className="card bg-white border border-slate-200/90 shadow-2xs p-4 rounded-2xl">
           <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             Total Finished Good
@@ -1114,7 +1218,7 @@ export function DailyEntryClient({
             <span className="text-xs font-bold text-slate-400">pcs</span>
           </div>
           <div className="text-[11px] text-slate-500 font-medium mt-1">
-            Net Good: <b className="font-mono text-slate-700">{netGoodOutput}</b> ({yieldPct}%)
+            Net Good: <b className="font-mono text-slate-700 tabular-nums">{netGoodOutput}</b> ({yieldPct}%)
           </div>
         </div>
 
@@ -1122,7 +1226,7 @@ export function DailyEntryClient({
           <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             Target & Variance
           </span>
-          <div className="flex items-baseline gap-2 mt-1">
+          <div className="flex items-baseline gap-2 mt-1 flex-wrap">
             <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tabular-nums">
               {hasAnyTarget
                 ? Math.round(totalTarget).toLocaleString()
@@ -1130,7 +1234,7 @@ export function DailyEntryClient({
             </span>
             {hasAnyTarget && (
               <span
-                className={`text-xs font-black px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                className={`text-xs font-black font-mono tabular-nums px-2 py-0.5 rounded-full flex items-center gap-1 ${
                   netVariance >= 0
                     ? "bg-emerald-100 text-emerald-800"
                     : "bg-rose-100 text-rose-800"
@@ -1156,21 +1260,21 @@ export function DailyEntryClient({
           <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             Quality Fallout
           </span>
-          <div className="flex items-baseline gap-2 mt-1 text-slate-700">
+          <div className="flex items-baseline gap-2 mt-1 text-slate-700 flex-wrap">
             <span className="text-xs sm:text-sm font-semibold">
-              Rew: <b className="font-mono text-slate-900">{totalRework}</b>
+              Rew: <b className="font-mono text-slate-900 tabular-nums">{totalRework}</b>
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-xs sm:text-sm font-semibold">
-              Rej: <b className="font-mono text-rose-600">{totalReject}</b>
+              Rej: <b className="font-mono text-rose-600 tabular-nums">{totalReject}</b>
             </span>
             <span className="text-slate-300">•</span>
             <span className="text-xs sm:text-sm font-semibold">
-              Scrap: <b className="font-mono text-amber-600">{totalScrap}</b>
+              Scrap: <b className="font-mono text-amber-600 tabular-nums">{totalScrap}</b>
             </span>
           </div>
           <div className="text-[11px] text-slate-400 mt-1">
-            Total non-conforming: <b className="font-mono">{totalRework + totalFallout}</b>
+            Total non-conforming: <b className="font-mono tabular-nums">{totalRework + totalFallout}</b>
           </div>
         </div>
 
@@ -1178,14 +1282,14 @@ export function DailyEntryClient({
           <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
             WIP & Downtime
           </span>
-          <div className="flex items-baseline gap-3 mt-1">
+          <div className="flex items-baseline gap-3 mt-1 flex-wrap">
             <span className="text-xs sm:text-sm font-semibold text-slate-700">
-              WIP: <b className="font-mono text-slate-900">{totalWIP}</b>
+              WIP: <b className="font-mono text-slate-900 tabular-nums">{totalWIP}</b>
             </span>
             <span className="text-xs sm:text-sm font-semibold text-slate-700">
               Down:{" "}
               <b
-                className={`font-mono ${
+                className={`font-mono tabular-nums ${
                   totalDowntime > 0 ? "text-amber-600 font-bold" : "text-slate-900"
                 }`}
               >
@@ -1219,7 +1323,7 @@ export function DailyEntryClient({
             <button
               type="button"
               onClick={() => setSelectedProductFilter("all")}
-              className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
+              className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all touch-manipulation ${
                 selectedProductFilter === "all"
                   ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs"
                   : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
@@ -1229,7 +1333,7 @@ export function DailyEntryClient({
                 All Products
               </div>
               <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="font-mono font-black text-sm text-slate-900">
+                <span className="font-mono font-black text-sm text-slate-900 tabular-nums">
                   {rows.reduce((sum, r) => sum + (r.entry.finishedGood || 0), 0).toLocaleString()}
                 </span>
                 <span className="text-[10px] text-slate-400">pcs</span>
@@ -1249,14 +1353,14 @@ export function DailyEntryClient({
                   onClick={() =>
                     setSelectedProductFilter(isSelected ? "all" : prod.productId)
                   }
-                  className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
+                  className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all touch-manipulation ${
                     isSelected
                       ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs"
                       : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
                   }`}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[140px] leading-relaxed">
                       {prod.productName}
                     </span>
                     <span className="text-[9px] font-mono font-bold bg-white px-1.5 py-0.2 rounded text-slate-600 border border-slate-200">
@@ -1266,7 +1370,7 @@ export function DailyEntryClient({
 
                   <div className="flex items-baseline gap-2 mt-1">
                     <div className="flex items-baseline gap-1">
-                      <span className="font-mono font-black text-sm text-slate-900">
+                      <span className="font-mono font-black text-sm text-slate-900 tabular-nums">
                         {prod.totalFG.toLocaleString()}
                       </span>
                       <span className="text-[10px] text-slate-400">pcs</span>
@@ -1274,7 +1378,7 @@ export function DailyEntryClient({
 
                     {prod.hasTarget ? (
                       <span
-                        className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded-md ${
+                        className={`text-[10px] font-mono font-black tabular-nums px-1.5 py-0.2 rounded-md ${
                           prod.netVariance >= 0
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-rose-100 text-rose-800"
@@ -1287,7 +1391,7 @@ export function DailyEntryClient({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 gap-2">
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 gap-2 font-mono tabular-nums">
                     <span>
                       {prod.hasTarget
                         ? `Target: ${Math.round(prod.totalTarget).toLocaleString()}`
@@ -1332,8 +1436,10 @@ export function DailyEntryClient({
                   <th className="py-3 px-4 min-w-[210px] sticky left-0 bg-slate-100 z-20 sticky-col-shadow">
                     Line & Product
                   </th>
-                  <th className="py-3 px-3 min-w-[120px]">Target</th>
-                  <th className="py-3 px-3 min-w-[170px] bg-indigo-50/50 text-indigo-900 font-extrabold">
+                  <th className="py-3 px-3 min-w-[130px]">Weekly Planned</th>
+                  <th className="py-3 px-3 min-w-[150px]">Left from Weekly Planned</th>
+                  <th className="py-3 px-3 min-w-[110px]">Daily Target</th>
+                  <th className="py-3 px-3 min-w-[170px] bg-emerald-50/50 text-emerald-950 font-extrabold">
                     Finished Good
                   </th>
                   <th className="py-3 px-3 min-w-[110px]">Variance</th>
@@ -1342,210 +1448,103 @@ export function DailyEntryClient({
                   <th className="py-3 px-3 min-w-[140px]">Scrap</th>
                   <th className="py-3 px-3 min-w-[140px]">WIP</th>
                   <th className="py-3 px-3 min-w-[140px]">Downtime (min)</th>
-                  <th className="py-3 px-4 min-w-[220px]">Issue Notes</th>
+                  <th className="py-3 px-4 min-w-[260px]">Issue Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center py-12 text-slate-400">
+                    <td colSpan={12} className="text-center py-12 text-slate-400">
                       <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                       No active lines or products configured for this factory.
                     </td>
                   </tr>
-                ) : (
-                  rows.map((row, idx) => {
-                    const targetRes = calculateDailyTarget(
-                      row.plan,
-                      selectedDate,
-                      workingDays,
-                      specialDaysList
-                    );
-                    const varianceRes = targetRes.hasTarget
-                      ? calculateVariance(
-                          row.entry.finishedGood,
-                          targetRes.dailyTarget
-                        )
-                      : null;
-
-                    return (
-                      <tr
-                        key={`${row.lineId}_${row.productId}`}
-                        className="hover:bg-slate-50/70 transition-colors"
-                      >
-                        {/* Frozen Line & Product Column */}
-                        <td className="py-3 px-4 sticky left-0 bg-white z-10 sticky-col-shadow">
-                          <div className="font-bold text-slate-900">
-                            {row.lineName}
-                          </div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <span className="font-medium text-slate-700">
-                              {row.productName}
-                            </span>
-                            <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-slate-600 border border-slate-200/50">
-                              {row.sku}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Daily Target */}
-                        <td className="py-3 px-3">
-                          {targetRes.hasTarget ? (
-                            <div>
-                              <span className="font-mono font-bold tabular-nums text-slate-900">
-                                {targetRes.displayTarget.toLocaleString()}
+                ) : displayedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} className="text-center py-12 text-slate-400">
+                      <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                      No production lines producing the selected product.
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProductFilter("all")}
+                          className="btn btn-xs btn-outline btn-neutral rounded-lg"
+                        >
+                          Show All Products
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : groupMode === "product" ? (
+                  productGroups.map((group) => (
+                    <React.Fragment key={`group_${group.product.id}`}>
+                      {/* Product Group Header Banner Row */}
+                      <tr className="bg-indigo-50/80 border-y-2 border-indigo-200">
+                        <td colSpan={12} className="py-2.5 px-4 sticky left-0 z-10 bg-indigo-50/90">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <Boxes className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <span className="font-black text-slate-900 text-sm leading-relaxed">
+                                {group.product.name}
                               </span>
-                              <span className="text-[10px] text-slate-400 block font-mono">
-                                Plan: {row.plan?.plannedQty.toLocaleString()}
+                              <span className="font-mono text-xs font-bold bg-white px-2 py-0.5 rounded border border-indigo-200 text-indigo-900 shadow-2xs">
+                                {group.product.sku}
+                              </span>
+                              <span className="badge badge-sm badge-neutral font-mono font-semibold">
+                                {group.items.length} {group.items.length === 1 ? "line" : "lines"}
                               </span>
                             </div>
-                          ) : (
-                            <span className="text-xs text-slate-400 italic">
-                              {targetRes.reason === "non_working_day"
-                                ? "Day Off"
-                                : "No plan"}
-                            </span>
-                          )}
-                        </td>
 
-                        {/* Finished Good (Primary Entry) */}
-                        <td className="py-3 px-3 bg-indigo-50/20">
-                          <StepperInput
-                            value={row.entry.finishedGood}
-                            onChange={(val) =>
-                              updateRowField(idx, "finishedGood", val)
-                            }
-                            quickAdds={[1, 5, 10, 50]}
-                            className="w-36"
-                          />
-                        </td>
-
-                        {/* Live Variance */}
-                        <td className="py-3 px-3">
-                          {varianceRes ? (
-                            <div className="flex flex-col items-start gap-0.5">
-                              <span
-                                className={`text-xs font-black font-mono tabular-nums px-2 py-0.5 rounded-md ${
-                                  varianceRes.isPositive
-                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                    : "bg-rose-100 text-rose-800 border border-rose-200"
-                                }`}
-                              >
-                                {varianceRes.varianceFormatted}
-                              </span>
-                              {varianceRes.percentOfTarget !== null && (
-                                <span className="text-[10px] font-bold text-slate-400">
-                                  {varianceRes.percentOfTarget}%
+                            <div className="flex items-center gap-3 text-xs flex-wrap">
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-slate-500 font-medium">Output:</span>
+                                <span className="font-mono font-extrabold text-slate-900 tabular-nums">
+                                  {group.summary.totalFG.toLocaleString()} pcs
+                                </span>
+                              </div>
+                              <span className="text-slate-300">•</span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-slate-500 font-medium">Target:</span>
+                                <span className="font-mono font-bold text-slate-700 tabular-nums">
+                                  {group.summary.hasTarget
+                                    ? group.summary.totalTarget.toLocaleString()
+                                    : "None"}
+                                </span>
+                              </div>
+                              <span className="text-slate-300">•</span>
+                              {group.summary.hasTarget && (
+                                <span
+                                  className={`font-mono font-black tabular-nums px-2 py-0.5 rounded-md ${
+                                    group.summary.netVariance >= 0
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-rose-100 text-rose-800"
+                                  }`}
+                                >
+                                  {group.summary.netVariance >= 0
+                                    ? `+${group.summary.netVariance}`
+                                    : `${group.summary.netVariance}`}
                                 </span>
                               )}
+                              <span className="text-slate-300">•</span>
+                              <span className="text-slate-500">
+                                Fallout: <b className="font-mono text-rose-600 tabular-nums">{group.summary.totalReject + group.summary.totalScrap}</b>
+                              </span>
                             </div>
-                          ) : (
-                            <span className="text-slate-300 font-mono text-xs">
-                              −
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Rework */}
-                        <td className="py-3 px-3">
-                          <StepperInput
-                            value={row.entry.rework}
-                            onChange={(val) =>
-                              updateRowField(idx, "rework", val)
-                            }
-                            quickAdds={[1, 5]}
-                            className="w-28"
-                          />
-                        </td>
-
-                        {/* Reject */}
-                        <td className="py-3 px-3">
-                          <StepperInput
-                            value={row.entry.reject}
-                            onChange={(val) =>
-                              updateRowField(idx, "reject", val)
-                            }
-                            quickAdds={[1, 5]}
-                            className="w-28"
-                          />
-                        </td>
-
-                        {/* Scrap */}
-                        <td className="py-3 px-3">
-                          <StepperInput
-                            value={row.entry.scrap}
-                            onChange={(val) =>
-                              updateRowField(idx, "scrap", val)
-                            }
-                            quickAdds={[1, 5]}
-                            className="w-28"
-                          />
-                        </td>
-
-                        {/* WIP */}
-                        <td className="py-3 px-3">
-                          <StepperInput
-                            value={row.entry.wip}
-                            onChange={(val) => updateRowField(idx, "wip", val)}
-                            quickAdds={[5, 10, 25]}
-                            className="w-28"
-                          />
-                        </td>
-
-                        {/* Downtime (min) */}
-                        <td className="py-3 px-3">
-                          <StepperInput
-                            value={row.entry.downtimeMinutes}
-                            onChange={(val) =>
-                              updateRowField(idx, "downtimeMinutes", val)
-                            }
-                            quickAdds={[5, 15, 30]}
-                            className="w-28"
-                          />
-                        </td>
-
-                        {/* Issue Notes */}
-                        <td className="py-3 px-4 min-w-[280px]">
-                          <div className="space-y-1.5">
-                            <input
-                              type="text"
-                              placeholder="Note stoppage or quality issue..."
-                              value={row.entry.issueNote || ""}
-                              onChange={(e) =>
-                                updateRowField(idx, "issueNote", e.target.value)
-                              }
-                              className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500"
-                            />
-                            {downtimeReasons && downtimeReasons.length > 0 && (
-                              <div className="flex flex-col gap-0.5">
-                                <label
-                                  htmlFor={`downtime-template-${idx}`}
-                                  className="text-[10px] font-bold text-slate-500 whitespace-nowrap"
-                                >
-                                  OM Reason Template (የመዘግየት ምክንያት):
-                                </label>
-                                <select
-                                  id={`downtime-template-${idx}`}
-                                  aria-label="OM Reason Template (የመዘግየት ምክንያት)"
-                                  value={row.entry.downtimeReasonId || ""}
-                                  onChange={(e) =>
-                                    handleSelectDowntimeReason(idx, e.target.value)
-                                  }
-                                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white"
-                                >
-                                  <option value="">Select reason template...</option>
-                                  {downtimeReasons.map((r) => (
-                                    <option key={r.id} value={r.id}>
-                                      {r.code}: {r.nameEn} ({r.nameAm})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
                           </div>
                         </td>
                       </tr>
+
+                      {group.items.map(({ row, globalIndex }) =>
+                        renderTableRow(row, globalIndex)
+                      )}
+                    </React.Fragment>
+                  ))
+                ) : (
+                  displayedRows.map((row) => {
+                    const globalIndex = rows.findIndex(
+                      (r) => r.lineId === row.lineId && r.productId === row.productId
                     );
+                    return renderTableRow(row, globalIndex >= 0 ? globalIndex : 0);
                   })
                 )}
               </tbody>
@@ -1555,175 +1554,86 @@ export function DailyEntryClient({
       ) : (
         /* Mobile Card View Mode */
         <div className="space-y-4">
-          {rows.map((row, idx) => {
-            const targetRes = calculateDailyTarget(
-              row.plan,
-              selectedDate,
-              workingDays,
-              specialDaysList
-            );
-            const varianceRes = targetRes.hasTarget
-              ? calculateVariance(
-                  row.entry.finishedGood,
-                  targetRes.dailyTarget
-                )
-              : null;
-
-            return (
+          {rows.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
+              <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              No active lines or products configured for this factory.
+            </div>
+          ) : displayedRows.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
+              <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+              No production lines producing the selected product.
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductFilter("all")}
+                  className="btn btn-xs btn-outline btn-neutral rounded-lg"
+                >
+                  Show All Products
+                </button>
+              </div>
+            </div>
+          ) : groupMode === "product" ? (
+            productGroups.map((group) => (
               <div
-                key={`card_${row.lineId}_${row.productId}`}
-                className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs space-y-4"
+                key={`card_group_${group.product.id}`}
+                className="space-y-3 bg-slate-50/50 border border-indigo-100 rounded-3xl p-3 sm:p-4 shadow-2xs"
               >
-                {/* Card Header */}
-                <div className="flex items-start justify-between pb-3 border-b border-slate-100">
-                  <div>
-                    <div className="font-extrabold text-base text-slate-900">
-                      {row.lineName}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-sm font-semibold text-slate-700">
-                        {row.productName}
-                      </span>
-                      <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-600">
-                        {row.sku}
-                      </span>
+                {/* Product Section Header Card */}
+                <div className="bg-indigo-50 border border-indigo-200/80 rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <Boxes className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <div>
+                      <div className="font-black text-slate-900 text-sm leading-relaxed">
+                        {group.product.name}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="font-mono text-[10px] font-bold bg-white px-1.5 py-0.2 rounded border border-indigo-200 text-indigo-900">
+                          {group.product.sku}
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          • {group.items.length} {group.items.length === 1 ? "line" : "lines"}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Target & Variance Pill */}
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 block">
-                      Target: {targetRes.hasTarget ? targetRes.displayTarget : "None"}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-mono font-black text-slate-900 tabular-nums">
+                      {group.summary.totalFG.toLocaleString()} pcs
                     </span>
-                    {varianceRes && (
+                    {group.summary.hasTarget && (
                       <span
-                        className={`text-xs font-black font-mono px-2 py-0.5 rounded-md inline-block mt-1 ${
-                          varianceRes.isPositive
+                        className={`font-mono font-bold text-[10px] tabular-nums px-1.5 py-0.2 rounded ${
+                          group.summary.netVariance >= 0
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-rose-100 text-rose-800"
                         }`}
                       >
-                        {varianceRes.varianceFormatted}
+                        {group.summary.netVariance >= 0
+                          ? `+${group.summary.netVariance}`
+                          : `${group.summary.netVariance}`}
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Steppers Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  <div className="bg-indigo-50/30 p-2.5 rounded-xl border border-indigo-100">
-                    <label className="text-[11px] font-extrabold text-indigo-900 uppercase block mb-1">
-                      Finished Good
-                    </label>
-                    <StepperInput
-                      value={row.entry.finishedGood}
-                      onChange={(val) => updateRowField(idx, "finishedGood", val)}
-                      quickAdds={[1, 5, 10]}
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                    <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
-                      Rework
-                    </label>
-                    <StepperInput
-                      value={row.entry.rework}
-                      onChange={(val) => updateRowField(idx, "rework", val)}
-                      quickAdds={[1, 5]}
-                    />
-                  </div>
-
-                  <div className="bg-rose-50/40 p-2.5 rounded-xl border border-rose-100">
-                    <label className="text-[11px] font-extrabold text-rose-800 uppercase block mb-1">
-                      Reject
-                    </label>
-                    <StepperInput
-                      value={row.entry.reject}
-                      onChange={(val) => updateRowField(idx, "reject", val)}
-                      quickAdds={[1, 5]}
-                    />
-                  </div>
-
-                  <div className="bg-amber-50/40 p-2.5 rounded-xl border border-amber-100">
-                    <label className="text-[11px] font-extrabold text-amber-800 uppercase block mb-1">
-                      Scrap
-                    </label>
-                    <StepperInput
-                      value={row.entry.scrap}
-                      onChange={(val) => updateRowField(idx, "scrap", val)}
-                      quickAdds={[1, 5]}
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                    <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
-                      WIP
-                    </label>
-                    <StepperInput
-                      value={row.entry.wip}
-                      onChange={(val) => updateRowField(idx, "wip", val)}
-                      quickAdds={[5, 10]}
-                    />
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                    <label className="text-[11px] font-extrabold text-slate-600 uppercase block mb-1">
-                      Downtime (min)
-                    </label>
-                    <StepperInput
-                      value={row.entry.downtimeMinutes}
-                      onChange={(val) =>
-                        updateRowField(idx, "downtimeMinutes", val)
-                      }
-                      quickAdds={[5, 15]}
-                    />
-                  </div>
-                </div>
-
-                {/* Issue Note */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-extrabold text-slate-600 uppercase block">
-                    Issue Note & Reason
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Add issue note or stoppage remark..."
-                    value={row.entry.issueNote || ""}
-                    onChange={(e) =>
-                      updateRowField(idx, "issueNote", e.target.value)
-                    }
-                    className="input input-sm input-bordered w-full text-xs rounded-xl"
-                  />
-                  {downtimeReasons && downtimeReasons.length > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <label
-                        htmlFor={`card-downtime-template-${idx}`}
-                        className="text-[10px] font-bold text-slate-500"
-                      >
-                        OM Reason Template (የመዘግየት ምክንያት):
-                      </label>
-                      <select
-                        id={`card-downtime-template-${idx}`}
-                        aria-label="OM Reason Template (የመዘግየት ምክንያት)"
-                        value={row.entry.downtimeReasonId || ""}
-                        onChange={(e) =>
-                          handleSelectDowntimeReason(idx, e.target.value)
-                        }
-                        className="select select-xs select-bordered w-full text-xs font-medium text-slate-700 rounded-lg bg-slate-50"
-                      >
-                        <option value="">Select reason template...</option>
-                        {downtimeReasons.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.code}: {r.nameEn} ({r.nameAm})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                {/* Cards for each Line in this Product Group */}
+                <div className="space-y-3">
+                  {group.items.map(({ row, globalIndex }) =>
+                    renderCard(row, globalIndex)
                   )}
                 </div>
               </div>
-            );
-          })}
+            ))
+          ) : (
+            displayedRows.map((row) => {
+              const globalIndex = rows.findIndex(
+                (r) => r.lineId === row.lineId && r.productId === row.productId
+              );
+              return renderCard(row, globalIndex >= 0 ? globalIndex : 0);
+            })
+          )}
         </div>
       )}
 
@@ -1754,14 +1664,14 @@ export function DailyEntryClient({
       )}
 
       {/* Sticky Bottom Save Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-3 shadow-xl pb-safe">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <span className="text-xs sm:text-sm font-semibold text-slate-700">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-2.5 sm:py-3 shadow-xl pb-safe">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
+            <span className="text-xs sm:text-sm font-semibold text-slate-700 truncate leading-relaxed">
               Date:{" "}
               {isEth && ethDate ? (
                 <>
-                  <b className="text-slate-900 font-bold">
+                  <b className="text-slate-900 font-bold leading-relaxed">
                     {formatEthDate(ethDate, "full_am")}
                   </b>
                   <span className="text-xs text-slate-400 font-mono ml-1.5 hidden md:inline">
@@ -1786,13 +1696,13 @@ export function DailyEntryClient({
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 shrink-0">
             {isDirty && (
               <button
                 type="button"
                 onClick={handleReset}
                 disabled={isPending}
-                className="btn btn-sm btn-ghost text-slate-500 hover:text-slate-800 rounded-xl"
+                className="btn btn-sm sm:btn-md min-h-[44px] min-w-[44px] btn-ghost text-slate-500 hover:text-slate-800 rounded-xl font-bold touch-manipulation"
               >
                 <RotateCcw className="w-4 h-4 mr-1" />
                 <span className="hidden sm:inline">Reset</span>
@@ -1803,7 +1713,7 @@ export function DailyEntryClient({
               type="button"
               onClick={handleSaveAll}
               disabled={isPending || !isDirty}
-              className={`btn btn-sm sm:btn-md px-5 sm:px-7 rounded-2xl font-black shadow-md transition-all flex items-center gap-2 ${
+              className={`btn btn-sm sm:btn-md min-h-[44px] px-4 sm:px-7 rounded-2xl font-black shadow-md transition-all flex items-center gap-2 touch-manipulation ${
                 isDirty
                   ? "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border-none shadow-emerald-200 active:scale-95 cursor-pointer"
                   : "btn-disabled opacity-40 bg-slate-200 text-slate-400 border-none"
@@ -1836,7 +1746,7 @@ export function DailyEntryClient({
               <div className="flex items-center gap-2">
                 <span className="text-xl">🇪🇹</span>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 className="text-base font-black text-slate-900 leading-relaxed">
                     ቀን ምረጥ (Select Ethiopian Date)
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
@@ -1856,13 +1766,13 @@ export function DailyEntryClient({
             {/* Year & Month Selection */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">
+                <label className="text-xs font-bold text-slate-600 block mb-1 leading-relaxed">
                   ዓመት (Year)
                 </label>
                 <select
                   value={pickerYear}
                   onChange={(e) => setPickerYear(Number(e.target.value))}
-                  className="select select-bordered select-sm w-full font-bold text-slate-800 rounded-xl"
+                  className="select select-bordered select-sm w-full font-bold text-slate-800 rounded-xl leading-relaxed"
                 >
                   {[2014, 2015, 2016, 2017, 2018, 2019, 2020].map((y) => (
                     <option key={y} value={y}>
@@ -1873,13 +1783,13 @@ export function DailyEntryClient({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">
+                <label className="text-xs font-bold text-slate-600 block mb-1 leading-relaxed">
                   ወር (Month)
                 </label>
                 <select
                   value={pickerMonth}
                   onChange={(e) => setPickerMonth(Number(e.target.value))}
-                  className="select select-bordered select-sm w-full font-bold text-slate-800 rounded-xl"
+                  className="select select-bordered select-sm w-full font-bold text-slate-800 rounded-xl leading-relaxed"
                 >
                   {Array.from({ length: 13 }, (_, i) => i + 1).map((m) => (
                     <option key={m} value={m}>
@@ -1893,14 +1803,14 @@ export function DailyEntryClient({
             {/* Day Selection Grid */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-600">
+                <label className="text-xs font-bold text-slate-600 leading-relaxed">
                   ቀን (Day: 1 - {daysInMonthEth(pickerYear, pickerMonth)})
                 </label>
-                <span className="text-xs font-extrabold text-indigo-600">
+                <span className="text-xs font-extrabold text-indigo-600 font-mono leading-relaxed">
                   ተመርጧል: {pickerDay}
                 </span>
               </div>
-              <div className="grid grid-cols-6 sm:grid-cols-7 gap-1.5 max-h-48 overflow-y-auto p-1 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="grid grid-cols-6 sm:grid-cols-7 gap-1.5 max-h-48 overflow-y-auto p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
                 {Array.from(
                   { length: daysInMonthEth(pickerYear, pickerMonth) },
                   (_, i) => i + 1
@@ -1909,7 +1819,7 @@ export function DailyEntryClient({
                     key={d}
                     type="button"
                     onClick={() => setPickerDay(d)}
-                    className={`btn btn-xs rounded-lg font-mono font-bold ${
+                    className={`btn btn-xs min-h-[36px] rounded-lg font-mono font-bold touch-manipulation ${
                       pickerDay === d
                         ? "bg-indigo-600 text-white shadow-xs"
                         : "btn-ghost text-slate-700 hover:bg-white"
@@ -1933,7 +1843,7 @@ export function DailyEntryClient({
                     setPickerDay(todayEth.day);
                   } catch {}
                 }}
-                className="btn btn-xs btn-ghost text-slate-500 font-bold"
+                className="btn btn-sm btn-ghost text-slate-600 font-bold leading-relaxed touch-manipulation"
               >
                 ዛሬ (Today)
               </button>
@@ -1942,7 +1852,7 @@ export function DailyEntryClient({
                 <button
                   type="button"
                   onClick={() => setShowEthPicker(false)}
-                  className="btn btn-sm btn-ghost rounded-xl"
+                  className="btn btn-sm min-h-[40px] btn-ghost rounded-xl leading-relaxed touch-manipulation"
                 >
                   ይቅር (Cancel)
                 </button>
@@ -1951,7 +1861,7 @@ export function DailyEntryClient({
                   onClick={() =>
                     handleApplyEthDate(pickerYear, pickerMonth, pickerDay)
                   }
-                  className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-4"
+                  className="btn btn-sm min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-4 leading-relaxed touch-manipulation"
                 >
                   አረጋግጥ (Apply)
                 </button>

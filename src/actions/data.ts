@@ -126,11 +126,16 @@ export async function getDailyGridData(factoryId: string, date: string) {
     .from(plans)
     .where(and(lte(plans.startDate, date), gte(plans.endDate, date)));
 
-  // Fetch report entries for this date
-  const entries = await db
+  // Fetch report entries for this factory/date and plan periods up to date
+  const minStartDate = activePlans.reduce(
+    (min, p) => (p.startDate < min ? p.startDate : min),
+    date
+  );
+
+  const reportEntriesList = await db
     .select()
     .from(reportEntries)
-    .where(eq(reportEntries.date, date));
+    .where(and(gte(reportEntries.date, minStartDate), lte(reportEntries.date, date)));
 
   // Fetch special day for date
   const [specialDayRecord] = await db
@@ -174,9 +179,29 @@ export async function getDailyGridData(factoryId: string, date: string) {
         (p) => p.lineId === line.id && p.productId === prod.id
       );
 
-      const entry = entries.find(
-        (e) => e.lineId === line.id && e.productId === prod.id
+      const entry = reportEntriesList.find(
+        (e) => e.lineId === line.id && e.productId === prod.id && (!e.date || e.date === date)
       );
+
+      // Prior finished good produced during the plan period strictly before `date`
+      const priorFinishedGood = plan
+        ? reportEntriesList
+            .filter(
+              (e) =>
+                e.lineId === line.id &&
+                e.productId === prod.id &&
+                Boolean(e.date) &&
+                e.date >= plan.startDate &&
+                e.date < date
+            )
+            .reduce((sum, e) => sum + (e.finishedGood || 0), 0)
+        : 0;
+
+      const currentFG = entry ? entry.finishedGood || 0 : 0;
+      const cumulativeProduced = priorFinishedGood + currentFG;
+      const leftFromWeeklyPlanned = plan
+        ? Math.max(0, plan.plannedQty - cumulativeProduced)
+        : 0;
 
       // Pass special day to calculateDailyTarget so non-working holidays evaluate to 0
       const targetCalc = plan
@@ -203,6 +228,10 @@ export async function getDailyGridData(factoryId: string, date: string) {
               startDate: plan.startDate,
               endDate: plan.endDate,
               plannedQty: plan.plannedQty,
+              weeklyPlanned: plan.plannedQty,
+              priorFinishedGood,
+              cumulativeProduced,
+              leftFromWeeklyPlanned,
               dailyTarget: targetCalc?.hasTarget ? targetCalc.displayTarget : 0,
             }
           : null,

@@ -17,7 +17,7 @@ export const statements = {
   plan: ["create", "read", "update", "delete"],
   report_entry: ["create", "read", "update", "delete", "record_entry"],
   qa_inspection: ["create", "read", "update", "delete", "record_inspection"],
-  stock_ledger: ["read"],
+  stock_ledger: ["create", "read"],
 } as const;
 
 export type StatementMap = typeof statements;
@@ -56,7 +56,7 @@ export const roles = {
     plan: ["create", "read", "update", "delete"],
     report_entry: ["create", "read", "update", "delete", "record_entry"],
     qa_inspection: ["create", "read", "update", "delete", "record_inspection"],
-    stock_ledger: ["read"],
+    stock_ledger: ["create", "read"],
   }),
 
   om: ac.newRole({
@@ -69,7 +69,7 @@ export const roles = {
     plan: ["create", "read", "update"],
     report_entry: ["read"],
     qa_inspection: ["read"],
-    stock_ledger: ["read"],
+    stock_ledger: ["create", "read"],
   }),
 
   fm: ac.newRole({
@@ -82,7 +82,7 @@ export const roles = {
     plan: ["create", "read", "update"],
     report_entry: ["create", "read", "update", "record_entry"],
     qa_inspection: ["read"],
-    stock_ledger: ["read"],
+    stock_ledger: ["create", "read"],
   }),
 
   qa: ac.newRole({
