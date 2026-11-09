@@ -3,6 +3,26 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["better-auth", "pg"],
+  async redirects() {
+    return [
+      {
+        source: "/",
+        has: [
+          {
+            type: "cookie",
+            key: "dpm.session_token",
+          },
+        ],
+        permanent: false,
+        destination: "/dashboard",
+      },
+      {
+        source: "/",
+        permanent: false,
+        destination: "/login",
+      },
+    ];
+  },
   async headers() {
     return [
       {
