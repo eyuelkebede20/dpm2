@@ -48,9 +48,25 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
     cleanup();
   });
 
-  it("handles Desktop 'Sign Out' button click calling authClient.signOut", async () => {
+  it("opens profile dropdown, displays user data, and handles 'Sign Out' button click calling authClient.signOut", async () => {
     render(<Navbar user={sampleUser} />);
 
+    // Profile trigger button
+    const profileBtn = screen.getByRole("button", { name: /user profile menu/i });
+    expect(profileBtn).toBeDefined();
+    expect(profileBtn.getAttribute("aria-expanded")).toBe("false");
+
+    // Open profile dropdown
+    fireEvent.click(profileBtn);
+    expect(profileBtn.getAttribute("aria-expanded")).toBe("true");
+
+    // User data is cleanly visible inside the dropdown
+    expect(screen.getAllByText("System Admin").length).toBeGreaterThan(0);
+    expect(screen.getByText("admin@dpm.local")).toBeDefined();
+    expect(screen.getAllByText("Sys Admin").length).toBeGreaterThan(0);
+    expect(screen.getByText("Change Password")).toBeDefined();
+
+    // Click Sign Out from inside profile dropdown
     const signOutBtn = screen.getByRole("button", { name: /sign out/i });
     fireEvent.click(signOutBtn);
 
@@ -58,6 +74,18 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(authClient.signOut).toHaveBeenCalled();
       expect(mockPush).toHaveBeenCalledWith("/login");
     });
+  });
+
+  it("closes profile dropdown on Escape key", () => {
+    render(<Navbar user={sampleUser} />);
+
+    const profileBtn = screen.getByRole("button", { name: /user profile menu/i });
+    fireEvent.click(profileBtn);
+    expect(profileBtn.getAttribute("aria-expanded")).toBe("true");
+
+    // Press Escape
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(profileBtn.getAttribute("aria-expanded")).toBe("false");
   });
 
   it("toggles mobile menu drawer open and closed using hamburger and close buttons", () => {

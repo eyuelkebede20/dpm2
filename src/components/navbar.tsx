@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -17,9 +17,12 @@ import {
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
   User,
+  Key,
 } from "lucide-react";
 import { SessionUser } from "@/lib/authz";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
 
 interface NavbarProps {
   user: SessionUser;
@@ -29,7 +32,40 @@ export function Navbar({ user }: NavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        profileDropdownRef.current &&
+        !profileDropdownRef.current.contains(event.target as Node)
+      ) {
+        setProfileOpen(false);
+      }
+    }
+
+    if (profileOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [profileOpen]);
+
+  // Close dropdown on Escape key
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+        setMobileMenuOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -126,18 +162,20 @@ export function Navbar({ user }: NavbarProps) {
     link.roles.includes(user.role)
   );
 
+  const userInitial = user.name ? user.name.trim().charAt(0).toUpperCase() : "U";
+
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Brand & Left Navigation */}
+            {/* Brand & Desktop Navigation */}
             <div className="flex items-center gap-6 lg:gap-8">
               <Link
                 href="/dashboard"
                 className="flex items-center gap-2.5 font-bold text-xl tracking-tight text-slate-900 group focus:outline-hidden"
               >
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm group-hover:bg-indigo-700 transition-colors">
+                <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-xs group-hover:bg-indigo-700 transition-colors">
                   <Boxes className="w-5 h-5" />
                 </div>
                 <span className="flex items-center gap-1.5 font-black">
@@ -163,7 +201,7 @@ export function Navbar({ user }: NavbarProps) {
                       href={link.href}
                       className={`relative px-3 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-semibold ${
                         isActive
-                          ? "bg-indigo-50 text-indigo-700 shadow-xs"
+                          ? "bg-indigo-50 text-indigo-700 shadow-2xs"
                           : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
                       }`}
                     >
@@ -182,41 +220,108 @@ export function Navbar({ user }: NavbarProps) {
               </nav>
             </div>
 
-            {/* Right Side: User Profile & Actions */}
+            {/* Right Side: Notifications & Clean Profile Dropdown */}
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="hidden sm:flex flex-col items-end">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-900">
-                    {user.name}
-                  </span>
-                  <span
-                    className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border tracking-wider ${roleBadgeColor}`}
+              <NotificationsDropdown userRole={user.role} />
+
+              {/* Profile Dropdown (Replaces clutter with clean dropdown) */}
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen((prev) => !prev)}
+                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-full hover:bg-slate-100 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                  aria-label="User profile menu"
+                  aria-expanded={profileOpen}
+                  aria-haspopup="true"
+                >
+                  <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0 ring-2 ring-indigo-100">
+                    {userInitial}
+                  </div>
+                  <div className="hidden lg:flex flex-col items-start text-left leading-tight">
+                    <span className="text-xs font-bold text-slate-800 truncate max-w-[120px]">
+                      {user.name}
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-400 capitalize">
+                      {roleLabel}
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 hidden sm:block ${
+                      profileOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Profile Dropdown Menu */}
+                {profileOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-150 divide-y divide-slate-100"
                   >
-                    {roleLabel}
-                  </span>
-                </div>
-                <span className="text-xs text-slate-400 font-mono">
-                  {user.email}
-                </span>
-              </div>
+                    {/* User Profile Card */}
+                    <div className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-black text-base flex items-center justify-center shadow-xs shrink-0">
+                          {userInitial}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-sm text-slate-900 truncate">
+                            {user.name}
+                          </div>
+                          <div className="text-xs font-mono text-slate-400 truncate">
+                            {user.email}
+                          </div>
+                        </div>
+                      </div>
 
-              <div className="h-6 w-px bg-slate-200 hidden sm:block mx-1" />
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                        <span
+                          className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border tracking-wider ${roleBadgeColor}`}
+                        >
+                          {roleLabel}
+                        </span>
+                        {roleAmharicDesc && (
+                          <span className="text-[11px] text-slate-400 font-medium leading-relaxed">
+                            {roleAmharicDesc}
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-              {/* Sign Out (Desktop) */}
-              <button
-                type="button"
-                onClick={handleSignOut}
-                disabled={signingOut}
-                className="hidden md:inline-flex btn btn-ghost btn-sm text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl gap-1.5 font-bold"
-                title="Sign Out"
-              >
-                {signingOut ? (
-                  <span className="loading loading-spinner loading-xs" />
-                ) : (
-                  <LogOut className="w-4 h-4" />
+                    {/* Quick Account Links */}
+                    <div className="py-1">
+                      <Link
+                        href="/change-password"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                      >
+                        <Key className="w-4 h-4 text-slate-400" />
+                        <span>Change Password</span>
+                      </Link>
+                    </div>
+
+                    {/* Sign Out Button */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          handleSignOut();
+                        }}
+                        disabled={signingOut}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors text-left"
+                      >
+                        {signingOut ? (
+                          <span className="loading loading-spinner loading-xs text-rose-600" />
+                        ) : (
+                          <LogOut className="w-4 h-4 text-rose-500" />
+                        )}
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
                 )}
-                <span>Sign Out</span>
-              </button>
+              </div>
 
               {/* Mobile Hamburger Button */}
               <button
@@ -237,7 +342,7 @@ export function Navbar({ user }: NavbarProps) {
         </div>
       </header>
 
-      {/* Mobile Navigation Drawer / Slide-over */}
+      {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
           {/* Backdrop */}
@@ -254,8 +359,8 @@ export function Navbar({ user }: NavbarProps) {
             {/* Drawer Header & User Pill */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-xs shrink-0">
-                  <User className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                  {userInitial}
                 </div>
                 <div className="min-w-0">
                   <div className="font-bold text-slate-900 text-base leading-tight truncate">
@@ -330,7 +435,15 @@ export function Navbar({ user }: NavbarProps) {
             </div>
 
             {/* Sign Out Action in Mobile Drawer */}
-            <div className="pt-2 border-t border-slate-100">
+            <div className="pt-2 border-t border-slate-100 space-y-2">
+              <Link
+                href="/change-password"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
+              >
+                <Key className="w-4 h-4 text-slate-400" />
+                <span>Change Password</span>
+              </Link>
               <button
                 type="button"
                 onClick={handleSignOut}
