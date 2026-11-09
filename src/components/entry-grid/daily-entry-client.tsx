@@ -96,6 +96,9 @@ export function DailyEntryClient({
 }: DailyEntryClientProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(initialDate);
+  const todayStr = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const isNextDayDisabled = selectedDate >= todayStr;
+  const isSelectedDateFuture = selectedDate > todayStr;
   const [rows, setRows] = useState<GridRowData[]>(initialRows);
   const [initialSnapshot, setInitialSnapshot] = useState<string>(
     JSON.stringify(initialRows)
@@ -135,6 +138,13 @@ export function DailyEntryClient({
       const maxDays = daysInMonthEth(y, m);
       const safeDay = Math.min(Math.max(1, d), maxDays);
       const gregIso = ethToGregorian(y, m, safeDay);
+      if (gregIso > todayStr) {
+        setToast({
+          type: "error",
+          message: "Cannot select future dates. Production entries are disabled for future dates.",
+        });
+        return;
+      }
       handleDateChange(gregIso);
       setShowEthPicker(false);
     } catch (err: any) {
@@ -292,6 +302,13 @@ export function DailyEntryClient({
   };
 
   const handleSaveAll = async () => {
+    if (selectedDate > todayStr) {
+      setToast({
+        type: "error",
+        message: "Cannot record production entries for future dates.",
+      });
+      return;
+    }
     startTransition(async () => {
       let savedCount = 0;
       let errorMsg = null;
@@ -480,6 +497,7 @@ export function DailyEntryClient({
               <input
                 type="date"
                 value={selectedDate}
+                max={todayStr}
                 onChange={(e) => handleDateChange(e.target.value)}
                 className="text-xs sm:text-sm font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
               />
@@ -487,13 +505,19 @@ export function DailyEntryClient({
 
             <button
               type="button"
+              disabled={isNextDayDisabled}
               onClick={() =>
+                !isNextDayDisabled &&
                 handleDateChange(
                   format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
                 )
               }
-              className="btn btn-sm btn-ghost px-2 text-slate-600 hover:text-slate-900"
-              title="Next Day"
+              className={`btn btn-sm btn-ghost px-2 ${
+                isNextDayDisabled
+                  ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+              title={isNextDayDisabled ? "Cannot navigate to future dates" : "Next Day"}
             >
               <ChevronRight className="w-4 h-4" />
             </button>

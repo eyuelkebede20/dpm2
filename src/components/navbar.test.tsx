@@ -125,4 +125,39 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(mockPush).toHaveBeenCalledWith("/admin");
     });
   });
+
+  describe("Role-based navigation item visibility", () => {
+    it("does not render Daily Entry or Calendar for sys_admin", () => {
+      render(<Navbar user={sampleUser} />);
+      expect(screen.queryByText("Daily Entry")).toBeNull();
+      expect(screen.queryByText("Calendar")).toBeNull();
+      expect(screen.getByText("Admin Portal")).toBeDefined();
+    });
+
+    it("renders Daily Entry and Calendar for Factory Manager (fm)", () => {
+      const fmUser = {
+        ...sampleUser,
+        id: "usr_fm_1",
+        name: "Abebe FM",
+        role: "fm" as const,
+      };
+      render(<Navbar user={fmUser} />);
+      expect(screen.getAllByText("Daily Entry").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Calendar").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Admin Portal")).toBeNull();
+    });
+
+    it("renders Daily Entry and Calendar for Operations Manager (om)", () => {
+      const omUser = {
+        ...sampleUser,
+        id: "usr_om_1",
+        name: "Solomon OM",
+        role: "om" as const,
+      };
+      render(<Navbar user={omUser} />);
+      expect(screen.getAllByText("Daily Entry").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Calendar").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Admin Portal")).toBeNull();
+    });
+  });
 });

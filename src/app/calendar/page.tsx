@@ -22,7 +22,7 @@ interface CalendarPageProps {
 }
 
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
-  const user = await requireAuthPage();
+  const user = await requireAuthPage(["fm", "om"]);
   const context = await getCurrentUserContext();
 
   if (!context.factoryId) {
@@ -53,10 +53,22 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
   if (calType === "ethiopian") {
     if (isNaN(ethYear) || ethYear < 1900) ethYear = currentEth.year;
     if (isNaN(ethMonth) || ethMonth < 1 || ethMonth > 13) ethMonth = currentEth.month;
+
+    // Disallow future months: clamp to current Ethiopian month
+    if (ethYear > currentEth.year || (ethYear === currentEth.year && ethMonth > currentEth.month)) {
+      ethYear = currentEth.year;
+      ethMonth = currentEth.month;
+    }
+
     const range = getEthiopianMonthRange(ethYear, ethMonth);
     startDateStr = range.from;
     endDateStr = range.to;
   } else {
+    const currentGregMonth = format(today, "yyyy-MM");
+    // Disallow future months: clamp to current Gregorian month
+    if (gregMonthStr > currentGregMonth) {
+      gregMonthStr = currentGregMonth;
+    }
     const monthDate = parseISO(`${gregMonthStr}-01`);
     startDateStr = format(startOfMonth(monthDate), "yyyy-MM-dd");
     endDateStr = format(endOfMonth(monthDate), "yyyy-MM-dd");

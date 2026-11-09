@@ -98,13 +98,13 @@ export function Navbar({ user }: NavbarProps) {
       label: "Daily Entry",
       href: "/entry",
       icon: PenTool,
-      roles: ["sys_admin", "om", "fm"],
+      roles: ["om", "fm"],
     },
     {
       label: "Calendar",
       href: "/calendar",
       icon: Calendar,
-      roles: ["sys_admin", "om", "fm"],
+      roles: ["om", "fm"],
     },
     {
       label: "QA Inspections",

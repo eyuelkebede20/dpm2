@@ -54,15 +54,6 @@ export async function getCurrentUserContext() {
       userFactoryId = fac.id;
       userFactoryName = fac.name;
     }
-  } else if (user.role === "sys_admin") {
-    const [fac] = await db
-      .select({ id: factories.id, name: factories.name })
-      .from(factories)
-      .limit(1);
-    if (fac) {
-      userFactoryId = fac.id;
-      userFactoryName = fac.name;
-    }
   }
 
   const [profile] = await db
@@ -295,23 +286,36 @@ export async function getMonthCalendarSummary(
       )
     );
 
+  // Active products in factory
+  const factoryProducts = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+    })
+    .from(products)
+    .where(and(eq(products.factoryId, factoryId), eq(products.active, true)));
+
   // Plans covering the period
   const factoryPlans = await db
     .select({
       lineId: plans.lineId,
       productId: plans.productId,
+      productName: products.name,
       startDate: plans.startDate,
       endDate: plans.endDate,
       plannedQty: plans.plannedQty,
     })
     .from(plans)
     .innerJoin(lines, eq(lines.id, plans.lineId))
+    .innerJoin(products, eq(products.id, plans.productId))
     .where(eq(lines.factoryId, factoryId));
 
   return {
     workingDays,
     entries,
     plans: factoryPlans,
+    products: factoryProducts,
   };
 }
 

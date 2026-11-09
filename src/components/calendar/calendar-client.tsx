@@ -125,7 +125,23 @@ export function CalendarClient({
 
   // Today in both calendars
   const todayGC = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+  const currentGregMonthStr = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const todayEC = useMemo(() => gregorianToEth(todayGC), [todayGC]);
+
+  // Is Next Month in the future? Next month and months following are disabled/inactive!
+  const isNextMonthDisabled = useMemo(() => {
+    if (calType === "ethiopian") {
+      return ethYear > todayEC.year || (ethYear === todayEC.year && ethMonth >= todayEC.month);
+    } else {
+      return initialGregMonthStr >= currentGregMonthStr;
+    }
+  }, [calType, ethYear, ethMonth, todayEC, initialGregMonthStr, currentGregMonthStr]);
+
+  // Is the currently active / inspected day in the future?
+  const isSelectedDayFuture = useMemo(() => {
+    if (!activeDayDateStr) return false;
+    return activeDayDateStr > todayGC;
+  }, [activeDayDateStr, todayGC]);
 
   // Set default active day to today
   useEffect(() => {
@@ -162,6 +178,7 @@ export function CalendarClient({
   };
 
   const handleNextMonth = () => {
+    if (isNextMonthDisabled) return;
     if (calType === "ethiopian") {
       let nextM = ethMonth + 1;
       let nextY = ethYear;
@@ -169,12 +186,18 @@ export function CalendarClient({
         nextM = 1;
         nextY++;
       }
+      if (nextY > todayEC.year || (nextY === todayEC.year && nextM > todayEC.month)) {
+        return;
+      }
       setEthMonth(nextM);
       setEthYear(nextY);
       router.push(`/calendar?cal=ethiopian&ey=${nextY}&em=${nextM}`);
     } else {
       const nextDate = addMonths(parseISO(`${initialGregMonthStr}-01`), 1);
       const nextStr = format(nextDate, "yyyy-MM");
+      if (nextStr > currentGregMonthStr) {
+        return;
+      }
       router.push(`/calendar?cal=gregorian&month=${nextStr}`);
     }
   };
@@ -191,6 +214,9 @@ export function CalendarClient({
   };
 
   const jumpToEthMonth = (year: number, month: number) => {
+    if (year > todayEC.year || (year === todayEC.year && month > todayEC.month)) {
+      return;
+    }
     setEthYear(year);
     setEthMonth(month);
     setShowMonthJumper(false);
@@ -226,6 +252,7 @@ export function CalendarClient({
     dayOfWeek: number;        // 0 = Sun, 1 = Mon ...
     isWorkDay: boolean;
     isCurrentToday: boolean;
+    isFuture: boolean;
     specialDay?: CalendarSpecialDay;
   }
 
@@ -239,6 +266,7 @@ export function CalendarClient({
         const dow = getEthDayOfWeek(ethYear, ethMonth, d);
         const isWork = isWorkingDay(gregStr, workingDays, specialDays);
         const isCurr = gregStr === todayGC;
+        const isFut = gregStr > todayGC;
         const gregDate = parseISO(gregStr);
         const secLabel = format(gregDate, "MMM d");
         const sDay = specialDays.find((sd) => sd.date === gregStr);
@@ -250,6 +278,7 @@ export function CalendarClient({
           dayOfWeek: dow,
           isWorkDay: isWork,
           isCurrentToday: isCurr,
+          isFuture: isFut,
           specialDay: sDay,
         });
       }
@@ -265,6 +294,7 @@ export function CalendarClient({
         const dow = d.getDay();
         const isWork = isWorkingDay(d, workingDays, specialDays);
         const isCurr = isToday(d);
+        const isFut = gregStr > todayGC;
         const mName = language === "am" ? ETH_MONTH_NAMES_AM[ethDate.month] : ETH_MONTH_NAMES_EN[ethDate.month];
         const secLabel = `${mName} ${ethDate.day}`;
         const sDay = specialDays.find((sd) => sd.date === gregStr);
@@ -276,6 +306,7 @@ export function CalendarClient({
           dayOfWeek: dow,
           isWorkDay: isWork,
           isCurrentToday: isCurr,
+          isFuture: isFut,
           specialDay: sDay,
         };
       });
@@ -415,11 +446,21 @@ export function CalendarClient({
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
-              onClick={() => router.push(`/entry?date=${activeDayDateStr || todayGC}`)}
-              className="btn btn-sm w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs border-none gap-1.5 transition-all active:scale-95"
+              disabled={isSelectedDayFuture}
+              onClick={() => {
+                if (!isSelectedDayFuture) {
+                  router.push(`/entry?date=${activeDayDateStr || todayGC}`);
+                }
+              }}
+              className={`btn btn-sm w-full sm:w-auto font-bold rounded-xl shadow-xs border-none gap-1.5 transition-all ${
+                isSelectedDayFuture
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95"
+              }`}
+              title={isSelectedDayFuture ? "Cannot input numbers for future dates" : "Enter Daily Numbers"}
             >
               <PenTool className="w-4 h-4" />
-              <span>Enter Daily Numbers</span>
+              <span>{isSelectedDayFuture ? "Input Disabled (Future)" : "Enter Daily Numbers"}</span>
             </button>
           </div>
         </div>
@@ -503,8 +544,13 @@ export function CalendarClient({
 
             <button
               onClick={handleNextMonth}
-              className="btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[38px] flex items-center justify-center"
-              title="Next Month"
+              disabled={isNextMonthDisabled}
+              className={`btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[38px] flex items-center justify-center transition-all ${
+                isNextMonthDisabled
+                  ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
+                  : ""
+              }`}
+              title={isNextMonthDisabled ? "Next Month (Disabled - Future)" : "Next Month"}
               aria-label="Next Month"
             >
               <ChevronRight className="w-4 h-4" />
@@ -725,20 +771,27 @@ export function CalendarClient({
                 Year (ዓ.ም)
               </span>
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {[2015, 2016, 2017, 2018, 2019, 2020].map((y) => (
-                  <button
-                    key={y}
-                    type="button"
-                    onClick={() => setEthYear(y)}
-                    className={`btn btn-xs rounded-xl font-mono font-bold flex-1 ${
-                      ethYear === y
-                        ? "bg-emerald-600 text-white border-none"
-                        : "btn-outline text-slate-600"
-                    }`}
-                  >
-                    {y}
-                  </button>
-                ))}
+                {[2015, 2016, 2017, 2018, 2019, 2020].map((y) => {
+                  const isFutureYear = y > todayEC.year;
+                  return (
+                    <button
+                      key={y}
+                      type="button"
+                      disabled={isFutureYear}
+                      onClick={() => !isFutureYear && setEthYear(y)}
+                      className={`btn btn-xs rounded-xl font-mono font-bold flex-1 ${
+                        isFutureYear
+                          ? "opacity-30 cursor-not-allowed bg-slate-100 text-slate-400 border-none"
+                          : ethYear === y
+                          ? "bg-emerald-600 text-white border-none"
+                          : "btn-outline text-slate-600"
+                      }`}
+                      title={isFutureYear ? "Future Year (Disabled)" : undefined}
+                    >
+                      {y}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -747,6 +800,7 @@ export function CalendarClient({
               {Array.from({ length: 13 }).map((_, idx) => {
                 const m = idx + 1;
                 const isSelected = ethMonth === m;
+                const isFutureMonth = ethYear > todayEC.year || (ethYear === todayEC.year && m > todayEC.month);
                 const mNameAm = ETH_MONTH_NAMES_AM[m];
                 const mNameEn = ETH_MONTH_NAMES_EN[m];
 
@@ -754,20 +808,28 @@ export function CalendarClient({
                   <button
                     key={m}
                     type="button"
-                    onClick={() => jumpToEthMonth(ethYear, m)}
+                    disabled={isFutureMonth}
+                    onClick={() => !isFutureMonth && jumpToEthMonth(ethYear, m)}
                     className={`p-2.5 rounded-2xl border text-center transition-all ${
-                      isSelected
+                      isFutureMonth
+                        ? "border-slate-200 bg-slate-100/70 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none"
+                        : isSelected
                         ? "border-emerald-600 bg-emerald-50 text-emerald-900 font-extrabold shadow-xs"
                         : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold"
                     }`}
+                    title={isFutureMonth ? `${mNameEn} (Disabled - Future Month)` : mNameEn}
                   >
                     <div className="text-sm font-bold">{mNameAm}</div>
                     <div className="text-[10px] text-slate-400 font-mono">{mNameEn}</div>
-                    {m === 13 && (
+                    {isFutureMonth ? (
+                      <span className="text-[8px] bg-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block">
+                        ወደፊት (Disabled)
+                      </span>
+                    ) : m === 13 ? (
                       <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block">
                         Pagume
                       </span>
-                    )}
+                    ) : null}
                   </button>
                 );
               })}

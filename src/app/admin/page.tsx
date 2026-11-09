@@ -3,7 +3,6 @@ import {
   getIndustryProfile,
   getOperationManagers,
   getAllUsersForAdmin,
-  getImpersonationCandidates,
 } from "@/actions/admin-actions";
 import { AdminClient } from "./admin-client";
 
@@ -15,7 +14,6 @@ export default async function AdminPage() {
   const profile = await getIndustryProfile();
   const oms = await getOperationManagers();
   const allUsers = await getAllUsersForAdmin();
-  const impersonationCandidates = await getImpersonationCandidates();
 
   const isDevImpersonationEnabled =
     process.env.NODE_ENV !== "production" &&
@@ -28,7 +26,7 @@ export default async function AdminPage() {
           System Administration
         </h1>
         <p className="text-sm text-slate-500 mt-1">
-          Manage system configurations, factory executives, and dev controls
+          Manage system configurations, factory executives, and user provisioning
         </p>
       </div>
 
@@ -43,7 +41,6 @@ export default async function AdminPage() {
         initialOms={oms}
         initialUsers={allUsers}
         currentUserId={user.id}
-        impersonationCandidates={impersonationCandidates}
         isDevImpersonationEnabled={isDevImpersonationEnabled}
       />
     </div>

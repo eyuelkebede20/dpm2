@@ -68,8 +68,6 @@ describe("Button Interaction Tests - AdminClient", () => {
       <AdminClient
         initialProfile={sampleProfile}
         initialOms={sampleOMs}
-        impersonationCandidates={sampleCandidates}
-        isDevImpersonationEnabled={true}
       />
     );
   };
@@ -146,27 +144,11 @@ describe("Button Interaction Tests - AdminClient", () => {
     });
   });
 
-  it("handles impersonation button click and disabled state", async () => {
+  it("does not render impersonation controls in sys admin as role switcher is enabled", () => {
     renderAdmin();
 
-    const impersonateBtn = screen.getByRole("button", { name: /impersonate/i }) as HTMLButtonElement;
-    // Disabled initially because no candidate selected in dropdown
-    expect(impersonateBtn.disabled).toBe(true);
-
-    // Select candidate
-    const select = screen.getAllByRole("combobox")[0];
-    fireEvent.change(select, { target: { value: "usr_om_1" } });
-
-    expect(impersonateBtn.disabled).toBe(false);
-
-    fireEvent.click(impersonateBtn);
-
-    await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        "/api/admin/impersonate",
-        expect.objectContaining({ method: "POST" })
-      );
-    });
+    expect(screen.queryByText(/dev impersonation toolbar/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /impersonate/i })).toBeNull();
   });
 
   it("opens and cancels Reset Password modal", () => {

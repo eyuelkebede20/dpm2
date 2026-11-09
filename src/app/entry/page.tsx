@@ -13,7 +13,7 @@ interface EntryPageProps {
 }
 
 export default async function EntryPage({ searchParams }: EntryPageProps) {
-  const user = await requireAuthPage(["fm", "om", "sys_admin"]);
+  const user = await requireAuthPage(["fm", "om"]);
   const context = await getCurrentUserContext();
 
   if (!context.factoryId) {
@@ -29,7 +29,12 @@ export default async function EntryPage({ searchParams }: EntryPageProps) {
 
   const resolvedSearchParams = await searchParams;
   const todayStr = format(new Date(), "yyyy-MM-dd");
-  const dateStr = resolvedSearchParams.date || todayStr;
+  let dateStr = resolvedSearchParams.date || todayStr;
+
+  // Disallow future dates: redirect to today if date is in the future
+  if (dateStr > todayStr) {
+    redirect(`/entry?date=${todayStr}`);
+  }
 
   const data = await getDailyGridData(context.factoryId, dateStr);
 

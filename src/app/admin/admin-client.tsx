@@ -19,7 +19,6 @@ import {
   Shield,
   Check,
   AlertCircle,
-  ShieldAlert,
   Copy,
   CheckCheck,
   ShieldCheck,
@@ -59,13 +58,13 @@ interface AdminClientProps {
   }>;
   initialUsers?: AdminUserItem[];
   currentUserId?: string;
-  impersonationCandidates: Array<{
+  impersonationCandidates?: Array<{
     id: string;
     name: string;
     email: string;
     role: string;
   }>;
-  isDevImpersonationEnabled: boolean;
+  isDevImpersonationEnabled?: boolean;
 }
 
 const DAYS = [
@@ -83,8 +82,8 @@ export function AdminClient({
   initialOms,
   initialUsers = [],
   currentUserId,
-  impersonationCandidates,
-  isDevImpersonationEnabled,
+  impersonationCandidates = [],
+  isDevImpersonationEnabled = false,
 }: AdminClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"roles" | "profile">("roles");
@@ -189,10 +188,6 @@ export function AdminClient({
     }
   };
 
-  // Impersonation state
-  const [selectedTargetId, setSelectedTargetId] = useState("");
-  const [impersonating, setImpersonating] = useState(false);
-
   // Toggle Day selection
   const handleDayToggle = (day: number) => {
     if (workingDays.includes(day)) {
@@ -290,27 +285,6 @@ export function AdminClient({
     router.refresh();
   };
 
-  // Dev Impersonation switch
-  const handleImpersonate = async () => {
-    if (!selectedTargetId) return;
-    setImpersonating(true);
-    try {
-      const res = await fetch("/api/admin/impersonate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: selectedTargetId }),
-      });
-      if (res.ok) {
-        router.refresh();
-        router.push("/dashboard");
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setImpersonating(false);
-    }
-  };
-
   // Filter users by role, status, and search query
   const filteredUsers = usersList.filter((u) => {
     const matchesRole = roleFilter === "all" || u.role === roleFilter;
@@ -332,51 +306,6 @@ export function AdminClient({
 
   return (
     <div className="space-y-6">
-      {/* Dev Impersonation Toolbar */}
-      {isDevImpersonationEnabled && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-200 text-amber-900 rounded-xl">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-amber-950">
-                  Dev Impersonation Toolbar
-                </h3>
-                <p className="text-xs text-amber-800">
-                  Switch your active session into any Operation Manager or Factory Manager.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                className="select select-bordered select-sm bg-white text-xs rounded-xl focus:border-amber-500"
-                value={selectedTargetId}
-                onChange={(e) => setSelectedTargetId(e.target.value)}
-              >
-                <option value="">-- Select OM / FM to impersonate --</option>
-                {impersonationCandidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    [{c.role.toUpperCase()}] {c.name} ({c.email})
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleImpersonate}
-                disabled={!selectedTargetId || impersonating}
-                className="btn btn-sm bg-amber-600 hover:bg-amber-700 text-white border-none rounded-xl"
-              >
-                {impersonating ? "Switching..." : "Impersonate"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      
-
       {/* Global Toast Notification */}
       {roleActionToast && (
         <div
