@@ -239,13 +239,85 @@ describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => 
   it("renders quality fallout numbers and targets in inspection views", () => {
     renderCalendar();
 
-    const matches = screen.getAllByText(/120/i);
-    const dayBtn = matches.map((m) => m.closest("button")).find(Boolean);
-    if (dayBtn) {
-      fireEvent.click(dayBtn);
+    // Day 29 in Ethiopian Tikimt corresponds to 2026-11-08 where sample entry is recorded
+    const day29Btn = screen.getByText("29").closest("button");
+    expect(day29Btn).not.toBeNull();
+    if (day29Btn) {
+      fireEvent.click(day29Btn);
     }
 
     expect(screen.getAllByText(/Rework/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Reject/i).length).toBeGreaterThan(0);
+  });
+
+  it("renders product filter dropdown and product performance strip", () => {
+    render(
+      <CalendarClient
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        calendarType="ethiopian"
+        ethiopianYear={2019}
+        ethiopianMonth={2}
+        gregorianMonthStr="2026-11"
+        startDateStr="2026-11-01"
+        endDateStr="2026-11-30"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        entries={sampleEntries}
+        plans={samplePlans}
+        products={[{ id: "prod_1", name: "Polo Shirt", sku: "POLO-001" }]}
+      />
+    );
+
+    // Product performance overview strip title
+    expect(screen.getByText(/Product Month Performance/i)).toBeDefined();
+
+    // Product name in the strip
+    const productPills = screen.getAllByText("Polo Shirt");
+    expect(productPills.length).toBeGreaterThan(0);
+
+    // Filter by product combobox
+    const selects = screen.getAllByRole("combobox");
+    const productSelect = selects.find((s) =>
+      Array.from(s.children).some((c) => c.textContent?.includes("Polo Shirt"))
+    );
+    expect(productSelect).toBeDefined();
+
+    if (productSelect) {
+      fireEvent.change(productSelect, { target: { value: "prod_1" } });
+      expect((productSelect as HTMLSelectElement).value).toBe("prod_1");
+    }
+  });
+
+  it("renders product breakdown in inspection details", () => {
+    render(
+      <CalendarClient
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        calendarType="ethiopian"
+        ethiopianYear={2019}
+        ethiopianMonth={2}
+        gregorianMonthStr="2026-11"
+        startDateStr="2026-11-01"
+        endDateStr="2026-11-30"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        entries={sampleEntries}
+        plans={samplePlans}
+        products={[{ id: "prod_1", name: "Polo Shirt", sku: "POLO-001" }]}
+      />
+    );
+
+    // Switch to Compact view mode
+    const compactBtn = screen.getByRole("button", { name: "Compact" });
+    fireEvent.click(compactBtn);
+
+    // Select the day with entries (2026-11-08)
+    const dayButtons = screen.getAllByRole("button");
+    const dayBtn = dayButtons.find((b) => b.textContent?.includes("120"));
+    if (dayBtn) {
+      fireEvent.click(dayBtn);
+    }
+
+    // Inspect should show Production by Product header
+    expect(screen.getAllByText(/Production by Product/i).length).toBeGreaterThan(0);
   });
 });

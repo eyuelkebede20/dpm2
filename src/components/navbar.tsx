@@ -152,9 +152,10 @@ export function Navbar({ user }: NavbarProps) {
               <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
                 {visibleLinks.map((link) => {
                   const Icon = link.icon;
+                  const safePathname = pathname || "";
                   const isActive = link.exact
-                    ? pathname === link.href
-                    : pathname.startsWith(link.href);
+                    ? safePathname === link.href
+                    : safePathname.startsWith(link.href);
 
                   return (
                     <Link
@@ -294,9 +295,10 @@ export function Navbar({ user }: NavbarProps) {
               </span>
               {visibleLinks.map((link) => {
                 const Icon = link.icon;
+                const safePathname = pathname || "";
                 const isActive = link.exact
-                  ? pathname === link.href
-                  : pathname.startsWith(link.href);
+                  ? safePathname === link.href
+                  : safePathname.startsWith(link.href);
 
                 return (
                   <Link

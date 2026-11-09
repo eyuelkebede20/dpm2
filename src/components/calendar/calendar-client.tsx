@@ -27,6 +27,7 @@ import {
   ChevronDown,
   PartyPopper,
   CheckCircle2,
+  Boxes,
 } from "lucide-react";
 import { calculateDailyTarget, calculateVariance, isWorkingDay } from "@/lib/target";
 import {
@@ -85,7 +86,7 @@ interface CalendarClientProps {
   endDateStr: string;
   entries: CalendarEntry[];
   plans: CalendarPlan[];
-  products?: { id: string; name: string }[];
+  products?: { id: string; name: string; sku?: string }[];
   specialDays?: CalendarSpecialDay[];
 }
 
@@ -247,10 +248,22 @@ export function CalendarClient({
   }, [entries]);
 
   const availableProducts = useMemo(() => {
-    const map = new Map<string, string>();
-    entries.forEach((e) => map.set(e.productId, e.productName));
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [entries]);
+    const map = new Map<string, { id: string; name: string; sku?: string }>();
+    if (products) {
+      products.forEach((p) => map.set(p.id, { id: p.id, name: p.name, sku: (p as any).sku }));
+    }
+    plans.forEach((p) => {
+      if (!map.has(p.productId)) {
+        map.set(p.productId, { id: p.productId, name: (p as any).productName || "Product" });
+      }
+    });
+    entries.forEach((e) => {
+      if (!map.has(e.productId)) {
+        map.set(e.productId, { id: e.productId, name: e.productName });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, plans, entries]);
 
   const filteredEntries = useMemo(() => {
     return entries.filter((e) => {
@@ -343,8 +356,22 @@ export function CalendarClient({
         hasTarget: boolean;
         netVariance: number;
         entries: CalendarEntry[];
+        productBreakdown: Array<{
+          productId: string;
+          productName: string;
+          fg: number;
+          target: number;
+          hasTarget: boolean;
+        }>;
       }
     >();
+
+    // Relevant plans based on filters
+    const relevantPlans = plans.filter((p) => {
+      if (selectedLineFilter !== "all" && p.lineId !== selectedLineFilter) return false;
+      if (selectedProductFilter !== "all" && p.productId !== selectedProductFilter) return false;
+      return true;
+    });
 
     gridDays.forEach((item) => {
       const dayEntries = filteredEntries.filter((e) => e.date === item.gregorianDateStr);
@@ -353,15 +380,51 @@ export function CalendarClient({
       let dayTotalTarget = 0;
       let dayHasTarget = false;
 
+      const productBreakdownMap = new Map<
+        string,
+        {
+          productId: string;
+          productName: string;
+          fg: number;
+          target: number;
+          hasTarget: boolean;
+        }
+      >();
+
       dayEntries.forEach((e) => {
         dayTotalFG += e.finishedGood;
-        const matchingPlan = plans.find(
-          (p) => p.lineId === e.lineId && p.productId === e.productId
-        );
-        const t = calculateDailyTarget(matchingPlan, item.gregorianDateStr, workingDays, specialDays);
+        if (!productBreakdownMap.has(e.productId)) {
+          productBreakdownMap.set(e.productId, {
+            productId: e.productId,
+            productName: e.productName,
+            fg: 0,
+            target: 0,
+            hasTarget: false,
+          });
+        }
+        productBreakdownMap.get(e.productId)!.fg += e.finishedGood;
+      });
+
+      relevantPlans.forEach((p) => {
+        const t = calculateDailyTarget(p, item.gregorianDateStr, workingDays, specialDays);
         if (t.hasTarget) {
           dayTotalTarget += t.dailyTarget;
           dayHasTarget = true;
+
+          const prodMeta = availableProducts.find((ap) => ap.id === p.productId);
+          const pName = prodMeta?.name || (p as any).productName || "Product";
+          if (!productBreakdownMap.has(p.productId)) {
+            productBreakdownMap.set(p.productId, {
+              productId: p.productId,
+              productName: pName,
+              fg: 0,
+              target: 0,
+              hasTarget: false,
+            });
+          }
+          const pItem = productBreakdownMap.get(p.productId)!;
+          pItem.target += t.dailyTarget;
+          pItem.hasTarget = true;
         }
       });
 
@@ -371,11 +434,129 @@ export function CalendarClient({
         hasTarget: dayHasTarget,
         netVariance: dayHasTarget ? dayTotalFG - dayTotalTarget : 0,
         entries: dayEntries,
+        productBreakdown: Array.from(productBreakdownMap.values()),
       });
     });
 
     return map;
-  }, [gridDays, filteredEntries, plans, workingDays, specialDays]);
+  }, [gridDays, filteredEntries, plans, workingDays, specialDays, selectedLineFilter, selectedProductFilter, availableProducts]);
+
+  // Month-level Product Summaries
+  const monthProductSummaries = useMemo(() => {
+    return availableProducts.map((prod) => {
+      let prodFG = 0;
+      let prodTarget = 0;
+      let prodHasTarget = false;
+
+      // Filter entries for this product (also respecting line filter)
+      const prodEntries = entries.filter((e) => {
+        if (e.productId !== prod.id) return false;
+        if (selectedLineFilter !== "all" && e.lineId !== selectedLineFilter) return false;
+        return true;
+      });
+
+      prodEntries.forEach((e) => {
+        prodFG += e.finishedGood;
+      });
+
+      // Target across all gridDays
+      const prodPlans = plans.filter((p) => {
+        if (p.productId !== prod.id) return false;
+        if (selectedLineFilter !== "all" && p.lineId !== selectedLineFilter) return false;
+        return true;
+      });
+
+      gridDays.forEach((d) => {
+        prodPlans.forEach((p) => {
+          const t = calculateDailyTarget(p, d.gregorianDateStr, workingDays, specialDays);
+          if (t.hasTarget) {
+            prodTarget += t.dailyTarget;
+            prodHasTarget = true;
+          }
+        });
+      });
+
+      const netVar = prodHasTarget ? prodFG - prodTarget : 0;
+      const completionPct = prodTarget > 0 ? Math.round((prodFG / prodTarget) * 100) : null;
+
+      return {
+        id: prod.id,
+        name: prod.name,
+        sku: prod.sku,
+        totalFG: prodFG,
+        totalTarget: prodTarget,
+        hasTarget: prodHasTarget,
+        netVariance: netVar,
+        completionPct,
+        entriesCount: prodEntries.length,
+      };
+    });
+  }, [availableProducts, entries, plans, gridDays, workingDays, specialDays, selectedLineFilter]);
+
+  // Active day details for inspection drawer / inline card
+  const activeDaySummary = activeDayDateStr ? daySummaryMap.get(activeDayDateStr) : null;
+  const activeDayItem = activeDayDateStr
+    ? gridDays.find((g) => g.gregorianDateStr === activeDayDateStr)
+    : null;
+
+  // Active Day grouped by Product
+  const activeDayProductGroups = useMemo(() => {
+    if (!activeDaySummary || !activeDayDateStr) return [];
+
+    const map = new Map<
+      string,
+      {
+        productId: string;
+        productName: string;
+        sku?: string;
+        totalFG: number;
+        totalTarget: number;
+        hasTarget: boolean;
+        netVariance: number;
+        entries: CalendarEntry[];
+      }
+    >();
+
+    activeDaySummary.entries.forEach((e) => {
+      const prodMeta = availableProducts.find((p) => p.id === e.productId);
+      if (!map.has(e.productId)) {
+        map.set(e.productId, {
+          productId: e.productId,
+          productName: e.productName,
+          sku: prodMeta?.sku,
+          totalFG: 0,
+          totalTarget: 0,
+          hasTarget: false,
+          netVariance: 0,
+          entries: [],
+        });
+      }
+
+      const g = map.get(e.productId)!;
+      g.totalFG += e.finishedGood;
+      g.entries.push(e);
+
+      const plan = plans.find(
+        (p) => p.lineId === e.lineId && p.productId === e.productId
+      );
+      const target = calculateDailyTarget(
+        plan,
+        activeDayDateStr,
+        workingDays,
+        specialDays
+      );
+      if (target.hasTarget) {
+        g.totalTarget += target.dailyTarget;
+        g.hasTarget = true;
+      }
+    });
+
+    map.forEach((g) => {
+      g.netVariance = g.hasTarget ? g.totalFG - g.totalTarget : 0;
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.productName.localeCompare(b.productName));
+  }, [activeDaySummary, activeDayDateStr, availableProducts, plans, workingDays, specialDays]);
 
   // Month-wide Performance Totals
   const monthTotals = useMemo(() => {
@@ -412,12 +593,6 @@ export function CalendarClient({
       recordedDaysCount,
     };
   }, [gridDays, daySummaryMap]);
-
-  // Active day details for inspection drawer / inline card
-  const activeDaySummary = activeDayDateStr ? daySummaryMap.get(activeDayDateStr) : null;
-  const activeDayItem = activeDayDateStr
-    ? gridDays.find((g) => g.gregorianDateStr === activeDayDateStr)
-    : null;
 
   // Header Title with proper leading for Ge'ez script
   const headerTitle = useMemo(() => {
@@ -574,6 +749,113 @@ export function CalendarClient({
           </div>
         </div>
       </div>
+
+      {/* Product Month Performance Strip */}
+      {monthProductSummaries.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs my-3 sm:my-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Boxes className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Product Month Performance</span>
+            </span>
+            <span className="text-[11px] text-slate-400 font-medium">
+              Click a product to isolate calendar views
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+            {/* All Products Pill */}
+            <button
+              type="button"
+              onClick={() => setSelectedProductFilter("all")}
+              className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
+                selectedProductFilter === "all"
+                  ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs"
+                  : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
+              }`}
+            >
+              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                All Products
+              </div>
+              <div className="flex items-baseline gap-1.5 mt-0.5">
+                <span className="font-mono font-black text-sm text-slate-900">
+                  {monthTotals.output.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-400">pcs</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
+                {monthProductSummaries.length} active {monthProductSummaries.length === 1 ? "product" : "products"}
+              </div>
+            </button>
+
+            {/* Individual Product Pills */}
+            {monthProductSummaries.map((prod) => {
+              const isSelected = selectedProductFilter === prod.id;
+              return (
+                <button
+                  key={prod.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedProductFilter(isSelected ? "all" : prod.id)
+                  }
+                  className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
+                    isSelected
+                      ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs"
+                      : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
+                      {prod.name}
+                    </span>
+                    {prod.sku && (
+                      <span className="text-[9px] font-mono font-bold bg-white px-1.5 py-0.2 rounded text-slate-600 border border-slate-200">
+                        {prod.sku}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-mono font-black text-sm text-slate-900">
+                        {prod.totalFG.toLocaleString()}
+                      </span>
+                      <span className="text-[10px] text-slate-400">pcs</span>
+                    </div>
+
+                    {prod.hasTarget ? (
+                      <span
+                        className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded-md ${
+                          prod.netVariance >= 0
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        {prod.netVariance >= 0 ? `+${prod.netVariance}` : `${prod.netVariance}`}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 italic">No target</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 gap-2">
+                    <span>
+                      {prod.hasTarget
+                        ? `Target: ${Math.round(prod.totalTarget).toLocaleString()}`
+                        : "Ad-hoc"}
+                    </span>
+                    {prod.completionPct !== null && (
+                      <span className="font-bold text-slate-600 font-mono">
+                        {prod.completionPct}%
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ============================================================= */}
       {/* 2. MONTH PERFORMANCE KPI RIBBON (COMPACT & RESPONSIVE)        */}
@@ -1093,11 +1375,14 @@ export function CalendarClient({
                 </div>
               </div>
 
-              {/* Line & Product Detailed Breakdown */}
-              <div>
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2.5">
-                  Production Lines Recorded ({activeDaySummary.entries.length})
-                </h3>
+              {/* Product Group Breakdown */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Boxes className="w-4 h-4 text-emerald-600" />
+                    <span>Production by Product ({activeDayProductGroups.length} product{activeDayProductGroups.length === 1 ? "" : "s"}, {activeDaySummary.entries.length} lines)</span>
+                  </h3>
+                </div>
 
                 {activeDaySummary.entries.length === 0 ? (
                   <div className="text-center py-6 sm:py-8 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-sm">
@@ -1118,95 +1403,150 @@ export function CalendarClient({
                     )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3">
-                    {activeDaySummary.entries.map((entry) => {
-                      const plan = plans.find(
-                        (p) =>
-                          p.lineId === entry.lineId &&
-                          p.productId === entry.productId
-                      );
-                      const target = calculateDailyTarget(
-                        plan,
-                        activeDayDateStr,
-                        workingDays,
-                        specialDays
-                      );
-                      const variance = target.hasTarget
-                        ? calculateVariance(entry.finishedGood, target.dailyTarget)
-                        : null;
-
+                  <div className="space-y-4">
+                    {activeDayProductGroups.map((group) => {
                       return (
                         <div
-                          key={`inline_${entry.id}`}
-                          className="bg-slate-50/60 border border-slate-200/80 rounded-2xl p-3.5 space-y-2.5"
+                          key={`compact_group_${group.productId}`}
+                          className="bg-slate-50/70 border border-slate-200/90 rounded-2xl p-3.5 space-y-3"
                         >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="font-extrabold text-slate-900 text-sm">
-                                {entry.lineName}
+                          {/* Product Group Header Banner */}
+                          <div className="flex items-start sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                                <Boxes className="w-4 h-4" />
                               </div>
-                              <div className="text-xs text-slate-600 font-medium mt-0.5">
-                                {entry.productName}
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-black text-slate-900 text-sm">
+                                    {group.productName}
+                                  </span>
+                                  {group.sku && (
+                                    <span className="px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-700 text-[10px] font-mono font-bold">
+                                      {group.sku}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-medium">
+                                  {group.entries.length} line{group.entries.length > 1 ? "s" : ""} recorded
+                                </div>
                               </div>
                             </div>
 
                             <div className="text-right">
                               <span className="text-sm sm:text-base font-black font-mono text-slate-900 tabular-nums">
-                                {entry.finishedGood.toLocaleString()} pcs
+                                {group.totalFG.toLocaleString()} pcs
                               </span>
-                              {variance && (
+                              {group.hasTarget && (
                                 <div className="text-xs font-bold font-mono">
                                   <span
                                     className={
-                                      variance.isPositive
+                                      group.netVariance >= 0
                                         ? "text-emerald-700"
                                         : "text-rose-700"
                                     }
                                   >
-                                    {variance.varianceFormatted}
+                                    {group.netVariance >= 0 ? `+${Math.round(group.netVariance)}` : Math.round(group.netVariance)}
                                   </span>
-                                  {variance.percentOfTarget !== null && (
-                                    <span className="text-slate-400 font-normal ml-1">
-                                      ({variance.percentOfTarget}%)
-                                    </span>
-                                  )}
+                                  <span className="text-slate-400 font-normal ml-1">
+                                    (tgt: {Math.round(group.totalTarget).toLocaleString()})
+                                  </span>
                                 </div>
                               )}
                             </div>
                           </div>
 
-                          {/* Quality metrics strip */}
-                          <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-200/60 text-center text-xs">
-                            <div className="bg-white p-1 rounded-xl border border-slate-200/50">
-                              <span className="text-[9px] text-slate-400 block uppercase font-bold">Rew</span>
-                              <span className="font-mono font-bold text-slate-800 text-xs">{entry.rework}</span>
-                            </div>
-                            <div className="bg-white p-1 rounded-xl border border-slate-200/50">
-                              <span className="text-[9px] text-rose-800 block uppercase font-bold">Rej</span>
-                              <span className="font-mono font-bold text-rose-700 text-xs">{entry.reject}</span>
-                            </div>
-                            <div className="bg-white p-1 rounded-xl border border-slate-200/50">
-                              <span className="text-[9px] text-slate-400 block uppercase font-bold">WIP</span>
-                              <span className="font-mono font-bold text-slate-800 text-xs">{entry.wip}</span>
-                            </div>
-                            <div className="bg-white p-1 rounded-xl border border-slate-200/50">
-                              <span className="text-[9px] text-slate-400 block uppercase font-bold">Down</span>
-                              <span
-                                className={`font-mono font-bold text-xs ${
-                                  entry.downtimeMinutes > 0 ? "text-amber-600" : "text-slate-800"
-                                }`}
-                              >
-                                {entry.downtimeMinutes}m
-                              </span>
-                            </div>
-                          </div>
+                          {/* Line Entries Under This Product */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                            {group.entries.map((entry) => {
+                              const plan = plans.find(
+                                (p) =>
+                                  p.lineId === entry.lineId &&
+                                  p.productId === entry.productId
+                              );
+                              const target = calculateDailyTarget(
+                                plan,
+                                activeDayDateStr,
+                                workingDays,
+                                specialDays
+                              );
+                              const variance = target.hasTarget
+                                ? calculateVariance(entry.finishedGood, target.dailyTarget)
+                                : null;
 
-                          {entry.issueNote && (
-                            <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-start gap-1.5">
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                              <span className="line-clamp-2">{entry.issueNote}</span>
-                            </div>
-                          )}
+                              return (
+                                <div
+                                  key={`inline_${entry.id}`}
+                                  className="bg-white border border-slate-200/80 rounded-xl p-3 space-y-2 shadow-2xs"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                      <div className="font-extrabold text-slate-900 text-xs sm:text-sm">
+                                        {entry.lineName}
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="text-xs sm:text-sm font-black font-mono text-slate-900 tabular-nums">
+                                        {entry.finishedGood.toLocaleString()} pcs
+                                      </span>
+                                      {variance && (
+                                        <div className="text-[11px] font-bold font-mono">
+                                          <span
+                                            className={
+                                              variance.isPositive
+                                                ? "text-emerald-700"
+                                                : "text-rose-700"
+                                            }
+                                          >
+                                            {variance.varianceFormatted}
+                                          </span>
+                                          {variance.percentOfTarget !== null && (
+                                            <span className="text-slate-400 font-normal ml-1">
+                                              ({variance.percentOfTarget}%)
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Quality metrics strip */}
+                                  <div className="grid grid-cols-4 gap-1 pt-1.5 border-t border-slate-100 text-center text-xs">
+                                    <div className="bg-slate-50 p-1 rounded-lg border border-slate-200/40">
+                                      <span className="text-[8px] text-slate-400 block uppercase font-bold">Rework</span>
+                                      <span className="font-mono font-bold text-slate-800 text-[11px]">{entry.rework}</span>
+                                    </div>
+                                    <div className="bg-slate-50 p-1 rounded-lg border border-slate-200/40">
+                                      <span className="text-[8px] text-rose-800 block uppercase font-bold">Reject</span>
+                                      <span className="font-mono font-bold text-rose-700 text-[11px]">{entry.reject}</span>
+                                    </div>
+                                    <div className="bg-slate-50 p-1 rounded-lg border border-slate-200/40">
+                                      <span className="text-[8px] text-slate-400 block uppercase font-bold">WIP</span>
+                                      <span className="font-mono font-bold text-slate-800 text-[11px]">{entry.wip}</span>
+                                    </div>
+                                    <div className="bg-slate-50 p-1 rounded-lg border border-slate-200/40">
+                                      <span className="text-[8px] text-slate-400 block uppercase font-bold">Down</span>
+                                      <span
+                                        className={`font-mono font-bold text-[11px] ${
+                                          entry.downtimeMinutes > 0 ? "text-amber-600" : "text-slate-800"
+                                        }`}
+                                      >
+                                        {entry.downtimeMinutes}m
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {entry.issueNote && (
+                                    <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-start gap-1.5">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                      <span className="line-clamp-2">{entry.issueNote}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
                     })}
@@ -1370,6 +1710,21 @@ export function CalendarClient({
                               No plan
                             </span>
                           )}
+
+                          {/* Product breakdown micro badges */}
+                          {summary.productBreakdown && summary.productBreakdown.length > 0 && (
+                            <div className="hidden sm:flex flex-col gap-0.5 mt-1 pt-1 border-t border-slate-100">
+                              {summary.productBreakdown.slice(0, 2).map((pb) => (
+                                <div key={pb.productId} className="flex items-center justify-between text-[9px] text-slate-500 font-mono truncate">
+                                  <span className="truncate max-w-[55px] font-sans font-medium text-slate-600" title={pb.productName}>{pb.productName}</span>
+                                  <span className="font-bold text-slate-800 tabular-nums">{pb.fg.toLocaleString()}</span>
+                                </div>
+                              ))}
+                              {summary.productBreakdown.length > 2 && (
+                                <span className="text-[8px] text-slate-400 font-sans">+{summary.productBreakdown.length - 2} more</span>
+                              )}
+                            </div>
+                          )}
                         </>
                       ) : (
                         <div className="text-[10px] sm:text-xs text-slate-300 font-mono">
@@ -1456,6 +1811,23 @@ export function CalendarClient({
                     {hasTarget && (
                       <div className="text-[11px] sm:text-xs text-slate-400 font-mono">
                         Target: {Math.round(summary.totalTarget).toLocaleString()} pcs
+                      </div>
+                    )}
+                    {/* Product breakdown badges */}
+                    {summary?.productBreakdown && summary.productBreakdown.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {summary.productBreakdown.map((pb) => (
+                          <span
+                            key={pb.productId}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[10px] font-mono text-slate-700"
+                          >
+                            <span className="font-sans font-medium text-slate-600 truncate max-w-[120px]">{pb.productName}:</span>
+                            <span className="font-bold text-slate-900">{pb.fg.toLocaleString()}</span>
+                            {pb.hasTarget && (
+                              <span className="text-[9px] text-slate-400 font-normal">/{Math.round(pb.target)}</span>
+                            )}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1619,10 +1991,11 @@ export function CalendarClient({
                 </div>
               </div>
 
-              {/* Line & Product Detailed Breakdown */}
-              <div>
-                <h4 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider mb-2.5">
-                  Line Breakdown ({activeDaySummary.entries.length} recorded)
+              {/* Product Group Breakdown in Drawer */}
+              <div className="space-y-3">
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Boxes className="w-4 h-4 text-emerald-600" />
+                  <span>Product Breakdown ({activeDayProductGroups.length} product{activeDayProductGroups.length === 1 ? "" : "s"}, {activeDaySummary.entries.length} lines)</span>
                 </h4>
 
                 {activeDaySummary.entries.length === 0 ? (
@@ -1644,96 +2017,146 @@ export function CalendarClient({
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {activeDaySummary.entries.map((entry) => {
-                      const plan = plans.find(
-                        (p) =>
-                          p.lineId === entry.lineId &&
-                          p.productId === entry.productId
-                      );
-                      const target = calculateDailyTarget(
-                        plan,
-                        activeDayDateStr,
-                        workingDays,
-                        specialDays
-                      );
-                      const variance = target.hasTarget
-                        ? calculateVariance(entry.finishedGood, target.dailyTarget)
-                        : null;
-
+                  <div className="space-y-4">
+                    {activeDayProductGroups.map((group) => {
                       return (
                         <div
-                          key={entry.id}
-                          className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xs space-y-2.5"
+                          key={`drawer_group_${group.productId}`}
+                          className="bg-slate-50/70 border border-slate-200 rounded-2xl p-3.5 space-y-3"
                         >
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="font-bold text-slate-900 text-sm">
-                                {entry.lineName}
+                          {/* Product Group Header Banner */}
+                          <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shrink-0">
+                                <Boxes className="w-4 h-4" />
                               </div>
-                              <div className="text-xs text-slate-500 font-medium">
-                                {entry.productName}
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-900 text-sm">
+                                    {group.productName}
+                                  </span>
+                                  {group.sku && (
+                                    <span className="px-1.5 py-0.2 rounded bg-slate-200 text-slate-700 text-[10px] font-mono font-bold">
+                                      {group.sku}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-500 font-medium">
+                                  {group.entries.length} line{group.entries.length > 1 ? "s" : ""}
+                                </div>
                               </div>
                             </div>
 
                             <div className="text-right">
-                              <span className="text-base font-black font-mono text-slate-900 tabular-nums">
-                                {entry.finishedGood.toLocaleString()} pcs
+                              <span className="text-sm font-black font-mono text-slate-900 tabular-nums">
+                                {group.totalFG.toLocaleString()} pcs
                               </span>
-                              {variance && (
+                              {group.hasTarget && (
                                 <div className="text-xs font-bold font-mono">
                                   <span
                                     className={
-                                      variance.isPositive
+                                      group.netVariance >= 0
                                         ? "text-emerald-700"
                                         : "text-rose-700"
                                     }
                                   >
-                                    {variance.varianceFormatted}
+                                    {group.netVariance >= 0 ? `+${Math.round(group.netVariance)}` : Math.round(group.netVariance)}
                                   </span>
-                                  {variance.percentOfTarget !== null && (
-                                    <span className="text-slate-400 font-normal ml-1">
-                                      ({variance.percentOfTarget}%)
-                                    </span>
-                                  )}
                                 </div>
                               )}
                             </div>
                           </div>
 
-                          {/* Quality Fallout Metrics */}
-                          <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-100 text-center text-xs">
-                            <div className="bg-slate-50 p-1.5 rounded-xl">
-                              <span className="text-[9px] text-slate-400 block uppercase font-bold">Rework</span>
-                              <span className="font-mono font-bold text-slate-800 text-xs">{entry.rework}</span>
-                            </div>
-                            <div className="bg-rose-50/50 p-1.5 rounded-xl border border-rose-100">
-                              <span className="text-[9px] text-rose-800 block uppercase font-bold">Reject</span>
-                              <span className="font-mono font-bold text-rose-700 text-xs">{entry.reject}</span>
-                            </div>
-                            <div className="bg-slate-50 p-1.5 rounded-xl">
-                              <span className="text-[9px] text-slate-400 block uppercase font-bold">WIP</span>
-                              <span className="font-mono font-bold text-slate-800 text-xs">{entry.wip}</span>
-                            </div>
-                            <div className="bg-slate-50 p-1.5 rounded-xl">
-                              <span className="text-[9px] text-slate-400 block uppercase font-bold">Downtime</span>
-                              <span
-                                className={`font-mono font-bold text-xs ${
-                                  entry.downtimeMinutes > 0 ? "text-amber-600" : "text-slate-800"
-                                }`}
-                              >
-                                {entry.downtimeMinutes}m
-                              </span>
-                            </div>
-                          </div>
+                          {/* Line items under this product in drawer */}
+                          <div className="space-y-2.5">
+                            {group.entries.map((entry) => {
+                              const plan = plans.find(
+                                (p) =>
+                                  p.lineId === entry.lineId &&
+                                  p.productId === entry.productId
+                              );
+                              const target = calculateDailyTarget(
+                                plan,
+                                activeDayDateStr,
+                                workingDays,
+                                specialDays
+                              );
+                              const variance = target.hasTarget
+                                ? calculateVariance(entry.finishedGood, target.dailyTarget)
+                                : null;
 
-                          {/* Issue Notes */}
-                          {entry.issueNote && (
-                            <div className="text-xs text-slate-600 bg-amber-50/70 border border-amber-200 p-2.5 rounded-xl flex items-start gap-1.5">
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                              <span>{entry.issueNote}</span>
-                            </div>
-                          )}
+                              return (
+                                <div
+                                  key={entry.id}
+                                  className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs space-y-2"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="font-bold text-slate-900 text-xs sm:text-sm">
+                                      {entry.lineName}
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="text-xs sm:text-sm font-black font-mono text-slate-900 tabular-nums">
+                                        {entry.finishedGood.toLocaleString()} pcs
+                                      </span>
+                                      {variance && (
+                                        <div className="text-xs font-bold font-mono">
+                                          <span
+                                            className={
+                                              variance.isPositive
+                                                ? "text-emerald-700"
+                                                : "text-rose-700"
+                                            }
+                                          >
+                                            {variance.varianceFormatted}
+                                          </span>
+                                          {variance.percentOfTarget !== null && (
+                                            <span className="text-slate-400 font-normal ml-1">
+                                              ({variance.percentOfTarget}%)
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Quality Fallout Metrics */}
+                                  <div className="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-100 text-center text-xs">
+                                    <div className="bg-slate-50 p-1.5 rounded-xl">
+                                      <span className="text-[9px] text-slate-400 block uppercase font-bold">Rework</span>
+                                      <span className="font-mono font-bold text-slate-800 text-xs">{entry.rework}</span>
+                                    </div>
+                                    <div className="bg-rose-50/50 p-1.5 rounded-xl border border-rose-100">
+                                      <span className="text-[9px] text-rose-800 block uppercase font-bold">Reject</span>
+                                      <span className="font-mono font-bold text-rose-700 text-xs">{entry.reject}</span>
+                                    </div>
+                                    <div className="bg-slate-50 p-1.5 rounded-xl">
+                                      <span className="text-[9px] text-slate-400 block uppercase font-bold">WIP</span>
+                                      <span className="font-mono font-bold text-slate-800 text-xs">{entry.wip}</span>
+                                    </div>
+                                    <div className="bg-slate-50 p-1.5 rounded-xl">
+                                      <span className="text-[9px] text-slate-400 block uppercase font-bold">Downtime</span>
+                                      <span
+                                        className={`font-mono font-bold text-xs ${
+                                          entry.downtimeMinutes > 0 ? "text-amber-600" : "text-slate-800"
+                                        }`}
+                                      >
+                                        {entry.downtimeMinutes}m
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Issue Notes */}
+                                  {entry.issueNote && (
+                                    <div className="text-xs text-slate-600 bg-amber-50/70 border border-amber-200 p-2 rounded-xl flex items-start gap-1.5">
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                      <span>{entry.issueNote}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
                     })}
