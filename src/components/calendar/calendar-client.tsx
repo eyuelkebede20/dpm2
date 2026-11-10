@@ -159,10 +159,20 @@ export function CalendarClient({
     return activeDayDateStr > todayGC;
   }, [activeDayDateStr, todayGC]);
 
-  // Set default active day to today
+  // Close drawer or modals on Escape key
   useEffect(() => {
-    setActiveDayDateStr(todayGC);
-  }, [todayGC]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showMonthJumper) {
+          setShowMonthJumper(false);
+        } else if (activeDayDateStr) {
+          setActiveDayDateStr(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showMonthJumper, activeDayDateStr]);
 
   // Handle Seamless Calendar Switch
   const toggleCalendarType = (newType: "ethiopian" | "gregorian") => {
@@ -612,60 +622,279 @@ export function CalendarClient({
   }, [startDateStr, endDateStr]);
 
   return (
-    <div className="max-w-7xl mx-auto px-2.5 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-5 pb-24">
+    <div className="max-w-7xl mx-auto px-2.5 sm:px-4 md:px-6 lg:px-8 py-2.5 sm:py-3.5 pb-20 space-y-2.5 sm:space-y-3">
       {/* ============================================================= */}
-      {/* 1. TOP HEADER & EXECUTIVE ACTION BAR (IMPECCABLY RESPONSIVE) */}
+      {/* 1. COMPACT PAGE HEADER & EXECUTIVE ACTION BAR                */}
       {/* ============================================================= */}
-      <div className="space-y-3 pb-4 border-b border-slate-200">
-        {/* Row A: Factory Brand + Title + Direct Emerald Entry Button */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 leading-relaxed">
-              <span className="font-extrabold text-slate-700">{factoryName}</span>
-              <span>•</span>
-              <span className="text-emerald-700 font-extrabold flex items-center gap-1 leading-relaxed">
-                <Sparkles className="w-3.5 h-3.5" />
-                {calType === "ethiopian" ? "የኢትዮጵያ ካላንደር (13 ወራት)" : "Gregorian Calendar"}
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-0.5 flex items-center gap-2 leading-relaxed">
-              <CalendarIcon className="w-6 h-6 text-emerald-600 shrink-0" />
-              <span>Calendar & Production</span>
-            </h1>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <span className="font-extrabold text-slate-700">{factoryName}</span>
+            <span>•</span>
+            <span className="text-emerald-700 font-extrabold flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              {calType === "ethiopian" ? "የኢትዮጵያ ካላንደር (13 ወራት)" : "Gregorian Calendar"}
+            </span>
           </div>
+          <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2 mt-0.5">
+            <CalendarIcon className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>Calendar & Production</span>
+          </h1>
+        </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              type="button"
-              disabled={isSelectedDayFuture}
-              onClick={() => {
-                if (!isSelectedDayFuture) {
-                  router.push(`/entry?date=${activeDayDateStr || todayGC}`);
-                }
-              }}
-              className={`btn btn-sm w-full sm:w-auto font-bold rounded-xl shadow-xs border-none gap-1.5 transition-all min-h-[44px] ${
-                isSelectedDayFuture
-                  ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95"
-              }`}
-              title={isSelectedDayFuture ? "Cannot input numbers for future dates" : "Enter Daily Numbers"}
-            >
-              <PenTool className="w-4 h-4" />
-              <span>{isSelectedDayFuture ? "Input Disabled (Future)" : "Enter Daily Numbers"}</span>
-            </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            disabled={isSelectedDayFuture}
+            onClick={() => {
+              if (!isSelectedDayFuture) {
+                router.push(`/entry?date=${activeDayDateStr || todayGC}`);
+              }
+            }}
+            className={`btn btn-sm h-8 sm:h-9 w-full sm:w-auto font-bold rounded-xl shadow-xs border-none gap-1.5 transition-all text-xs ${
+              isSelectedDayFuture
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white active:scale-95"
+            }`}
+            title={isSelectedDayFuture ? "Cannot input numbers for future dates" : "Enter Daily Numbers"}
+          >
+            <PenTool className="w-3.5 h-3.5" />
+            <span>{isSelectedDayFuture ? "Input Disabled (Future)" : "Enter Daily Numbers"}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ============================================================= */}
+      {/* 2. COMPACT MONTH PERFORMANCE KPI RIBBON                      */}
+      {/* ============================================================= */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
+        {/* KPI 1: Output */}
+        <div className="bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider truncate block">
+            Month Total Output
+          </span>
+          <div className="flex items-baseline gap-1 mt-0.5">
+            <span className="text-base sm:text-xl lg:text-2xl font-black text-slate-900 font-mono tabular-nums leading-tight">
+              {monthTotals.output.toLocaleString()}
+            </span>
+            <span className="text-[10px] font-bold text-slate-400">pcs</span>
+          </div>
+          <div className="text-[10px] text-slate-500 truncate mt-0.5">
+            {monthTotals.recordedDaysCount} days logged
           </div>
         </div>
 
-        {/* Row B: Responsive Controls Ribbon (Wraps cleanly on mobile: flex-wrap sm:flex-nowrap gap-2) */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 pt-1">
-          {/* Calendar System Switcher & Language Switcher */}
-          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        {/* KPI 2: Target & Variance */}
+        <div className="bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider truncate block">
+            Plan & Variance
+          </span>
+          <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
+            <span className="text-base sm:text-xl lg:text-2xl font-black text-slate-900 font-mono tabular-nums leading-tight">
+              {monthTotals.target > 0 ? Math.round(monthTotals.target).toLocaleString() : "No Plan"}
+            </span>
+            {monthTotals.target > 0 && (
+              <span
+                className={`text-[10px] font-black px-1.5 py-0.2 rounded-md flex items-center leading-none ${
+                  monthTotals.netVar >= 0
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-rose-100 text-rose-800"
+                }`}
+              >
+                {monthTotals.netVar >= 0 ? "+" : ""}
+                {Math.round(monthTotals.netVar).toLocaleString()}
+              </span>
+            )}
+          </div>
+          <div className="text-[10px] text-slate-500 truncate mt-0.5">
+            {monthTotals.completionPct !== null ? `${monthTotals.completionPct}% completed` : "No targets set"}
+          </div>
+        </div>
+
+        {/* KPI 3: Working Days */}
+        <div className="bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider truncate block">
+            Working Days
+          </span>
+          <div className="flex items-baseline gap-1 mt-0.5">
+            <span className="text-base sm:text-xl lg:text-2xl font-black text-slate-900 font-mono tabular-nums leading-tight">
+              {monthTotals.workingDaysCount}
+            </span>
+            <span className="text-[10px] font-bold text-slate-400">days</span>
+          </div>
+          <div className="text-[10px] text-slate-500 truncate mt-0.5">
+            {gridDays.length - monthTotals.workingDaysCount} scheduled off / holidays
+          </div>
+        </div>
+
+        {/* KPI 4: Coverage Logged */}
+        <div className="bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider truncate block">
+            Coverage Status
+          </span>
+          <div className="flex items-baseline gap-1 mt-0.5">
+            <span className="text-base sm:text-xl lg:text-2xl font-black text-emerald-700 font-mono tabular-nums leading-tight">
+              {Math.round((monthTotals.recordedDaysCount / (monthTotals.workingDaysCount || 1)) * 100)}%
+            </span>
+            <span className="text-[10px] font-bold text-slate-400">logged</span>
+          </div>
+          <div className="text-[10px] text-slate-500 truncate mt-0.5">
+            {monthTotals.recordedDaysCount} of {monthTotals.workingDaysCount} active work days
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================= */}
+      {/* 3. PRODUCT MONTH PERFORMANCE STRIP (COMPACT PILLS)            */}
+      {/* ============================================================= */}
+      {monthProductSummaries.length > 0 && (
+        <div className="bg-white border border-slate-200/90 rounded-xl p-2.5 shadow-2xs">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+              <Boxes className="w-3 h-3 text-emerald-600" />
+              <span>Product Month Performance</span>
+            </span>
+            <span className="text-[10px] text-slate-400">
+              Filter by product
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
+            {/* All Products Pill */}
+            <button
+              type="button"
+              onClick={() => setSelectedProductFilter("all")}
+              className={`px-2.5 py-1.5 rounded-lg border text-left shrink-0 transition-all text-xs ${
+                selectedProductFilter === "all"
+                  ? "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-500/20 shadow-2xs"
+                  : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
+              }`}
+            >
+              <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                All Products
+              </div>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="font-mono font-black text-xs text-slate-900">
+                  {monthTotals.output.toLocaleString()}
+                </span>
+                <span className="text-[9px] text-slate-400">pcs</span>
+              </div>
+            </button>
+
+            {/* Individual Product Pills */}
+            {monthProductSummaries.map((prod) => {
+              const isSelected = selectedProductFilter === prod.id;
+              return (
+                <button
+                  key={prod.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedProductFilter(isSelected ? "all" : prod.id)
+                  }
+                  className={`px-2.5 py-1.5 rounded-lg border text-left shrink-0 transition-all text-xs ${
+                    isSelected
+                      ? "bg-emerald-50 border-emerald-400 ring-1 ring-emerald-500/20 shadow-2xs"
+                      : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[120px]">
+                      {prod.name}
+                    </span>
+                    {prod.sku && (
+                      <span className="text-[8px] font-mono font-bold bg-white px-1 py-0.2 rounded text-slate-600 border border-slate-200">
+                        {prod.sku}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="font-mono font-black text-xs text-slate-900">
+                      {prod.totalFG.toLocaleString()}
+                    </span>
+                    <span className="text-[9px] text-slate-400">pcs</span>
+                    {prod.hasTarget && (
+                      <span
+                        className={`text-[9px] font-mono font-bold px-1 py-0.2 rounded ${
+                          prod.netVariance >= 0
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        {prod.netVariance >= 0 ? `+${prod.netVariance}` : `${prod.netVariance}`}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* 4. UNIFIED CALENDAR TOOLBAR (DIRECTLY ATOP THE CALENDAR)       */}
+      {/* ============================================================= */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-2 sm:p-2.5 shadow-2xs space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Left: Month Stepper & Jumper + Today + Calendar Switcher */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            {/* Month Stepper & Jumper */}
+            <div className="join border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white flex items-center">
+              <button
+                onClick={handlePrevMonth}
+                className="btn btn-xs sm:btn-sm btn-ghost join-item h-8 min-h-0 px-2.5 text-slate-600 hover:text-slate-900"
+                title="Previous Month"
+                aria-label="Previous Month"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => calType === "ethiopian" && setShowMonthJumper(true)}
+                className="join-item px-2.5 sm:px-3 h-8 flex items-center justify-center gap-1 text-xs sm:text-sm font-black text-slate-900 hover:bg-slate-50 transition-colors"
+              >
+                <span className="truncate">{headerTitle}</span>
+                {calType === "ethiopian" ? (
+                  <span className="text-[9px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1 py-0.2 rounded font-mono font-bold shrink-0 flex items-center gap-0.5">
+                    13M
+                    <ChevronDown className="w-2.5 h-2.5 text-emerald-700" />
+                  </span>
+                ) : (
+                  <ChevronDown className="w-2.5 h-2.5 text-slate-400" />
+                )}
+              </button>
+
+              <button
+                onClick={handleNextMonth}
+                disabled={isNextMonthDisabled}
+                className={`btn btn-xs sm:btn-sm btn-ghost join-item h-8 min-h-0 px-2.5 text-slate-600 hover:text-slate-900 transition-all ${
+                  isNextMonthDisabled
+                    ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
+                    : ""
+                }`}
+                title={isNextMonthDisabled ? "Next Month (Disabled - Future)" : "Next Month"}
+                aria-label="Next Month"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Today Button */}
+            <button
+              onClick={handleToday}
+              className="btn btn-xs sm:btn-sm btn-outline h-8 min-h-0 rounded-xl text-xs font-bold px-2.5"
+            >
+              Today
+            </button>
+
             {/* Dual Calendar Mode Toggle */}
             <div className="join border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
               <button
                 type="button"
                 onClick={() => toggleCalendarType("ethiopian")}
-                className={`btn btn-sm join-item text-xs font-extrabold min-h-[40px] px-3.5 ${
+                className={`btn btn-xs sm:btn-sm join-item h-8 min-h-0 text-xs font-bold px-2.5 ${
                   calType === "ethiopian"
                     ? "bg-slate-900 text-white hover:bg-black border-none"
                     : "btn-ghost text-slate-600"
@@ -676,7 +905,7 @@ export function CalendarClient({
               <button
                 type="button"
                 onClick={() => toggleCalendarType("gregorian")}
-                className={`btn btn-sm join-item text-xs font-extrabold min-h-[40px] px-3.5 ${
+                className={`btn btn-xs sm:btn-sm join-item h-8 min-h-0 text-xs font-bold px-2.5 ${
                   calType === "gregorian"
                     ? "bg-slate-900 text-white hover:bg-black border-none"
                     : "btn-ghost text-slate-600"
@@ -691,352 +920,111 @@ export function CalendarClient({
               <button
                 type="button"
                 onClick={() => setLanguage((l) => (l === "am" ? "en" : "am"))}
-                className="btn btn-sm btn-outline rounded-xl text-xs font-bold shrink-0 min-h-[40px] leading-relaxed"
+                className="btn btn-xs sm:btn-sm btn-ghost h-8 min-h-0 rounded-xl text-xs font-bold px-2 text-slate-600 border border-slate-200"
                 title="Toggle Amharic / English Labels"
               >
                 {language === "am" ? "ፊደል (አማ)" : "English"}
               </button>
             )}
 
-            <button
-              onClick={handleToday}
-              className="btn btn-sm btn-outline rounded-xl text-xs font-bold shrink-0 min-h-[40px]"
-            >
-              Today
-            </button>
-          </div>
-
-          {/* Month Stepper & Jumper */}
-          <div className="join w-full sm:w-auto border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white flex items-center justify-between">
-            <button
-              onClick={handlePrevMonth}
-              className="btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[42px] min-w-[44px] flex items-center justify-center touch-manipulation"
-              title="Previous Month"
-              aria-label="Previous Month"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => calType === "ethiopian" && setShowMonthJumper(true)}
-              className="join-item px-3 sm:px-4 flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-slate-900 hover:bg-slate-50 transition-colors flex-1 sm:flex-initial min-h-[42px] leading-relaxed"
-            >
-              <span className="truncate leading-relaxed">{headerTitle}</span>
-              {calType === "ethiopian" ? (
-                <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono font-bold shrink-0 flex items-center gap-0.5 leading-relaxed">
-                  13M
-                  <ChevronDown className="w-3 h-3 text-emerald-700" />
-                </span>
-              ) : (
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              )}
-            </button>
-
-            <button
-              onClick={handleNextMonth}
-              disabled={isNextMonthDisabled}
-              className={`btn btn-sm btn-ghost join-item px-3 text-slate-600 hover:text-slate-900 min-h-[42px] min-w-[44px] flex items-center justify-center transition-all touch-manipulation ${
-                isNextMonthDisabled
-                  ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
-                  : ""
-              }`}
-              title={isNextMonthDisabled ? "Next Month (Disabled - Future)" : "Next Month"}
-              aria-label="Next Month"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Product Month Performance Strip */}
-      {monthProductSummaries.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs my-3 sm:my-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-              <Boxes className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Product Month Performance</span>
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium">
-              Click a product to isolate calendar views
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
-            {/* All Products Pill */}
-            <button
-              type="button"
-              onClick={() => setSelectedProductFilter("all")}
-              className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
-                selectedProductFilter === "all"
-                  ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs"
-                  : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
-              }`}
-            >
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                All Products
-              </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="font-mono font-black text-sm text-slate-900">
-                  {monthTotals.output.toLocaleString()}
-                </span>
-                <span className="text-[10px] text-slate-400">pcs</span>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
-                {monthProductSummaries.length} active {monthProductSummaries.length === 1 ? "product" : "products"}
-              </div>
-            </button>
-
-            {/* Individual Product Pills */}
-            {monthProductSummaries.map((prod) => {
-              const isSelected = selectedProductFilter === prod.id;
-              return (
-                <button
-                  key={prod.id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedProductFilter(isSelected ? "all" : prod.id)
-                  }
-                  className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all ${
-                    isSelected
-                      ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs"
-                      : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900 truncate max-w-[140px]">
-                      {prod.name}
-                    </span>
-                    {prod.sku && (
-                      <span className="text-[9px] font-mono font-bold bg-white px-1.5 py-0.2 rounded text-slate-600 border border-slate-200">
-                        {prod.sku}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <div className="flex items-baseline gap-1">
-                      <span className="font-mono font-black text-sm text-slate-900">
-                        {prod.totalFG.toLocaleString()}
-                      </span>
-                      <span className="text-[10px] text-slate-400">pcs</span>
-                    </div>
-
-                    {prod.hasTarget ? (
-                      <span
-                        className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded-md ${
-                          prod.netVariance >= 0
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-rose-100 text-rose-800"
-                        }`}
-                      >
-                        {prod.netVariance >= 0 ? `+${prod.netVariance}` : `${prod.netVariance}`}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 italic">No target</span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 gap-2">
-                    <span>
-                      {prod.hasTarget
-                        ? `Target: ${Math.round(prod.totalTarget).toLocaleString()}`
-                        : "Ad-hoc"}
-                    </span>
-                    {prod.completionPct !== null && (
-                      <span className="font-bold text-slate-600 font-mono">
-                        {prod.completionPct}%
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================= */}
-      {/* 2. MONTH PERFORMANCE KPI RIBBON (COMPACT & RESPONSIVE)        */}
-      {/* ============================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 my-3 sm:my-4">
-        {/* KPI 1: Output */}
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-3 sm:p-4 rounded-2xl">
-          <span className="text-[10px] sm:text-[11px] font-extrabold text-slate-500 uppercase tracking-wider truncate">
-            Month Total Output
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5 sm:mt-1">
-            <span className="text-lg sm:text-2xl lg:text-3xl font-black text-slate-900 font-mono tabular-nums leading-tight">
-              {monthTotals.output.toLocaleString()}
-            </span>
-            <span className="text-[11px] font-bold text-slate-400">pcs</span>
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
-            {monthTotals.recordedDaysCount} days logged
-          </div>
-        </div>
-
-        {/* KPI 2: Target & Variance */}
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-3 sm:p-4 rounded-2xl">
-          <span className="text-[10px] sm:text-[11px] font-extrabold text-slate-500 uppercase tracking-wider truncate">
-            Plan & Variance
-          </span>
-          <div className="flex items-baseline gap-1.5 mt-0.5 sm:mt-1 flex-wrap">
-            <span className="text-lg sm:text-2xl lg:text-3xl font-black text-slate-900 font-mono tabular-nums leading-tight">
-              {monthTotals.target > 0 ? Math.round(monthTotals.target).toLocaleString() : "No Plan"}
-            </span>
-            {monthTotals.target > 0 && (
-              <span
-                className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-full flex items-center leading-none ${
-                  monthTotals.netVar >= 0
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-rose-100 text-rose-800"
-                }`}
-              >
-                {monthTotals.netVar >= 0 ? "+" : ""}
-                {Math.round(monthTotals.netVar).toLocaleString()}
-              </span>
-            )}
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
-            {monthTotals.completionPct !== null ? `${monthTotals.completionPct}% completed` : "No targets set"}
-          </div>
-        </div>
-
-        {/* KPI 3: Working Days */}
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-3 sm:p-4 rounded-2xl">
-          <span className="text-[10px] sm:text-[11px] font-extrabold text-slate-500 uppercase tracking-wider truncate">
-            Working Days
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5 sm:mt-1">
-            <span className="text-lg sm:text-2xl lg:text-3xl font-black text-slate-900 font-mono tabular-nums leading-tight">
-              {monthTotals.workingDaysCount}
-            </span>
-            <span className="text-[11px] font-bold text-slate-400">days</span>
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
-            {gridDays.length - monthTotals.workingDaysCount} scheduled off / holidays
-          </div>
-        </div>
-
-        {/* KPI 4: Coverage Logged */}
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-3 sm:p-4 rounded-2xl">
-          <span className="text-[10px] sm:text-[11px] font-extrabold text-slate-500 uppercase tracking-wider truncate">
-            Coverage Status
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5 sm:mt-1">
-            <span className="text-lg sm:text-2xl lg:text-3xl font-black text-emerald-700 font-mono tabular-nums leading-tight">
-              {Math.round((monthTotals.recordedDaysCount / (monthTotals.workingDaysCount || 1)) * 100)}%
-            </span>
-            <span className="text-[11px] font-bold text-slate-400">logged</span>
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5 truncate">
-            {monthTotals.recordedDaysCount} of {monthTotals.workingDaysCount} active work days
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================================= */}
-      {/* 3. RESPONSIVE FILTER & VIEW MODE TOOLBAR                      */}
-      {/* ============================================================= */}
-      <div className="flex flex-wrap sm:flex-nowrap items-stretch sm:items-center justify-between gap-2.5 mb-3 sm:mb-4 bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs">
-        {/* Date Range & Dropdown Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs text-slate-500">
-            <span className="hidden sm:inline font-bold uppercase tracking-wider text-[11px]">Range:</span>
-            <span className="font-extrabold text-slate-800 font-mono bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60 text-[11px] sm:text-xs">
+            {/* Date Range Sub-label */}
+            <span className="font-extrabold text-slate-600 font-mono bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60 text-[10px] sm:text-[11px] hidden md:inline">
               {headerSubrange}
             </span>
           </div>
 
-          {availableLines.length > 0 && (
-            <select
-              value={selectedLineFilter}
-              onChange={(e) => setSelectedLineFilter(e.target.value)}
-              className="select select-xs sm:select-sm select-bordered rounded-xl text-xs font-semibold h-8 min-h-0 flex-1 sm:flex-initial"
-            >
-              <option value="all">All Lines</option>
-              {availableLines.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          )}
+          {/* Right: View Mode Switcher + Filters */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            {/* View Switcher: Compact, Grid, List */}
+            <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200 flex">
+              <button
+                type="button"
+                onClick={() => setCalendarViewMode("compact")}
+                className={`btn btn-xs join-item h-7 rounded-lg font-bold gap-1 flex items-center px-2.5 ${
+                  calendarViewMode === "compact"
+                    ? "bg-white text-emerald-800 shadow-2xs"
+                    : "btn-ghost text-slate-600"
+                }`}
+                title="Compact View (Single screen UX)"
+              >
+                <CalendarDays className="w-3 h-3" />
+                <span>Compact</span>
+              </button>
 
-          {availableProducts.length > 0 && (
-            <select
-              value={selectedProductFilter}
-              onChange={(e) => setSelectedProductFilter(e.target.value)}
-              className="select select-xs sm:select-sm select-bordered rounded-xl text-xs font-semibold h-8 min-h-0 flex-1 sm:flex-initial"
-            >
-              <option value="all">All Products</option>
-              {availableProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
+              <button
+                type="button"
+                onClick={() => setCalendarViewMode("grid")}
+                className={`btn btn-xs join-item h-7 rounded-lg font-bold gap-1 flex items-center px-2.5 ${
+                  calendarViewMode === "grid"
+                    ? "bg-white text-emerald-800 shadow-2xs"
+                    : "btn-ghost text-slate-600"
+                }`}
+                title="Month Grid View (Fluid 7-day layout)"
+              >
+                <GridIcon className="w-3 h-3" />
+                <span>Grid</span>
+              </button>
 
-          {(selectedLineFilter !== "all" || selectedProductFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedLineFilter("all");
-                setSelectedProductFilter("all");
-              }}
-              className="btn btn-xs btn-ghost text-rose-600 rounded-lg text-[11px] font-bold"
-            >
-              Reset
-            </button>
-          )}
-        </div>
+              <button
+                type="button"
+                onClick={() => setCalendarViewMode("list")}
+                className={`btn btn-xs join-item h-7 rounded-lg font-bold gap-1 flex items-center px-2.5 ${
+                  calendarViewMode === "list"
+                    ? "bg-white text-emerald-800 shadow-2xs"
+                    : "btn-ghost text-slate-600"
+                }`}
+                title="Agenda List View (Vertical feed)"
+              >
+                <ListIcon className="w-3 h-3" />
+                <span>List</span>
+              </button>
+            </div>
 
-        {/* View Switcher: Compact, Grid, List (Cleanly wrapped on mobile) */}
-        <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200 w-full sm:w-auto grid grid-cols-3 sm:flex">
-          <button
-            type="button"
-            onClick={() => setCalendarViewMode("compact")}
-            className={`btn btn-xs sm:btn-sm join-item rounded-lg font-bold gap-1 flex items-center justify-center min-h-[36px] sm:min-h-[32px] ${
-              calendarViewMode === "compact"
-                ? "bg-white text-emerald-800 shadow-2xs"
-                : "btn-ghost text-slate-600"
-            }`}
-            title="Compact View (Single screen UX)"
-          >
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span>Compact</span>
-          </button>
+            {/* Line Filter */}
+            {availableLines.length > 0 && (
+              <select
+                value={selectedLineFilter}
+                onChange={(e) => setSelectedLineFilter(e.target.value)}
+                className="select select-xs select-bordered rounded-xl text-xs font-semibold h-7 min-h-0"
+              >
+                <option value="all">All Lines</option>
+                {availableLines.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            )}
 
-          <button
-            type="button"
-            onClick={() => setCalendarViewMode("grid")}
-            className={`btn btn-xs sm:btn-sm join-item rounded-lg font-bold gap-1 flex items-center justify-center min-h-[36px] sm:min-h-[32px] ${
-              calendarViewMode === "grid"
-                ? "bg-white text-emerald-800 shadow-2xs"
-                : "btn-ghost text-slate-600"
-            }`}
-            title="Month Grid View (Fluid 7-day layout)"
-          >
-            <GridIcon className="w-3.5 h-3.5" />
-            <span>Grid</span>
-          </button>
+            {/* Product Filter */}
+            {availableProducts.length > 0 && (
+              <select
+                value={selectedProductFilter}
+                onChange={(e) => setSelectedProductFilter(e.target.value)}
+                className="select select-xs select-bordered rounded-xl text-xs font-semibold h-7 min-h-0"
+              >
+                <option value="all">All Products</option>
+                {availableProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            )}
 
-          <button
-            type="button"
-            onClick={() => setCalendarViewMode("list")}
-            className={`btn btn-xs sm:btn-sm join-item rounded-lg font-bold gap-1 flex items-center justify-center min-h-[36px] sm:min-h-[32px] ${
-              calendarViewMode === "list"
-                ? "bg-white text-emerald-800 shadow-2xs"
-                : "btn-ghost text-slate-600"
-            }`}
-            title="Agenda List View (Vertical feed)"
-          >
-            <ListIcon className="w-3.5 h-3.5" />
-            <span>List</span>
-          </button>
+            {(selectedLineFilter !== "all" || selectedProductFilter !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLineFilter("all");
+                  setSelectedProductFilter("all");
+                }}
+                className="btn btn-xs btn-ghost text-rose-600 rounded-lg text-[10px] font-bold h-7 min-h-0 px-1.5"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1196,6 +1184,7 @@ export function CalendarClient({
                   <button
                     key={`c_${item.gregorianDateStr}`}
                     type="button"
+                    data-testid="compact-day-tile"
                     onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
                     className={`aspect-square min-h-[44px] min-w-[44px] sm:min-h-[56px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 touch-manipulation ${
                       isSelected
@@ -1256,7 +1245,7 @@ export function CalendarClient({
           </div>
 
           {/* Inline Active Day Details Card */}
-          {activeDayDateStr && activeDaySummary && (
+          {activeDayDateStr && activeDaySummary ? (
             <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 shadow-2xs space-y-4 animate-in fade-in duration-150">
               {/* Header with Title and Green Edit Button */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
@@ -1554,6 +1543,14 @@ export function CalendarClient({
                 )}
               </div>
             </div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-8 text-center text-slate-500 shadow-2xs">
+              <CalendarIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-700">No Date Selected</p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Click any date on the calendar above to inspect daily numbers and performance.
+              </p>
+            </div>
           )}
         </div>
       )}
@@ -1587,7 +1584,7 @@ export function CalendarClient({
               {Array.from({ length: leadingBlanks }).map((_, idx) => (
                 <div
                   key={`blank_${idx}`}
-                  className="min-h-[56px] sm:min-h-[76px] md:min-h-[98px] lg:min-h-[115px] rounded-xl sm:rounded-2xl bg-slate-50/40 border border-transparent"
+                  className="min-h-[48px] sm:min-h-[64px] md:min-h-[74px] lg:min-h-[84px] rounded-xl sm:rounded-2xl bg-slate-50/40 border border-transparent"
                 />
               ))}
 
@@ -1606,8 +1603,9 @@ export function CalendarClient({
                   <button
                     key={item.gregorianDateStr}
                     type="button"
+                    data-testid="calendar-day-tile"
                     onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                    className={`w-full min-h-[56px] sm:min-h-[76px] md:min-h-[98px] lg:min-h-[115px] p-1 sm:p-2 md:p-2.5 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer group active:scale-98 touch-manipulation ${
+                    className={`w-full min-h-[48px] sm:min-h-[64px] md:min-h-[74px] lg:min-h-[84px] p-1 sm:p-1.5 md:p-2 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer group active:scale-98 touch-manipulation ${
                       isSelected
                         ? "ring-2 ring-slate-900 border-slate-900 bg-emerald-50/40 shadow-sm"
                         : item.isCurrentToday
@@ -1763,6 +1761,7 @@ export function CalendarClient({
               <button
                 key={`list_${item.gregorianDateStr}`}
                 type="button"
+                data-testid="list-day-tile"
                 onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
                 className={`w-full p-3 sm:p-4 rounded-2xl border transition-all text-left flex items-center justify-between shadow-2xs touch-manipulation ${
                   isSelected
@@ -1865,7 +1864,12 @@ export function CalendarClient({
           />
 
           {/* Drawer Container (Desktop: right slide-over, Mobile: native bottom sheet) */}
-          <div className="fixed bottom-0 left-0 right-0 max-h-[85vh] rounded-t-3xl sm:bottom-auto sm:top-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-full sm:w-[500px] sm:rounded-none bg-white shadow-2xl flex flex-col z-10 overflow-y-auto border-t sm:border-t-0 sm:border-l border-slate-200 pb-safe animate-in slide-in-from-bottom sm:slide-in-from-right duration-200">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Day Inspection"
+            className="fixed bottom-0 left-0 right-0 max-h-[85vh] rounded-t-3xl sm:bottom-auto sm:top-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-full sm:w-[500px] sm:rounded-none bg-white shadow-2xl flex flex-col z-10 overflow-y-auto border-t sm:border-t-0 sm:border-l border-slate-200 pb-safe animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
+          >
             {/* Mobile Drag Handle Indicator */}
             <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mt-3 sm:hidden" />
 
@@ -1905,6 +1909,7 @@ export function CalendarClient({
                   type="button"
                   onClick={() => setActiveDayDateStr(null)}
                   className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700"
+                  aria-label="Close day inspection"
                 >
                   <X className="w-5 h-5" />
                 </button>

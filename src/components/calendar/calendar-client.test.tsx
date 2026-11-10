@@ -122,17 +122,40 @@ describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => 
     expect(gridBtn.className).toContain("bg-white");
   });
 
+  it("does NOT show any popup/drawer on initial load, and only opens when a date is clicked", () => {
+    renderCalendar();
+
+    // Verify no day inspection drawer dialog is open on initial load
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText("Day Inspection")).toBeNull();
+
+    // Click a calendar day tile button
+    const dayTiles = screen.getAllByTestId("calendar-day-tile");
+    expect(dayTiles.length).toBeGreaterThan(0);
+    fireEvent.click(dayTiles[0]);
+
+    // Now the dialog should be open
+    expect(screen.getByRole("dialog")).toBeDefined();
+    expect(screen.getAllByText("Day Inspection").length).toBeGreaterThan(0);
+
+    // Pressing Escape should close it
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   it("opens day details drawer on day click, and navigates via 'Edit Daily Production Numbers' button", () => {
     renderCalendar();
 
-    // Find a day button
-    const dayButtons = screen.getAllByRole("button");
-    const dayBtn = dayButtons.find((b) => b.className.includes("text-left"));
-    if (dayBtn) {
-      fireEvent.click(dayBtn);
-    }
+    // Verify initial load has no drawer
+    expect(screen.queryByRole("dialog")).toBeNull();
 
-    // Drawer should have Edit button
+    // Click a calendar day tile button
+    const dayTiles = screen.getAllByTestId("calendar-day-tile");
+    expect(dayTiles.length).toBeGreaterThan(0);
+    fireEvent.click(dayTiles[0]);
+
+    // Drawer should now be visible and have Edit button
+    expect(screen.getByRole("dialog")).toBeDefined();
     const editBtns = screen.getAllByRole("button").filter((b) =>
       b.textContent?.includes("Edit") || b.textContent?.includes("Enter Numbers")
     );
@@ -145,18 +168,17 @@ describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => 
   it("closes day details drawer when close button is clicked", () => {
     renderCalendar();
 
-    const dayButtons = screen.getAllByRole("button");
-    const dayBtn = dayButtons.find((b) => b.className.includes("text-left"));
-    if (dayBtn) {
-      fireEvent.click(dayBtn);
-    }
+    const dayTiles = screen.getAllByTestId("calendar-day-tile");
+    expect(dayTiles.length).toBeGreaterThan(0);
+    fireEvent.click(dayTiles[0]);
 
-    const closeBtn = screen.getAllByRole("button").find(
-      (b) => b.className.includes("btn-circle") || b.textContent === "✕"
-    );
-    if (closeBtn) {
-      fireEvent.click(closeBtn);
-    }
+    expect(screen.getByRole("dialog")).toBeDefined();
+
+    const closeBtn = screen.getByRole("button", { name: /Close day inspection/i });
+    expect(closeBtn).toBeDefined();
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("navigates to daily entry page when 'Enter Daily Numbers' header action button is clicked", () => {
@@ -310,11 +332,12 @@ describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => 
     const compactBtn = screen.getByRole("button", { name: "Compact" });
     fireEvent.click(compactBtn);
 
-    // Select the day with entries (2026-11-08)
-    const dayButtons = screen.getAllByRole("button");
-    const dayBtn = dayButtons.find((b) => b.textContent?.includes("120"));
-    if (dayBtn) {
-      fireEvent.click(dayBtn);
+    // Select the day with entries (day 29 in Ethiopian Tikimt 2019 corresponds to 2026-11-08)
+    const compactTiles = screen.getAllByTestId("compact-day-tile");
+    const day29Tile = compactTiles.find((b) => b.textContent?.includes("29"));
+    expect(day29Tile).toBeDefined();
+    if (day29Tile) {
+      fireEvent.click(day29Tile);
     }
 
     // Inspect should show Production by Product header
