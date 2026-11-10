@@ -223,3 +223,52 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
    - Returns typed `SessionUser` for immediate data querying.
 4. Validate with 100% test coverage in `src/lib/authz.test.ts` (17 tests) and full multi-core `next build` passing in ~7s with exit code 0.
 
+---
+
+## 2026-11-09 — Per-Plant Dedicated QA Product Assignment Matrix (Item 07)
+
+**Goal:** Disaggregate the monolithic cross-plant QA assignment table into dedicated per-plant matrix tables, reflecting that each factory plant manufactures its own distinct product catalog and assigns only its own QA inspectors.
+
+### Edge cases & gotchas discovered
+
+- **Cross-Tenant Product Pollution:** When all products and QA inspectors across multiple factories are rendered in a single flat grid, inspectors belonging to Plant A are shown alongside products produced exclusively by Plant B. This creates visual clutter, invites invalid cross-factory assignments, and does not scale when dozens of products and plants exist.
+- **Bulk Assignment Performance:** Toggling individual checkboxes for 10–20 products per inspector creates unnecessary request cascades. Adding `bulkAssignQAProductsAction` allows atomic assignment/clearing across all of a plant's products in a single database transaction (`onConflictDoNothing` / `inArray`).
+- **Global Icon vs. Global Scope Invariant:** Using `<History />` in JSX without importing `History` from `lucide-react` causes TypeScript to resolve `window.History`, throwing TS2607/TS2786.
+
+### Decision
+
+1. In `src/app/om/om-client.tsx`, replace the monolithic global table with individual per-plant QA Product Assignment Matrix cards and tables.
+2. In each plant's matrix table:
+   - Rows are strictly inspectors provisioned to that plant.
+   - Columns are strictly products registered to that plant.
+   - Headers display live inspector assignment ratios and product assignment counts.
+   - Each inspector row provides one-click "Assign All" and "Clear All" bulk actions.
+3. Add plant filter pills (`All Plants` or specific plant) and live inspector search (`matrixSearchQuery`).
+4. Replicate the enhanced design in the Plant Operations Hub drill-down (`plantSubTab === "matrix"`).
+5. Implement `bulkAssignQAProductsAction` in `src/actions/om-actions.ts`.
+6. Add comprehensive unit testing in `src/app/om/om-client.test.tsx` verifying separate plant tables, distinct product columns, bulk assignment actions, and plant filtering.
+
+---
+
+## 2026-11-09 — Calendar Drawer Pop-up on Load Bug Fix & Accessibility (Item 08)
+
+**Goal:** Remove the automatic pop-up / drawer opening upon navigating to `/calendar`, and ensure day inspection details only open when the user explicitly clicks on a specific date in the calendar.
+
+### Edge cases & gotchas discovered
+
+- **Auto-Selection on Mount:** `calendar-client.tsx` contained a `useEffect` setting `setActiveDayDateStr(todayGC)` on mount. Because `daySummaryMap` includes every day in the month, `calendarViewMode !== "compact" && activeDayDateStr && activeDaySummary` evaluated to `true` immediately on page load, instantly popping open the modal slide-over drawer / bottom sheet over the screen.
+- **Escape Key Accessibility:** Slide-over drawers and modal dialogs must listen to `Escape` key events to close cleanly in compliance with `AGENTS.md` Section 7.2.
+- **Compact View State:** In compact view mode, having no active date selected should present a helpful, accessible placeholder message inviting the user to select a date, rather than displaying an empty or unguided UI.
+- **Test Tile Distinctness:** Generic CSS class queries (`b.className.includes("text-left")`) in tests matched product filter pills instead of day cells. Adding dedicated `data-testid="calendar-day-tile"`, `data-testid="compact-day-tile"`, and `data-testid="list-day-tile"` ensures deterministic and robust test assertions.
+
+### Decision
+
+1. Remove the automatic `setActiveDayDateStr(todayGC)` `useEffect` in `src/components/calendar/calendar-client.tsx`. `activeDayDateStr` now starts as `null`.
+2. Keep today visually highlighted using `item.isCurrentToday` (`border-emerald-500 bg-white shadow-2xs`) without opening the drawer automatically.
+3. Open the day inspection drawer / bottom sheet only when the user clicks a day tile button (`onClick={() => setActiveDayDateStr(item.gregorianDateStr)}`).
+4. Add global `Escape` key event handling so users can press `Esc` to close either the month jumper modal or the day inspection drawer.
+5. Add `role="dialog"`, `aria-modal="true"`, and `aria-label="Close day inspection"` to the drawer for WCAG AA compliance.
+6. Provide a subtle, clean empty state in compact view mode when no date is selected.
+7. Update `src/components/calendar/calendar-client.test.tsx` with dedicated tests asserting that no dialog is open on initial mount, that clicking a day opens the drawer, and that clicking the close button or pressing `Escape` closes it. All 14 tests passing.
+
+
