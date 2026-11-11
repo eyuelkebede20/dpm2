@@ -272,3 +272,166 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 7. Update `src/components/calendar/calendar-client.test.tsx` with dedicated tests asserting that no dialog is open on initial mount, that clicking a day opens the drawer, and that clicking the close button or pressing `Escape` closes it. All 14 tests passing.
 
 
+
+
+---
+
+## 2026-11-10 — Calendar Layout Optimization, Month Navigation Bar Placement & Compact UI (Item 11)
+
+**Goal:** Reorganize the "Calendar & Production" page to position the month navigation bar directly atop the calendar, streamline buttons and day tiles to eliminate excessive vertical scrolling, and ensure per-plant QA Product Assignment Matrix tables are accessible in the OM portal.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tailwind CSS Grid & DaisyUI** | Yes | MIT | Built-in | **Selected** | Streamlined day tiles from `min-h-[115px]` down to `min-h-[48px] sm:min-h-[64px] md:min-h-[74px] lg:min-h-[84px]`, saving over 180px of vertical space while preserving WCAG AA touch targets (`>= 44x44px` on mobile/compact view). |
+| **Lucide Icons** | Yes | ISC | Built-in | **Selected** | Standardized icons (`ChevronLeft`, `ChevronRight`, `CalendarDays`, `GridIcon`, `ListIcon`, `PenTool`) at `14px-16px` for dense, sleek navigation controls. |
+
+### Edge cases & gotchas discovered
+
+- **Month Bar Disconnect:** Previously, the month stepper (`[ < Month Year > ]`, `Today`, Calendar Switcher) was mounted in the global top header, separated from the calendar view by: 1) Product Month Performance Strip, 2) 4 large KPI cards, and 3) View/Filter toolbar. Users navigating months had to scroll up and down repeatedly. Moving the Unified Calendar Toolbar directly atop the calendar views eliminates this context split.
+- **Button Sizing & Excessive Scrolling:** Buttons (`min-h-[44px]`, `min-h-[42px]`) and cards (`p-4`, `my-4`, `text-3xl`) pushed the calendar grid below the fold on standard laptop displays. Streamlining header buttons to `h-8 sm:h-9`, KPI cards to `p-2.5 sm:p-3` with `text-base sm:text-xl font-mono`, and day tiles to `84px` max height fits the entire calendar within standard 1080p viewports without requiring vertical scrolling.
+- **Compact View Touch Targets:** Compact view tiles were optimized to `min-h-[40px] min-w-[40px] sm:min-h-[46px]`, maintaining touch accessibility while avoiding layout bloating on desktop screens.
+- **QA Review Status Value in Test Mock:** In `daily-entry-client.test.tsx`, `qaReview.status` was typed as `"approved" | "denied" | "pending" | undefined`. Using `"rejected"` triggered a TS2322 type error during `tsc --noEmit`. Harmonized to `"denied"`, ensuring 0 type errors across the entire codebase.
+
+### Decision
+
+1. In `src/components/calendar/calendar-client.tsx`:
+   - Unified the Month Stepper, 13M jumper, Today button, Dual Calendar switcher, Amharic/English toggle, view mode buttons (`Compact`, `Grid`, `List`), and filters into a single compact bar placed **directly atop the calendar views**.
+   - Streamlined grid day tiles to `min-h-[48px] sm:min-h-[64px] md:min-h-[74px] lg:min-h-[84px]` and compact view cells to `min-h-[40px] min-w-[40px] sm:min-h-[46px]`.
+   - Reduced KPI ribbon padding and text scale to fit comfortably in a 4-column desktop row (~70px height).
+   - Rendered Product Month Performance as a compact horizontal scrolling pill strip (~45px height).
+2. All 14 tests in `src/components/calendar/calendar-client.test.tsx` pass.
+3. All 10 tests in `src/app/om/om-client.test.tsx` pass.
+4. All 20 tests in `src/components/entry-grid/daily-entry-client.test.tsx` pass.
+5. Quality Gate: `tsc --noEmit` (0 errors), `next lint` (0 warnings/errors), and `next build` production compilation succeeded with exit code 0.
+
+---
+
+## 2026-11-11 — Readable High-Contrast Notifications Layout with Status, Plant Name & Metric Variance (Item 12)
+
+**Goal:** Redesign incoming notifications to be exceptionally readable and glanceable with explicit "NEW" / "READ" badge, clean plant name ("Name..."), signed metric value ("Value - + or -"), while preserving both "View Report" and "Mark as Reviewed" action buttons.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tailwind CSS Flexbox & Badges** | Yes | MIT | Built-in | **Selected** | Structured each card into a high-contrast horizontal scan layout: `NEW`/`READ` pill on the left, bold truncated plant name, and color-coded signed pill (`+` in emerald, `-` in rose) on the right. |
+| **Lucide Icons** | Yes | ISC | Built-in | **Selected** | Standardized icons (`Check`, `CheckCheck`, `TrendingUp`, `TrendingDown`, `ExternalLink`, `Bell`) for visual scannability and WCAG AA contrast. |
+
+### Edge cases & gotchas discovered
+
+- **Visual Clutter & Paragraph Bloat:** Previously, notifications rendered long verbose strings like `"Daily report for 2026-11-08 submitted. 1 data entry recorded, ready for OM review."` with generic gray bell icons, making it difficult for Operation Managers to quickly determine which factory reported and whether production was above or below target.
+- **Signed Output Representation:** By extracting or computing signed variance (`+X pcs` or `-Y pcs`), OM managers can immediately see factory health at a glance from the top navbar bell dropdown without opening individual reports.
+- **Factory Manager 1-Entry-Per-Day Enforcement:** During report unit tests, mock database returns must account for the strict FM one-entry limit (`saveDailyReportEntryAction`), ensuring admin revision tests simulate `role: "sys_admin"` while asserting that FM submissions for existing dates are rejected with a clear message.
+- **Ethiopian Date Formatter Type Scope:** Adding `"short_am"` to `formatEthDate` in `src/lib/ethiopian-calendar.ts` resolved type assignability across `fm-client.tsx` and `planning-client.tsx`, maintaining full TypeScript safety with 0 errors.
+
+### Decision
+
+1. Redesigned `NotificationsDropdown` in `src/components/notifications-dropdown.tsx`:
+   - High-contrast top header: `NEW` (bold emerald badge) / `READ` (subtle slate badge), Plant Name (`font-black text-slate-900 truncate`), and Signed Variance (`font-mono font-black` badge with `TrendingUp` or `TrendingDown` icon, colored in emerald for positive `+` and rose for negative `-`).
+   - Meta footer with report date and relative timestamp (`timeAgo`).
+   - Clean action row preserving **View Report** (`Link` with `ExternalLink` icon) and **Mark as Reviewed** button (or **Reviewed ✓** status pill).
+2. Enriched `getNotificationsAction()` in `src/actions/review-actions.ts` to parse clean factory names and signed `+` or `-` values with fallback extraction.
+3. Created comprehensive test suite `src/components/notifications-dropdown.test.tsx` (5/5 tests passing).
+4. Verified all 16 tests in `src/actions/report-actions.test.ts` and 13 tests in `src/actions/review-actions.test.ts` pass (34/34 tests passing).
+5. Ran full `tsc --noEmit` and confirmed 0 TypeScript errors.
+
+---
+
+## 2026-11-11 — Strict "One Data Entry Per Day" Production Reporting Rule (Item 13)
+
+**Goal:** Enforce a strict "One Data Entry Per Day" constraint for factory production reporting. Once a Factory Manager saves daily numbers for a given date, the entry is locked to prevent multiple submissions or post-save modifications, while preserving System Administrator emergency override.
+
+### Libraries & Primitives Evaluated
+
+| Component / Layer | Pattern | Verdict | Reason |
+| :--- | :--- | :--- | :--- |
+| **`saveDailyReportBatchAction`** | Atomic Drizzle Transaction | **Selected** | Replaced sequential per-line saves with a single atomic batch transaction. Evaluates whether any report entries already exist for this date and factory, rejecting subsequent submissions by FM with 0 partial writes. |
+| **`saveDailyReportEntryAction`** | Strict Role-Based Pre-check | **Selected** | Enforces that if `user.role === "fm"` and an entry already exists for the date, re-entry is blocked with actionable error `"Only one data entry is permitted per day. The daily entry for this date has already been recorded."` Sys Admins retain override access. |
+| **`DailyEntryClient` Locked State** | Prop-driven Reactive Lockout | **Selected** | When `isDaySubmitted` is true (or immediately upon saving in session), `isReadOnly` becomes `true` for FM. Disables all steppers, inputs, downtime buttons, and replaces the Save button with an accessible completion badge. |
+
+### Edge Cases & Gotchas Discovered
+
+- **Sequential Loop vs. Atomic Batch Submission:** In earlier versions, `handleSaveAll` called `saveDailyReportEntryAction` sequentially in a `for` loop. If line 1 passed and line 2 failed, the database was left in an inconsistent partial state. Introducing `saveDailyReportBatchAction` executes the entire day's report across all lines in one atomic database transaction, validating the "one entry per day" constraint before making any writes.
+- **Immediate In-Session Lockout:** In addition to reading `isDaySubmitted` from `getDailyGridData` on initial page load, the client UI must immediately set `daySubmitted = true` upon successful batch save. This provides instant feedback, locking steppers and disabling the Save button without requiring an asynchronous roundtrip or page reload.
+- **Admin Emergency Override Distinction:** System Administrators (`sys_admin`) may occasionally need to correct erroneous data reported by a plant manager. The backend and UI explicitly distinguish between `fm` (strictly one entry, permanently locked) and `sys_admin` (allowed to edit with an visible "Admin Override Mode" badge).
+- **Vitest Mocking with Nested Sub-queries:** When mocking `db.select().from(reportEntries).where(...).limit(1)`, ensure the table being inspected distinguishes between `reportEntries` (where existing entry check returns empty array for initial saves) and other tables like `lines` (which must return active line definitions).
+
+### Decision
+
+1. Implemented `saveDailyReportBatchAction` and updated `saveDailyReportEntryAction` in `src/actions/report-actions.ts` to strictly block FM from submitting more than once per day.
+2. Updated `getDailyGridData` in `src/actions/data.ts` to compute `isDaySubmitted`, `submittedAt`, and `submittedBy`.
+3. Updated `src/app/entry/page.tsx` and `src/components/entry-grid/daily-entry-client.tsx`:
+   - Renders a prominent "Daily Data Entry Completed (የዕለቱ መረጃ ተመዝግቧል)" banner when entries exist.
+   - Replaces the bottom floating Save button with a locked completion pill (`"Daily Entry Completed (የዕለቱ መረጃ ተመዝግቧል) — 1 Data Entry Recorded"`).
+   - Locks all steppers, numeric inputs, downtime reasons, and issue notes (`isReadOnly = true`).
+4. Expanded test suites:
+   - Added 4 batch and one-entry-per-day tests in `src/actions/report-actions.test.ts` (all 20 pass).
+   - Added locked state, immediate post-save lockout, and admin override tests in `src/components/entry-grid/daily-entry-client.test.tsx` (all 23 pass).
+5. All 44 test files (470 tests) passed; TypeScript `tsc --noEmit` passed with 0 errors; production build `next build` compiled cleanly.
+
+
+---
+
+## 2026-11-11 — Central Production Planning Portal, Sys Admin Calendar Selection & FM Read-Only Role Enforcement (Item 12)
+
+**Goal:** Provide a dedicated Production Planning portal (`/planning`) for the Operation Manager (OM) and Factory Manager (FM), bind plan start and end dates strictly to the Sys Admin's calendar system selection (`ethiopian` vs `gregorian`), and enforce that Factory Managers cannot edit or create production plans (OM-only authoring), while allowing FMs read-only view of their plant's items.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Custom PlanDatePicker Component** | Maintained internally | MIT | 0kB | **Selected** | Provides coordinated 3-tier Ethiopian selects (Year ዓ.ም, Month ወር 1–13 with bilingual Amharic/English names, Day ቀን 1–30 or 1–5/6 with leap-year calculation via `daysInMonthEth`) alongside HTML5 `<input type="date">` for Gregorian mode, always outputting canonical ISO dates (`YYYY-MM-DD`). |
+| **Better Auth Access Control (RBAC)** | Yes | MIT | Built-in | **Selected** | Updated `roles.fm` to `plan: ["read"]` (stripped `create`, `update`, `delete`), while giving `roles.om` full `plan: ["create", "read", "update", "delete"]`. |
+
+### Edge cases & gotchas discovered
+
+- **Calendar System Independence from Database Storage:** All plans store `startDate` and `endDate` as canonical ISO date strings (`YYYY-MM-DD`) in PostgreSQL. When the Sys Admin changes the company calendar system in the Industry Profile (`admin-actions.ts`), no database migration is required: `PlanDatePicker` and the UI table dynamically render and parse dates in the configured system (`ethiopian` or `gregorian`) without data corruption.
+- **Factory Manager Authority Restriction:** In industrial multi-plant operations, Factory Managers reporting local daily output should not arbitrarily adjust periodic production commitments. Setting `roles.fm` to `plan: ["read"]` and guarding server actions (`createPlanAction` and `updatePlanAction`) ensures that attempts by FMs to modify periodic plans are strictly rejected at both UI and server API layers.
+- **Leap Year and Pagume (13th Month) Clamping:** Month 13 (Pagume) only has 5 days (6 in a leap year). When switching months to Pagume, `PlanDatePicker` dynamically recalculates `maxEthDays` and clamps the selected day to prevent invalid date generation.
+- **Multi-Plant Navigation for OM:** An OM managing multiple plants can filter plans by plant using the header dropdown or view all plans in an aggregated table with Initial Baseline vs Edited Plan comparisons.
+
+### Decision
+
+1. Created `src/actions/plan-actions.ts` with `getProductionPlansAction`, `createPlanAction`, `updatePlanAction`, and `deletePlanAction`.
+2. Created reusable `src/components/planning/plan-date-picker.tsx` driven by `industryProfile.calendarSystem`.
+3. Created `src/app/planning/page.tsx` and `src/components/planning/planning-client.tsx`:
+   - OM has full planning controls ("New Production Plan" button, "Edit" button, plant switcher, multi-plant overview).
+   - FM has read-only access (informative notice banner, hidden action buttons, scoped to FM's plant).
+   - Start and end dates are formatted and chosen based on the Sys Admin's calendar setting (`ethiopian` or `gregorian`).
+4. Updated `src/lib/rbac.ts` to restrict `fm` to `plan: ["read"]`.
+5. Updated `src/components/navbar.tsx` to add `"Production Plans"` (`/planning`) for both OM and FM.
+6. Updated `src/app/fm/page.tsx` and `src/app/fm/fm-client.tsx` to respect `calendarSystem` and read-only mode for FMs.
+7. Added comprehensive unit tests in `src/components/planning/planning-client.test.tsx` (9 tests passing), `fm-actions.test.ts` (23 tests passing), `fm-client.test.tsx` (10 tests passing), and `navbar.test.tsx` (8 tests passing).
+8. Quality Gate: `tsc --noEmit` (0 errors), `next lint` (0 warnings/errors), and `next build` compiled with exit code 0.
+
+---
+
+## 2026-11-11 — Big-Screen Responsiveness, Left/Right Page Padding, & UI Component Consolidation (Item 12)
+
+**Goal:** Establish responsive gutters on big screens (1080p, 1440p, 4K monitors), normalize input box heights (min 44px) and widths (controlled max-widths), and eliminate redundant, scattered form inputs by introducing shared, accessible UI primitives (`PageContainer`, `Input`, `SearchInput`, `Select`, `FormField`).
+
+### Edge cases & gotchas discovered
+
+- **Cramped Big Screen Layouts vs. Overstretched Inputs:** Locking desktop layouts to `max-w-7xl` (1280px) on 1920px+ monitors left 320px+ awkward side voids while leaving inputs inside modal cards stretching unconstrained to 100% width. Introducing `<PageContainer />` with `max-w-7xl 2xl:max-w-8xl` and responsive padding `px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16` provides breathing room on ultra-wide screens, while `max-w-md` / `max-w-lg` constraints prevent single-line text inputs from ballooning across the screen.
+- **Microscopic 32px Inputs:** Numerous search and form inputs used DaisyUI's `input-sm` (32px), which violates the WCAG AA 44x44px touch target requirement and causes iOS Safari to auto-zoom on mobile devices due to font sizes < 16px. Standardizing inputs to `min-h-[44px] h-11 text-base sm:text-sm` eliminates auto-zoom and ensures comfortable desktop/mobile ergonomics.
+- **Duplicated Search Bar Logic:** Search inputs in Admin, OM, FM, QA, and Store views duplicated the same 15-line JSX pattern (`Search` icon + `input` + clear `X` button). Consolidating into `<SearchInput />` reduced boilerplate, standardized clear-button touch targets, and unified keyboard accessibility.
+
+### Decision
+
+1. Created `src/components/ui/page-container.tsx` providing standard responsive gutters across all viewports (`px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16` and `max-w-7xl 2xl:max-w-8xl`).
+2. Updated all main layout views to utilize `<PageContainer>` or the unified responsive gutter:
+   - Header Navigation (`src/components/navbar.tsx`)
+   - Dashboard View (`src/app/dashboard/page.tsx`)
+   - Admin Portal (`src/app/admin/page.tsx`)
+   - OM Operations (`src/app/om/page.tsx`)
+   - FM Operations (`src/app/fm/page.tsx`)
+   - Store Stock (`src/app/fm/store/page.tsx`)
+   - QA Operations (`src/app/qa/page.tsx`)
+   - Calendar Hub (`src/components/calendar/calendar-client.tsx`)
+   - Daily Production Entry Grid (`src/components/entry-grid/daily-entry-client.tsx`)
+3. Created `src/components/ui/input.tsx`, `src/components/ui/search-input.tsx`, `src/components/ui/select.tsx`, and `src/components/ui/form-field.tsx` with ref forwarding, 44px min-height, text-base on mobile / text-sm on desktop, and full keyboard/ARIA support.
+4. Refactored repeated search bars and form fields across Admin, OM, FM, QA, and Store views to use the unified components.
+5. Added unit tests for each new primitive (`page-container.test.tsx`, `input.test.tsx`, `search-input.test.tsx`, `select.test.tsx`). 35 UI unit tests pass; all 68 component tests pass.
+

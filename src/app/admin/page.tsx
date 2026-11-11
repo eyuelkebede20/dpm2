@@ -5,6 +5,7 @@ import {
   getAllUsersForAdmin,
 } from "@/actions/admin-actions";
 import { AdminClient } from "./admin-client";
+import { PageContainer } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function AdminPage() {
     process.env.ENABLE_DEV_IMPERSONATION === "true";
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 min-h-[calc(100vh-4rem)]">
+    <PageContainer className="min-h-[calc(100vh-4rem)]">
       <div className="mb-6 sm:mb-8 pb-5 border-b border-slate-200/80">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -61,6 +62,6 @@ export default async function AdminPage() {
         currentUserId={user.id}
         isDevImpersonationEnabled={isDevImpersonationEnabled}
       />
-    </div>
+    </PageContainer>
   );
 }

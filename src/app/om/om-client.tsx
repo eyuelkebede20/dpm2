@@ -8,8 +8,10 @@ import {
   toggleFactoryUserStatusAction,
   updateFactoryUserRoleAction,
   toggleQAProductAssignmentAction,
+  bulkAssignQAProductsAction,
   getOMFactoryCalendarDataAction,
 } from "@/actions/om-actions";
+import { SearchInput } from "@/components/ui";
 import {
   Building2,
   Users,
@@ -150,6 +152,9 @@ export function OMClient({
 
   // Matrix Optimistic / Pending state
   const [pendingAssignment, setPendingAssignment] = useState<string | null>(null);
+  const [matrixPlantFilter, setMatrixPlantFilter] = useState<string>("all");
+  const [matrixSearchQuery, setMatrixSearchQuery] = useState<string>("");
+  const [bulkAssigningUserId, setBulkAssigningUserId] = useState<string | null>(null);
 
   // Role Assignment change state & notification
   const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
@@ -312,6 +317,39 @@ export function OMClient({
 
     setPendingAssignment(null);
     router.refresh();
+  };
+
+  // Bulk QA Product Assignment (Assign all / Clear all for a QA user in a plant)
+  const handleBulkAssignment = async (
+    qaUserId: string,
+    productIds: string[],
+    assignAll: boolean
+  ) => {
+    setBulkAssigningUserId(qaUserId);
+    try {
+      const res = await bulkAssignQAProductsAction({
+        qaUserId,
+        productIds,
+        assignAll,
+      });
+      if (res.success) {
+        setToastMsg({
+          type: "success",
+          text: assignAll
+            ? "All products assigned to inspector"
+            : "Product assignments cleared for inspector",
+        });
+      } else {
+        setToastMsg({ type: "error", text: res.error || "Failed to update assignments" });
+      }
+      setTimeout(() => setToastMsg(null), 3000);
+      router.refresh();
+    } catch (err) {
+      setToastMsg({ type: "error", text: "Failed to update assignments" });
+      setTimeout(() => setToastMsg(null), 3000);
+    } finally {
+      setBulkAssigningUserId(null);
+    }
   };
 
   const isAssigned = (qaUserId: string, productId: string) => {
@@ -702,26 +740,13 @@ export function OMClient({
 
                   {/* Plant Team Search Bar */}
                   {plantTeamUsers.length > 0 && (
-                    <div className="relative max-w-md">
-                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={plantUserSearchQuery}
-                        onChange={(e) => setPlantUserSearchQuery(e.target.value)}
-                        placeholder="Search personnel by name, email, or role..."
-                        className="input input-sm pl-9 pr-8 w-full rounded-xl border-slate-200 bg-slate-50 text-xs font-medium placeholder:text-slate-400 focus:outline-hidden focus:bg-white focus:border-emerald-500"
-                      />
-                      {plantUserSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setPlantUserSearchQuery("")}
-                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                          title="Clear search"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
+                    <SearchInput
+                      value={plantUserSearchQuery}
+                      onChange={(e) => setPlantUserSearchQuery(e.target.value)}
+                      onClear={() => setPlantUserSearchQuery("")}
+                      placeholder="Search personnel by name, email, or role..."
+                      maxWidthClass="max-w-md"
+                    />
                   )}
 
                   <div className="overflow-x-auto">
@@ -860,72 +885,198 @@ export function OMClient({
               {/* SUB-VIEW 3: QA Matrix for Selected Plant */}
               {plantSubTab === "matrix" && (
                 <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4">
-                  <div className="pb-3 border-b border-slate-100">
-                    <h3 className="text-base sm:text-lg font-black text-slate-900">
-                      QA Product Assignment Matrix ({selectedFactory.name})
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Configure QA inspector product permissions for this plant.
-                    </p>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                        <Grid className="w-5 h-5 text-emerald-600" />
+                        <span>QA Product Assignment Matrix ({selectedFactory.name})</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Configure QA inspector product permissions specifically for products manufactured in {selectedFactory.name}.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2.5 py-1 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-bold text-slate-700 font-mono">
+                        {plantQAUsers.length} QA Inspectors
+                      </span>
+                      <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-bold text-emerald-800 font-mono">
+                        {plantProducts.length} Products
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserFactoryId(selectedFactory.id);
+                          setUserRole("qa");
+                          setUserName("");
+                          setUserEmail("");
+                          setUserPassword("TemporaryPass123!");
+                          setSelectedQAProductIds([]);
+                          setUserError(null);
+                          setUserModalOpen(true);
+                        }}
+                        className="btn btn-xs sm:btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs border-none gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add QA Inspector</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-2xs">
                     {plantQAUsers.length === 0 || plantProducts.length === 0 ? (
-                      <div className="text-center py-10 text-slate-400 text-sm">
-                        {plantQAUsers.length === 0
-                          ? `No QA Inspectors in ${selectedFactory.name}. Click "+ Add Personnel to Plant" to provision one.`
-                          : `No Products created for ${selectedFactory.name} yet.`}
+                      <div className="text-center py-12 px-4 text-slate-400 text-sm">
+                        {plantQAUsers.length === 0 ? (
+                          <div className="space-y-3">
+                            <Shield className="w-8 h-8 text-slate-300 mx-auto" />
+                            <div className="font-bold text-slate-700">
+                              No QA Inspectors provisioned for {selectedFactory.name}
+                            </div>
+                            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                              This plant has {plantProducts.length} product{plantProducts.length === 1 ? "" : "s"} ready for inspection. Add a QA Inspector to configure assignments.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUserFactoryId(selectedFactory.id);
+                                setUserRole("qa");
+                                setUserName("");
+                                setUserEmail("");
+                                setUserPassword("TemporaryPass123!");
+                                setSelectedQAProductIds([]);
+                                setUserError(null);
+                                setUserModalOpen(true);
+                              }}
+                              className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs border-none"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Provision QA Inspector for {selectedFactory.name}</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Package className="w-8 h-8 text-slate-300 mx-auto" />
+                            <div className="font-bold text-slate-700">
+                              No Products configured for {selectedFactory.name}
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              Products must be registered to this plant before QA inspections can be assigned.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <table className="table w-full text-sm">
                         <thead>
                           <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-                            <th className="py-3 px-4 font-bold text-slate-700 text-xs uppercase tracking-wider sticky left-0 bg-slate-50 z-20">
-                              QA Inspector
+                            <th className="py-3 px-4 font-black text-slate-700 text-xs uppercase tracking-wider sticky left-0 bg-slate-50 z-20 min-w-[200px]">
+                              <div>QA Inspector</div>
+                              <div className="text-[10px] text-slate-400 font-normal normal-case">
+                                {plantQAUsers.length} assigned to plant
+                              </div>
                             </th>
-                            {plantProducts.map((p) => (
-                              <th
-                                key={p.id}
-                                className="py-3 px-4 text-center font-bold text-slate-700 text-xs uppercase tracking-wider"
-                              >
-                                <div>{p.name}</div>
-                                <div className="text-[10px] text-slate-400 font-mono tabular-nums font-normal">
-                                  {p.sku}
-                                </div>
-                              </th>
-                            ))}
+                            {plantProducts.map((p) => {
+                              const assignedInspectorsCount = plantQAUsers.filter((qa) => isAssigned(qa.id, p.id)).length;
+                              return (
+                                <th
+                                  key={p.id}
+                                  className="py-3 px-4 text-center font-bold text-slate-700 text-xs uppercase tracking-wider min-w-[130px]"
+                                >
+                                  <div className="font-black text-slate-900 truncate max-w-[150px] mx-auto" title={p.name}>
+                                    {p.name}
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 font-mono tabular-nums font-normal bg-slate-200/70 px-1.5 py-0.2 rounded inline-block mt-0.5">
+                                    {p.sku}
+                                  </div>
+                                  <div className="text-[9px] text-emerald-700 font-mono font-normal normal-case mt-0.5">
+                                    {assignedInspectorsCount} inspector{assignedInspectorsCount === 1 ? "" : "s"}
+                                  </div>
+                                </th>
+                              );
+                            })}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {plantQAUsers.map((qa) => (
-                            <tr key={qa.id} className="hover:bg-slate-50/50">
-                              <td className="py-3 px-4 font-bold text-slate-900 sticky left-0 bg-white z-10">
-                                <div>{qa.name}</div>
-                                <div className="text-xs text-slate-500 font-normal">{qa.email}</div>
-                              </td>
-                              {plantProducts.map((prod) => {
-                                const assigned = isAssigned(qa.id, prod.id);
-                                const isPending = pendingAssignment === `${qa.id}_${prod.id}`;
+                          {plantQAUsers.map((qa) => {
+                            const inspectorAssignedProducts = plantProducts.filter((p) => isAssigned(qa.id, p.id));
+                            const isAllAssigned = inspectorAssignedProducts.length === plantProducts.length;
+                            const isBulkLoading = bulkAssigningUserId === qa.id;
 
-                                return (
-                                  <td key={prod.id} className="py-2 px-3 text-center">
-                                    <label className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                                      <input
-                                        type="checkbox"
-                                        aria-label={`Assign ${prod.name} to ${qa.name}`}
-                                        disabled={isPending}
-                                        checked={assigned}
-                                        onChange={() =>
-                                          handleAssignmentToggle(qa.id, prod.id, assigned)
+                            return (
+                              <tr key={qa.id} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="py-3 px-4 sticky left-0 bg-white z-10">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <div className="font-black text-slate-900 text-sm">{qa.name}</div>
+                                      <div className="text-xs text-slate-500 font-normal">{qa.email}</div>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        <span className={`text-[10px] font-bold font-mono px-1.5 py-0.2 rounded ${
+                                          inspectorAssignedProducts.length > 0
+                                            ? "bg-emerald-100 text-emerald-800"
+                                            : "bg-slate-100 text-slate-400"
+                                        }`}>
+                                          {inspectorAssignedProducts.length} / {plantProducts.length} products
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Inspector Row Bulk Actions */}
+                                    <div className="flex flex-col gap-1 items-end shrink-0">
+                                      <button
+                                        type="button"
+                                        disabled={isBulkLoading || isAllAssigned}
+                                        onClick={() =>
+                                          handleBulkAssignment(
+                                            qa.id,
+                                            plantProducts.map((p) => p.id),
+                                            true
+                                          )
                                         }
-                                        className="checkbox checkbox-sm checkbox-primary rounded-md"
-                                      />
-                                    </label>
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
+                                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 disabled:opacity-40 disabled:cursor-not-allowed hover:underline"
+                                      >
+                                        Assign All
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isBulkLoading || inspectorAssignedProducts.length === 0}
+                                        onClick={() =>
+                                          handleBulkAssignment(
+                                            qa.id,
+                                            plantProducts.map((p) => p.id),
+                                            false
+                                          )
+                                        }
+                                        className="text-[10px] font-bold text-slate-400 hover:text-rose-700 disabled:opacity-40 disabled:cursor-not-allowed hover:underline"
+                                      >
+                                        Clear All
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                                {plantProducts.map((prod) => {
+                                  const assigned = isAssigned(qa.id, prod.id);
+                                  const isPending = pendingAssignment === `${qa.id}_${prod.id}` || isBulkLoading;
+
+                                  return (
+                                    <td key={prod.id} className="py-2 px-3 text-center">
+                                      <label className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input
+                                          type="checkbox"
+                                          aria-label={`Assign ${prod.name} to ${qa.name}`}
+                                          disabled={isPending}
+                                          checked={assigned}
+                                          onChange={() =>
+                                            handleAssignmentToggle(qa.id, prod.id, assigned)
+                                          }
+                                          className="checkbox checkbox-sm checkbox-primary rounded-md"
+                                        />
+                                      </label>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     )}
@@ -1034,26 +1185,13 @@ export function OMClient({
           {/* Search & Filter Toolbar */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80">
             {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                value={userSearchQuery}
-                onChange={(e) => setUserSearchQuery(e.target.value)}
-                placeholder="Search personnel by name, email, role, or plant..."
-                className="input input-sm pl-9 pr-8 w-full rounded-xl border-slate-200 bg-white text-xs font-medium placeholder:text-slate-400 focus:outline-hidden focus:border-emerald-500"
-              />
-              {userSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setUserSearchQuery("")}
-                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
-                  title="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+            <SearchInput
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              onClear={() => setUserSearchQuery("")}
+              placeholder="Search personnel by name, email, role, or plant..."
+              maxWidthClass="flex-1 max-w-lg"
+            />
 
             {/* Filter Dropdowns */}
             <div className="flex items-center gap-2 flex-wrap">
@@ -1250,76 +1388,339 @@ export function OMClient({
       )}
 
       {/* ============================================================= */}
-      {/* TAB 3: QA PRODUCT ASSIGNMENT MATRIX (GLOBAL)                  */}
+      {/* TAB 3: QA PRODUCT ASSIGNMENT MATRIX (PER-PLANT TABLES)        */}
       {/* ============================================================= */}
       {activeTab === "matrix" && (
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-2xs">
-          <div className="pb-4 border-b border-slate-100">
-            <h2 className="text-lg font-black text-slate-900 tracking-tight">
-              QA Product Assignment Matrix
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Assign Quality Assurance inspectors to products across all managed facilities.
-            </p>
+        <div className="space-y-6">
+          {/* Header & Explanatory Banner */}
+          <div className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                    <Grid className="w-4 h-4" />
+                  </div>
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                    QA Product Assignment Matrix
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  Each plant maintains its own dedicated QA product matrix. Assign Quality Assurance inspectors to the specific products produced at their facility.
+                </p>
+              </div>
+
+              {/* Summary KPIs */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-bold text-slate-700 font-mono">
+                  {factories.length} Plant{factories.length === 1 ? "" : "s"}
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-bold text-emerald-800 font-mono">
+                  {matrixData.qaUsers.length} QA Inspectors
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200/80 text-xs font-bold text-blue-800 font-mono">
+                  {matrixData.productsList.length} Total Products
+                </span>
+              </div>
+            </div>
+
+            {/* Filter Toolbar: Plant Switcher & Search */}
+            <div className="pt-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              {/* Plant Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+                <button
+                  type="button"
+                  onClick={() => setMatrixPlantFilter("all")}
+                  className={`btn btn-xs rounded-xl font-bold min-h-[36px] px-3.5 transition-all text-xs shrink-0 ${
+                    matrixPlantFilter === "all"
+                      ? "bg-slate-900 text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 border-none"
+                  }`}
+                >
+                  All Plants ({factories.length})
+                </button>
+                {factories.map((fac) => {
+                  const facProds = matrixData.productsList.filter((p) => p.factoryId === fac.id);
+                  const isSelected = matrixPlantFilter === fac.id;
+                  return (
+                    <button
+                      key={fac.id}
+                      type="button"
+                      onClick={() => setMatrixPlantFilter(fac.id)}
+                      className={`btn btn-xs rounded-xl font-bold min-h-[36px] px-3.5 transition-all text-xs shrink-0 ${
+                        isSelected
+                          ? "bg-emerald-600 text-white shadow-2xs"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200 border-none"
+                      }`}
+                    >
+                      <span>{fac.name}</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${isSelected ? "bg-emerald-700 text-emerald-100" : "bg-slate-200 text-slate-700"}`}>
+                        {facProds.length}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Inspector Search Input */}
+              <SearchInput
+                placeholder="Search QA Inspector..."
+                value={matrixSearchQuery}
+                onChange={(e) => setMatrixSearchQuery(e.target.value)}
+                onClear={() => setMatrixSearchQuery("")}
+                maxWidthClass="min-w-[240px] max-w-xs"
+              />
+            </div>
           </div>
 
-          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
-            {matrixData.qaUsers.length === 0 || matrixData.productsList.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm">
-                Ensure you have active QA inspectors and Products created to build assignments.
-              </div>
-            ) : (
-              <table className="table w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
-                    <th className="py-3 px-4 font-bold text-slate-700 text-xs uppercase tracking-wider sticky left-0 bg-slate-50 z-20">
-                      QA Inspector
-                    </th>
-                    {matrixData.productsList.map((p) => (
-                      <th
-                        key={p.id}
-                        className="py-3 px-4 text-center font-bold text-slate-700 text-xs uppercase tracking-wider"
+          {/* Plant-by-Plant QA Matrix Tables */}
+          <div className="space-y-6">
+            {(matrixPlantFilter === "all" ? factories : factories.filter((f) => f.id === matrixPlantFilter)).map((fac) => {
+              const plantQA = matrixData.qaUsers.filter((u) => u.factoryId === fac.id);
+              const plantProducts = matrixData.productsList.filter((p) => p.factoryId === fac.id);
+              const q = matrixSearchQuery.toLowerCase().trim();
+              const filteredPlantQA = q
+                ? plantQA.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+                : plantQA;
+              const plantAssignmentsCount = plantQA.reduce(
+                (sum, qa) => sum + plantProducts.filter((prod) => isAssigned(qa.id, prod.id)).length,
+                0
+              );
+              const maxPossible = plantQA.length * plantProducts.length;
+              const coveragePct = maxPossible > 0 ? Math.round((plantAssignmentsCount / maxPossible) * 100) : 0;
+
+              return (
+                <div
+                  key={`matrix_fac_${fac.id}`}
+                  className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-2xs space-y-4"
+                >
+                  {/* Plant Header Strip */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-800 flex items-center justify-center font-bold shrink-0">
+                        <Building2 className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base sm:text-lg font-black text-slate-900">
+                            {fac.name}
+                          </h3>
+                          <span className="badge badge-sm badge-ghost font-mono text-[10px]">
+                            ID: {fac.id}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5 flex-wrap">
+                          <span>{plantQA.length} QA Inspector{plantQA.length === 1 ? "" : "s"}</span>
+                          <span>•</span>
+                          <span>{plantProducts.length} Product{plantProducts.length === 1 ? "" : "s"}</span>
+                          <span>•</span>
+                          <span className="font-semibold text-emerald-700">
+                            {plantAssignmentsCount} active assignments ({coveragePct}% coverage)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserFactoryId(fac.id);
+                          setUserRole("qa");
+                          setUserName("");
+                          setUserEmail("");
+                          setUserPassword("TemporaryPass123!");
+                          setSelectedQAProductIds([]);
+                          setUserError(null);
+                          setUserModalOpen(true);
+                        }}
+                        className="btn btn-xs sm:btn-sm bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold rounded-xl gap-1"
                       >
-                        <div>{p.name}</div>
-                        <div className="text-[10px] text-slate-400 font-mono tabular-nums font-normal">
-                          SKU: {p.sku} ({p.factoryName})
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {matrixData.qaUsers.map((qa) => (
-                    <tr key={qa.id} className="hover:bg-slate-50/50">
-                      <td className="py-3 px-4 font-bold text-slate-900 sticky left-0 bg-white z-10">
-                        <div>{qa.name}</div>
-                        <div className="text-xs text-slate-500 font-normal">
-                          {qa.email} • {qa.factoryName}
-                        </div>
-                      </td>
-                      {matrixData.productsList.map((prod) => {
-                        const assigned = isAssigned(qa.id, prod.id);
-                        const isPending = pendingAssignment === `${qa.id}_${prod.id}`;
-                        return (
-                          <td key={prod.id} className="py-2 px-3 text-center">
-                            <label className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                              <input
-                                type="checkbox"
-                                aria-label={`Assign ${prod.name} to ${qa.name}`}
-                                disabled={isPending}
-                                checked={assigned}
-                                onChange={() => handleAssignmentToggle(qa.id, prod.id, assigned)}
-                                className="checkbox checkbox-primary checkbox-sm rounded-md"
-                              />
-                            </label>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add QA Inspector</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFactoryId(fac.id);
+                          setPlantSubTab("matrix");
+                        }}
+                        className="btn btn-xs sm:btn-sm btn-ghost text-slate-600 hover:text-slate-900 font-bold rounded-xl gap-1"
+                      >
+                        <span>Plant Hub</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Plant Matrix Table or Empty State */}
+                  {plantProducts.length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50">
+                      <Package className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <div className="text-sm font-bold text-slate-700">
+                        No Products Registered for {fac.name}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                        Each plant maintains its own product catalog. Products must be registered in this plant before QA inspectors can be assigned.
+                      </p>
+                    </div>
+                  ) : plantQA.length === 0 ? (
+                    <div className="text-center py-10 border border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50">
+                      <Shield className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <div className="text-sm font-bold text-slate-700">
+                        No QA Inspectors in {fac.name}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                        This plant has {plantProducts.length} product{plantProducts.length === 1 ? "" : "s"} ready for inspection, but no QA Inspectors are provisioned yet.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserFactoryId(fac.id);
+                          setUserRole("qa");
+                          setUserName("");
+                          setUserEmail("");
+                          setUserPassword("TemporaryPass123!");
+                          setSelectedQAProductIds([]);
+                          setUserError(null);
+                          setUserModalOpen(true);
+                        }}
+                        className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs mt-3 border-none"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Provision QA Inspector for {fac.name}</span>
+                      </button>
+                    </div>
+                  ) : filteredPlantQA.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-xs">
+                      No QA Inspectors in {fac.name} matching &quot;{matrixSearchQuery}&quot;.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-2xs">
+                      <table className="table w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                            <th className="py-3 px-4 font-black text-slate-700 text-xs uppercase tracking-wider sticky left-0 bg-slate-50 z-20 min-w-[200px]">
+                              <div>QA Inspector</div>
+                              <div className="text-[10px] text-slate-400 font-normal normal-case">
+                                {plantQA.length} assigned to plant
+                              </div>
+                            </th>
+                            {plantProducts.map((p) => {
+                              const assignedInspectorsCount = plantQA.filter((qa) => isAssigned(qa.id, p.id)).length;
+                              return (
+                                <th
+                                  key={p.id}
+                                  className="py-3 px-4 text-center font-bold text-slate-700 text-xs uppercase tracking-wider min-w-[140px]"
+                                >
+                                  <div className="font-black text-slate-900 truncate max-w-[160px] mx-auto" title={p.name}>
+                                    {p.name}
+                                  </div>
+                                  <div className="flex items-center justify-center gap-1 mt-0.5">
+                                    <span className="text-[10px] text-slate-500 font-mono font-normal bg-slate-200/70 px-1.5 py-0.2 rounded">
+                                      {p.sku}
+                                    </span>
+                                  </div>
+                                  <div className="text-[9px] text-emerald-700 font-mono font-normal normal-case mt-0.5">
+                                    {assignedInspectorsCount} inspector{assignedInspectorsCount === 1 ? "" : "s"}
+                                  </div>
+                                </th>
+                              );
+                            })}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredPlantQA.map((qa) => {
+                            const inspectorAssignedProducts = plantProducts.filter((p) => isAssigned(qa.id, p.id));
+                            const isAllAssigned = inspectorAssignedProducts.length === plantProducts.length;
+                            const isBulkLoading = bulkAssigningUserId === qa.id;
+
+                            return (
+                              <tr key={qa.id} className="hover:bg-slate-50/60 transition-colors">
+                                <td className="py-3 px-4 sticky left-0 bg-white z-10">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <div className="font-black text-slate-900 text-sm">
+                                        {qa.name}
+                                      </div>
+                                      <div className="text-xs text-slate-500 font-normal">
+                                        {qa.email}
+                                      </div>
+                                      <div className="flex items-center gap-1.5 mt-1">
+                                        <span className={`text-[10px] font-bold font-mono px-1.5 py-0.2 rounded ${
+                                          inspectorAssignedProducts.length > 0
+                                            ? "bg-emerald-100 text-emerald-800"
+                                            : "bg-slate-100 text-slate-400"
+                                        }`}>
+                                          {inspectorAssignedProducts.length} / {plantProducts.length} products
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Inspector Row Bulk Actions */}
+                                    <div className="flex flex-col gap-1 items-end shrink-0">
+                                      <button
+                                        type="button"
+                                        disabled={isBulkLoading || isAllAssigned}
+                                        onClick={() =>
+                                          handleBulkAssignment(
+                                            qa.id,
+                                            plantProducts.map((p) => p.id),
+                                            true
+                                          )
+                                        }
+                                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 disabled:opacity-40 disabled:cursor-not-allowed hover:underline"
+                                      >
+                                        Assign All
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isBulkLoading || inspectorAssignedProducts.length === 0}
+                                        onClick={() =>
+                                          handleBulkAssignment(
+                                            qa.id,
+                                            plantProducts.map((p) => p.id),
+                                            false
+                                          )
+                                        }
+                                        className="text-[10px] font-bold text-slate-400 hover:text-rose-700 disabled:opacity-40 disabled:cursor-not-allowed hover:underline"
+                                      >
+                                        Clear All
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {plantProducts.map((prod) => {
+                                  const assigned = isAssigned(qa.id, prod.id);
+                                  const isPending = pendingAssignment === `${qa.id}_${prod.id}` || isBulkLoading;
+
+                                  return (
+                                    <td key={prod.id} className="py-2 px-3 text-center">
+                                      <label className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                                        <input
+                                          type="checkbox"
+                                          aria-label={`Assign ${prod.name} to ${qa.name}`}
+                                          disabled={isPending}
+                                          checked={assigned}
+                                          onChange={() =>
+                                            handleAssignmentToggle(qa.id, prod.id, assigned)
+                                          }
+                                          className="checkbox checkbox-primary checkbox-sm rounded-md"
+                                        />
+                                      </label>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1438,7 +1839,7 @@ export function OMClient({
                   value={userName}
                   onChange={(e) => setUserName(e.target.value)}
                   placeholder="e.g. Abebe Kebede"
-                  className="input input-bordered w-full text-sm rounded-xl font-medium"
+                  className="input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl font-medium"
                 />
               </div>
 
@@ -1452,7 +1853,7 @@ export function OMClient({
                   value={userEmail}
                   onChange={(e) => setUserEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="input input-bordered w-full text-sm rounded-xl font-medium"
+                  className="input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl font-medium"
                 />
               </div>
 
@@ -1464,7 +1865,7 @@ export function OMClient({
                   <select
                     id="user-role-select"
                     aria-label="User Role"
-                    className="select select-bordered w-full text-sm rounded-xl font-bold"
+                    className="select select-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl font-bold"
                     value={userRole}
                     onChange={(e) => setUserRole(e.target.value as "fm" | "qa")}
                   >
@@ -1478,13 +1879,13 @@ export function OMClient({
                     Factory Plant
                   </label>
                   {selectedFactory ? (
-                    <div className="input input-bordered w-full text-sm rounded-xl font-bold bg-slate-50 flex items-center text-slate-700">
+                    <div className="input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl font-bold bg-slate-50 flex items-center text-slate-700">
                       {selectedFactory.name}
                     </div>
                   ) : (
                     <select
                       aria-label="Factory Plant"
-                      className="select select-bordered w-full text-sm rounded-xl font-bold"
+                      className="select select-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl font-bold"
                       value={userFactoryId}
                       onChange={(e) => {
                         setUserFactoryId(e.target.value);
@@ -1595,7 +1996,7 @@ export function OMClient({
                     required
                     value={userPassword}
                     onChange={(e) => setUserPassword(e.target.value)}
-                    className="join-item input input-bordered w-full text-sm font-mono tabular-nums rounded-l-xl font-bold"
+                    className="join-item input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm font-mono tabular-nums rounded-l-xl font-bold"
                   />
                   <button
                     type="button"

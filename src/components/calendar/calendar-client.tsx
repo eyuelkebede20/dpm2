@@ -622,7 +622,7 @@ export function CalendarClient({
   }, [startDateStr, endDateStr]);
 
   return (
-    <div className="max-w-7xl mx-auto px-2.5 sm:px-4 md:px-6 lg:px-8 py-2.5 sm:py-3.5 pb-20 space-y-2.5 sm:space-y-3">
+    <div className="max-w-7xl 2xl:max-w-8xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16 py-3 sm:py-4.5 pb-24 space-y-3 sm:space-y-4">
       {/* ============================================================= */}
       {/* 1. COMPACT PAGE HEADER & EXECUTIVE ACTION BAR                */}
       {/* ============================================================= */}
@@ -1186,7 +1186,7 @@ export function CalendarClient({
                     type="button"
                     data-testid="compact-day-tile"
                     onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                    className={`aspect-square min-h-[44px] min-w-[44px] sm:min-h-[56px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 touch-manipulation ${
+                    className={`aspect-square min-h-[40px] min-w-[40px] sm:min-h-[46px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 touch-manipulation ${
                       isSelected
                         ? "bg-slate-900 text-white font-black shadow-md ring-2 ring-emerald-500"
                         : item.isCurrentToday

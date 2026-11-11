@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createStoreTransactionAction } from "@/actions/fm-actions";
+import { SearchInput } from "@/components/ui";
 import {
   Warehouse,
   TrendingUp,
@@ -191,16 +192,13 @@ export function StoreClient({
             <span>Current Accumulated Product Balances ({productBalances.length})</span>
           </h2>
 
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search product balances..."
-              value={stockSearch}
-              onChange={(e) => setStockSearch(e.target.value)}
-              className="input input-bordered w-full pl-10 text-xs sm:text-sm rounded-2xl border-slate-200 bg-white focus:border-indigo-600 min-h-[44px]"
-            />
-          </div>
+          <SearchInput
+            placeholder="Search product balances..."
+            value={stockSearch}
+            onChange={(e) => setStockSearch(e.target.value)}
+            onClear={() => setStockSearch("")}
+            maxWidthClass="w-full sm:w-72"
+          />
         </div>
 
         {filteredBalances.length === 0 ? (
@@ -265,16 +263,13 @@ export function StoreClient({
 
         {/* Search & Filter Bar */}
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search ledger by product, SKU, or date..."
-              value={txSearch}
-              onChange={(e) => setTxSearch(e.target.value)}
-              className="input input-bordered w-full pl-10 text-xs sm:text-sm rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 min-h-[44px]"
-            />
-          </div>
+          <SearchInput
+            placeholder="Search ledger by product, SKU, or date..."
+            value={txSearch}
+            onChange={(e) => setTxSearch(e.target.value)}
+            onClear={() => setTxSearch("")}
+            maxWidthClass="flex-1 max-w-md"
+          />
 
           {/* Direction Filter Pills */}
           <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl self-start sm:self-auto">

@@ -11,6 +11,7 @@ import {
   createPlanAction,
   updatePlanAction,
 } from "@/actions/fm-actions";
+import { SearchInput } from "@/components/ui";
 import {
   GitBranch,
   Boxes,
@@ -30,7 +31,10 @@ import {
   Layers,
   ArrowRight,
   SlidersHorizontal,
+  Lock,
 } from "lucide-react";
+import { gregorianToEth, formatEthDate } from "@/lib/ethiopian-calendar";
+import { PlanDatePicker } from "@/components/planning/plan-date-picker";
 
 interface PlanItem {
   id: string;
@@ -42,6 +46,7 @@ interface PlanItem {
   startDate: string;
   endDate: string;
   plannedQty: number;
+  initialPlannedQty?: number;
   weeklyPlanned?: number;
   totalProduced?: number;
   leftFromWeeklyPlanned?: number;
@@ -68,6 +73,8 @@ interface FMClientProps {
     productId: string;
   }>;
   plans: PlanItem[];
+  userRole?: "om" | "fm" | "sys_admin" | "qa";
+  calendarSystem?: "ethiopian" | "gregorian";
 }
 
 export function FMClient({
@@ -76,8 +83,11 @@ export function FMClient({
   products,
   lineProducts,
   plans,
+  userRole,
+  calendarSystem = "ethiopian",
 }: FMClientProps) {
   const router = useRouter();
+  const canManagePlans = userRole ? (userRole === "om" || userRole === "sys_admin") : true;
   const [activeTab, setActiveTab] = useState<"lines" | "products" | "links" | "plans">("plans");
 
   // Search and filter states
@@ -395,27 +405,45 @@ export function FMClient({
                 Daily target = Planned Quantity ÷ Working Days in the period (excluding non-working days)
               </p>
             </div>
-            <button
-              onClick={() => setPlanModalOpen(true)}
-              className="btn btn-primary rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white border-none gap-2 min-h-[44px] px-5 font-bold text-xs sm:text-sm shadow-sm transition-all"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Production Plan</span>
-            </button>
+            {canManagePlans ? (
+              <button
+                onClick={() => setPlanModalOpen(true)}
+                className="btn btn-primary rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white border-none gap-2 min-h-[44px] px-5 font-bold text-xs sm:text-sm shadow-sm transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Production Plan</span>
+              </button>
+            ) : (
+              <div className="badge badge-lg bg-amber-50 text-amber-800 border-amber-200 gap-1.5 py-3 font-semibold text-xs">
+                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Read-Only View</span>
+              </div>
+            )}
           </div>
+
+          {!canManagePlans && (
+            <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed shadow-2xs">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-extrabold text-amber-950 block">
+                  Production Plans Managed by Operation Management
+                </span>
+                <span className="text-amber-800/90 mt-0.5 block">
+                  Factory Managers have read-only permissions to view plan schedules and fulfillment progress for this plant. Production targets are set and revised by the Operation Manager (OM).
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Filter / Search Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search plans by product, SKU, or line..."
-                value={planSearch}
-                onChange={(e) => setPlanSearch(e.target.value)}
-                className="input input-bordered w-full pl-10 text-xs sm:text-sm rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 min-h-[44px]"
-              />
-            </div>
+            <SearchInput
+              placeholder="Search plans by product, SKU, or line..."
+              value={planSearch}
+              onChange={(e) => setPlanSearch(e.target.value)}
+              onClear={() => setPlanSearch("")}
+              maxWidthClass="flex-1 max-w-md"
+            />
             <div className="text-xs text-slate-400 font-mono self-center sm:self-auto">
               Showing {filteredPlans.length} of {plans.length} plans
             </div>
@@ -434,10 +462,11 @@ export function FMClient({
                 <thead>
                   <tr className="text-slate-500 text-xs font-black uppercase tracking-wider border-b border-slate-200/80 bg-slate-50/80">
                     <th className="py-3.5 px-4">Line / Product</th>
-                    <th className="py-3.5 px-4">Period (Start → End)</th>
-                    <th className="py-3.5 px-4">Planned Quantity</th>
+                    <th className="py-3.5 px-4">Period ({calendarSystem === "ethiopian" ? "የኢትዮጵያ" : "Gregorian"})</th>
+                    <th className="py-3.5 px-4">Initial Set Plan</th>
+                    <th className="py-3.5 px-4">Edited Plan</th>
                     <th className="py-3.5 px-4">Target Status</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
+                    {canManagePlans && <th className="py-3.5 px-4 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -458,19 +487,38 @@ export function FMClient({
                       <td className="py-3.5 px-4">
                         <div className="text-slate-800 font-bold font-mono text-xs flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>{p.startDate}</span>
-                          <span className="text-slate-400">→</span>
-                          <span>{p.endDate}</span>
+                          <span>
+                            {calendarSystem === "ethiopian"
+                              ? `${formatEthDate(gregorianToEth(p.startDate), "short_am")} → ${formatEthDate(gregorianToEth(p.endDate), "short_am")}`
+                              : `${p.startDate} → ${p.endDate}`}
+                          </span>
                         </div>
+                        {calendarSystem === "ethiopian" && (
+                          <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                            GC: {p.startDate} → {p.endDate}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-black text-slate-900 text-base font-mono tabular-nums">
+                        <div className="font-bold text-slate-700 text-sm font-mono tabular-nums">
+                          {(p.initialPlannedQty ?? p.plannedQty).toLocaleString()}{" "}
+                          <span className="text-xs font-normal text-slate-400 font-sans">pcs</span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Initial Set</span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-black text-indigo-700 text-sm font-mono tabular-nums">
                           {p.plannedQty.toLocaleString()}{" "}
                           <span className="text-xs font-normal text-slate-400 font-sans">pcs</span>
                         </div>
                         {p.totalProduced !== undefined && (
                           <div className="text-[11px] text-slate-500 font-mono mt-0.5">
                             Produced: <span className="font-bold text-emerald-600">{p.totalProduced.toLocaleString()}</span> pcs
+                          </div>
+                        )}
+                        {p.leftFromWeeklyPlanned !== undefined && (
+                          <div className="text-[11px] text-amber-700 font-mono">
+                            Left: <span className="font-bold">{p.leftFromWeeklyPlanned.toLocaleString()}</span> pcs
                           </div>
                         )}
                       </td>
@@ -480,16 +528,18 @@ export function FMClient({
                           Active Target Schedule
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => openEditPlan(p)}
-                          className="btn btn-sm btn-ghost hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-slate-600 gap-1.5 min-h-[40px] px-3 font-semibold text-xs"
-                          title="Edit Plan"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                          <span>Edit</span>
-                        </button>
-                      </td>
+                      {canManagePlans && (
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => openEditPlan(p)}
+                            className="btn btn-sm btn-ghost hover:bg-indigo-50 hover:text-indigo-600 rounded-xl text-slate-600 gap-1.5 min-h-[40px] px-3 font-semibold text-xs"
+                            title="Edit Plan"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -519,16 +569,18 @@ export function FMClient({
                       </h3>
                       <p className="text-xs text-slate-500 mt-0.5">{p.lineName}</p>
                     </div>
-                    <button
-                      onClick={() => openEditPlan(p)}
-                      className="btn btn-xs btn-outline border-slate-300 hover:border-indigo-600 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-xl min-h-[36px] min-w-[36px] p-2"
-                      title="Edit Plan"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    {canManagePlans && (
+                      <button
+                        onClick={() => openEditPlan(p)}
+                        className="btn btn-xs btn-outline border-slate-300 hover:border-indigo-600 hover:bg-indigo-50 hover:text-indigo-600 text-slate-700 rounded-xl min-h-[36px] min-w-[36px] p-2"
+                        title="Edit Plan"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 gap-2 text-xs">
+                  <div className="pt-2 border-t border-slate-200/60 grid grid-cols-3 gap-2 text-xs">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-slate-400 block">Period</span>
                       <span className="font-mono font-bold text-slate-800 text-[11px] block mt-0.5">
@@ -536,10 +588,17 @@ export function FMClient({
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Planned Qty</span>
-                      <span className="font-mono font-black text-indigo-700 text-sm block mt-0.5">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Initial Set</span>
+                      <span className="font-mono font-bold text-slate-700 text-xs block mt-0.5">
+                        {(p.initialPlannedQty ?? p.plannedQty).toLocaleString()}{" "}
+                        <span className="text-[9px] font-normal text-slate-400 font-sans">pcs</span>
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-indigo-600 block">Edited Plan</span>
+                      <span className="font-mono font-black text-indigo-700 text-xs block mt-0.5">
                         {p.plannedQty.toLocaleString()}{" "}
-                        <span className="text-[10px] font-normal text-slate-400 font-sans">pcs</span>
+                        <span className="text-[9px] font-normal text-slate-400 font-sans">pcs</span>
                       </span>
                     </div>
                   </div>
@@ -573,16 +632,13 @@ export function FMClient({
 
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Filter production lines by name..."
-                value={lineSearch}
-                onChange={(e) => setLineSearch(e.target.value)}
-                className="input input-bordered w-full pl-10 text-xs sm:text-sm rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 min-h-[44px]"
-              />
-            </div>
+            <SearchInput
+              placeholder="Filter production lines by name..."
+              value={lineSearch}
+              onChange={(e) => setLineSearch(e.target.value)}
+              onClear={() => setLineSearch("")}
+              maxWidthClass="flex-1 max-w-md"
+            />
             <div className="text-xs text-slate-400 font-mono self-center sm:self-auto">
               {filteredLines.length} lines listed
             </div>
@@ -661,16 +717,13 @@ export function FMClient({
 
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search products by title or SKU..."
-                value={prodSearch}
-                onChange={(e) => setProdSearch(e.target.value)}
-                className="input input-bordered w-full pl-10 text-xs sm:text-sm rounded-2xl border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 min-h-[44px]"
-              />
-            </div>
+            <SearchInput
+              placeholder="Search products by title or SKU..."
+              value={prodSearch}
+              onChange={(e) => setProdSearch(e.target.value)}
+              onClear={() => setProdSearch("")}
+              maxWidthClass="flex-1 max-w-md"
+            />
             <div className="text-xs text-slate-400 font-mono self-center sm:self-auto">
               {filteredProducts.length} products listed
             </div>
@@ -866,32 +919,20 @@ export function FMClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 font-mono"
-                  />
-                </div>
+              <div className="space-y-3">
+                <PlanDatePicker
+                  label="Start Date"
+                  value={startDate}
+                  onChange={setStartDate}
+                  calendarSystem={calendarSystem}
+                />
+                <PlanDatePicker
+                  label="End Date"
+                  value={endDate}
+                  onChange={setEndDate}
+                  calendarSystem={calendarSystem}
+                  minDate={startDate}
+                />
               </div>
 
               <div>
@@ -1016,37 +1057,37 @@ export function FMClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={editStartDate}
-                    onChange={(e) => setEditStartDate(e.target.value)}
-                    className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    End Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={editEndDate}
-                    onChange={(e) => setEditEndDate(e.target.value)}
-                    className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 font-mono"
-                  />
-                </div>
+              <div className="space-y-3">
+                <PlanDatePicker
+                  label="Start Date"
+                  value={editStartDate}
+                  onChange={setEditStartDate}
+                  calendarSystem={calendarSystem}
+                />
+                <PlanDatePicker
+                  label="End Date"
+                  value={editEndDate}
+                  onChange={setEditEndDate}
+                  calendarSystem={calendarSystem}
+                  minDate={editStartDate}
+                />
               </div>
+
+              {editingPlan && (
+                <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-slate-700 block">Initial Set Annual Baseline:</span>
+                    <span className="text-[11px] text-slate-500">Original target before revisions</span>
+                  </div>
+                  <span className="font-mono font-black text-slate-800 text-sm">
+                    {(editingPlan.initialPlannedQty ?? editingPlan.plannedQty).toLocaleString()} pcs
+                  </span>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Total Planned Quantity
+                  Edited Planned Quantity
                 </label>
                 <input
                   type="number"
@@ -1128,7 +1169,7 @@ export function FMClient({
                   value={lineName}
                   onChange={(e) => setLineName(e.target.value)}
                   placeholder="e.g. Line 3 - Aseptic Bottling"
-                  className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 leading-relaxed"
+                  className="input input-bordered w-full text-base sm:text-sm rounded-2xl min-h-[44px] h-11 border-slate-200 focus:border-indigo-600 leading-relaxed"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
@@ -1182,7 +1223,7 @@ export function FMClient({
                   value={prodName}
                   onChange={(e) => setProdName(e.target.value)}
                   placeholder="e.g. Sparkling Water 1L"
-                  className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 leading-relaxed"
+                  className="input input-bordered w-full text-base sm:text-sm rounded-2xl min-h-[44px] h-11 border-slate-200 focus:border-indigo-600 leading-relaxed"
                 />
               </div>
               <div>
@@ -1195,7 +1236,7 @@ export function FMClient({
                   value={prodSku}
                   onChange={(e) => setProdSku(e.target.value)}
                   placeholder="e.g. WAT-1000"
-                  className="input input-bordered w-full text-xs sm:text-sm rounded-2xl min-h-[44px] border-slate-200 focus:border-indigo-600 font-mono"
+                  className="input input-bordered w-full text-base sm:text-sm rounded-2xl min-h-[44px] h-11 border-slate-200 focus:border-indigo-600 font-mono"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

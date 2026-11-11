@@ -10,6 +10,7 @@ import {
   adminResetPasswordAction,
 } from "@/actions/admin-actions";
 import { Role, ROLES_METADATA, ALL_ROLES } from "@/lib/rbac-types";
+import { SearchInput } from "@/components/ui";
 import {
   Users,
   Settings,
@@ -437,27 +438,13 @@ export function AdminClient({
           <div className="space-y-3.5 bg-slate-50/80 p-3.5 sm:p-4 rounded-2xl border border-slate-200/60">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               {/* Search Box */}
-              <div className="relative flex-1 max-w-md w-full">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search accounts by name, email, or role..."
-                  className="input min-h-[44px] h-11 input-bordered w-full pl-10 pr-10 text-xs sm:text-sm font-medium rounded-xl bg-white border-slate-200 focus:border-indigo-600 shadow-2xs"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    title="Clear search"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              <SearchInput
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onClear={() => setSearchQuery("")}
+                placeholder="Search accounts by name, email, or role..."
+                className="flex-1"
+              />
 
               {/* Status Filter & Count */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -713,7 +700,7 @@ export function AdminClient({
                 required
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                className="input input-bordered w-full min-h-[44px] text-sm rounded-xl focus:border-indigo-600 bg-white"
+                className="input input-bordered w-full max-w-lg min-h-[44px] h-11 text-base sm:text-sm rounded-xl focus:border-indigo-600 bg-white"
                 placeholder="e.g. Acme Garment Manufacturing Plc"
               />
             </div>
@@ -808,7 +795,7 @@ export function AdminClient({
                 required
                 value={units}
                 onChange={(e) => setUnits(e.target.value)}
-                className="input input-bordered w-full min-h-[44px] text-sm rounded-xl focus:border-indigo-600 bg-white"
+                className="input input-bordered w-full max-w-lg min-h-[44px] h-11 text-base sm:text-sm rounded-xl focus:border-indigo-600 bg-white"
                 placeholder="e.g. pcs, cartons, kg, meters"
               />
             </div>
@@ -816,7 +803,7 @@ export function AdminClient({
             <button
               type="submit"
               disabled={profileSaving}
-              className="btn btn-primary w-full min-h-[48px] rounded-xl bg-indigo-600 hover:bg-indigo-700 border-none text-white font-bold shadow-md shadow-indigo-100 touch-manipulation"
+              className="btn btn-primary w-full sm:w-auto px-8 min-h-[48px] rounded-xl bg-indigo-600 hover:bg-indigo-700 border-none text-white font-bold shadow-md shadow-indigo-100 touch-manipulation"
             >
               {profileSaving ? (
                 <span className="loading loading-spinner loading-sm"></span>
@@ -873,7 +860,7 @@ export function AdminClient({
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
                   placeholder="e.g. Solomon Tadesse (ሰለሞን ታደሰ)"
-                  className="input input-bordered w-full min-h-[44px] text-sm rounded-xl focus:border-indigo-600"
+                  className="input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl focus:border-indigo-600"
                 />
               </div>
 
@@ -887,7 +874,7 @@ export function AdminClient({
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   placeholder="user@company.com"
-                  className="input input-bordered w-full min-h-[44px] text-sm rounded-xl focus:border-indigo-600"
+                  className="input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl focus:border-indigo-600"
                 />
               </div>
 
@@ -898,7 +885,7 @@ export function AdminClient({
                 <select
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value as Role)}
-                  className="select select-bordered w-full min-h-[44px] text-sm rounded-xl font-medium focus:border-indigo-600"
+                  className="select select-bordered w-full min-h-[44px] h-11 text-base sm:text-sm rounded-xl font-medium focus:border-indigo-600"
                 >
                   {ALL_ROLES.map((r) => (
                     <option key={r} value={r}>
@@ -921,7 +908,7 @@ export function AdminClient({
                     required
                     value={newUserPassword}
                     onChange={(e) => setNewUserPassword(e.target.value)}
-                    className="join-item input input-bordered w-full min-h-[44px] text-sm font-mono rounded-l-xl focus:border-indigo-600"
+                    className="join-item input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm font-mono rounded-l-xl focus:border-indigo-600"
                   />
                   <button
                     type="button"
@@ -1057,7 +1044,7 @@ export function AdminClient({
                     minLength={12}
                     value={resetPasswordValue}
                     onChange={(e) => setResetPasswordValue(e.target.value)}
-                    className="join-item input input-bordered w-full min-h-[44px] text-sm font-mono rounded-l-xl focus:border-indigo-600"
+                    className="join-item input input-bordered w-full min-h-[44px] h-11 text-base sm:text-sm font-mono rounded-l-xl focus:border-indigo-600"
                     placeholder="Enter min. 12 characters..."
                   />
                   <button

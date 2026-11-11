@@ -141,7 +141,7 @@ export function LoginClient() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="input input-bordered w-full pl-10 text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
+                  className="input input-bordered min-h-[44px] h-11 w-full pl-10 text-base sm:text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
                 />
               </div>
             </div>
@@ -161,7 +161,7 @@ export function LoginClient() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="input input-bordered w-full pl-10 text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
+                  className="input input-bordered min-h-[44px] h-11 w-full pl-10 text-base sm:text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
                 />
               </div>
             </div>

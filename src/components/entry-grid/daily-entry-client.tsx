@@ -19,11 +19,25 @@ import {
   Sparkles,
   X,
   Boxes,
+  Shield,
+  Check,
+  Pencil,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { StepperInput } from "@/components/ui/stepper-input";
 import { LineTallyVisualizer } from "./line-tally-visualizer";
 import { calculateDailyTarget, calculateVariance } from "@/lib/target";
-import { saveDailyReportEntryAction } from "@/actions/report-actions";
+import {
+  saveDailyReportEntryAction,
+  saveDailyReportBatchAction,
+} from "@/actions/report-actions";
+import {
+  markDailyReportReviewedAction,
+  unmarkDailyReportReviewedAction,
+  reviewItemAction,
+  updateDailyPlanAction,
+} from "@/actions/review-actions";
 import {
   ETH_MONTH_NAMES_AM,
   ETH_MONTH_NAMES_EN,
@@ -33,6 +47,34 @@ import {
   daysInMonthEth,
 } from "@/lib/ethiopian-calendar";
 
+export interface QAReviewInfo {
+  isReviewed: boolean;
+  status?: "approved" | "rejected" | "denied" | "pending";
+  verdict?: string;
+  inspectorId: string | null;
+  inspectorName: string | null;
+  checked: number;
+  defects: number;
+  defectRate: number;
+  note: string | null;
+  createdAt: string | null;
+}
+
+export interface ItemReviewInfo {
+  status: "approved" | "denied";
+  note?: string | null;
+  reviewedAt: string;
+}
+
+export interface ReportReviewInfo {
+  isReviewed: boolean;
+  reviewedBy: string | null;
+  reviewerName: string | null;
+  reviewedAt: string | null;
+  note: string | null;
+  itemReviews?: Record<string, ItemReviewInfo>;
+}
+
 export interface GridRowData {
   lineId: string;
   lineName: string;
@@ -40,9 +82,11 @@ export interface GridRowData {
   productName: string;
   sku: string;
   plan: {
+    id?: string;
     startDate: string;
     endDate: string;
     plannedQty: number;
+    initialPlannedQty?: number;
     weeklyPlanned?: number;
     priorFinishedGood?: number;
     cumulativeProduced?: number;
@@ -59,6 +103,8 @@ export interface GridRowData {
     issueNote: string | null;
     downtimeReasonId?: string | null;
   };
+  qaReview?: QAReviewInfo;
+  itemReview?: ItemReviewInfo | null;
 }
 
 export interface DowntimeReasonTemplate {
@@ -83,9 +129,12 @@ interface DailyEntryClientProps {
   workingDays: number[];
   initialRows: GridRowData[];
   userRole: string;
+  isDaySubmitted?: boolean;
+  submittedAt?: string | null;
   calendarSystem?: string;
   specialDay?: SpecialDayInfo | null;
   downtimeReasons?: DowntimeReasonTemplate[];
+  reportReview?: ReportReviewInfo | null;
 }
 
 export function DailyEntryClient({
@@ -95,9 +144,12 @@ export function DailyEntryClient({
   workingDays,
   initialRows,
   userRole,
+  isDaySubmitted = false,
+  submittedAt = null,
   calendarSystem,
   specialDay,
   downtimeReasons = [],
+  reportReview = null,
 }: DailyEntryClientProps) {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(initialDate);
@@ -115,6 +167,208 @@ export function DailyEntryClient({
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  const [daySubmitted, setDaySubmitted] = useState<boolean>(Boolean(isDaySubmitted));
+
+  useEffect(() => {
+    setDaySubmitted(Boolean(isDaySubmitted));
+  }, [isDaySubmitted, selectedDate]);
+
+  const isOM = userRole === "om";
+  const canInputDailyNumbers = userRole === "fm" || userRole === "sys_admin";
+  const isDayLocked = userRole === "fm" && daySubmitted;
+  const isReadOnly = !canInputDailyNumbers || isDayLocked;
+  const canEditDailyPlans = isOM || userRole === "sys_admin";
+  const canReviewItems = isOM || userRole === "sys_admin";
+
+  const [editingPlanRow, setEditingPlanRow] = useState<GridRowData | null>(null);
+  const [editTargetValue, setEditTargetValue] = useState<number>(100);
+  const [isSavingPlan, setIsSavingPlan] = useState<boolean>(false);
+  const [isReviewingItemKey, setIsReviewingItemKey] = useState<string | null>(null);
+
+  const [currentReview, setCurrentReview] = useState<ReportReviewInfo | null>(
+    reportReview || null
+  );
+  const [isReviewing, setIsReviewing] = useState(false);
+
+  useEffect(() => {
+    setCurrentReview(reportReview || null);
+  }, [reportReview]);
+
+  const handleMarkReviewed = async () => {
+    if (!isOM && userRole !== "sys_admin") return;
+    setIsReviewing(true);
+    try {
+      const res = await markDailyReportReviewedAction({
+        factoryId,
+        date: selectedDate,
+      });
+      if (res.success && res.review) {
+        setCurrentReview({
+          isReviewed: true,
+          reviewedBy: res.review.reviewedBy,
+          reviewerName: res.review.reviewerName || "Operation Manager",
+          reviewedAt: res.review.reviewedAt,
+          note: res.review.note,
+        });
+        setToast({
+          type: "success",
+          message: "Daily report marked as reviewed by Operation Manager.",
+        });
+        router.refresh();
+      } else {
+        setToast({
+          type: "error",
+          message: res.error || "Failed to mark report as reviewed",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: "error",
+        message: err.message || "An error occurred",
+      });
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const handleUnmarkReviewed = async () => {
+    if (!isOM && userRole !== "sys_admin") return;
+    setIsReviewing(true);
+    try {
+      const res = await unmarkDailyReportReviewedAction({
+        factoryId,
+        date: selectedDate,
+      });
+      if (res.success) {
+        setCurrentReview({
+          isReviewed: false,
+          reviewedBy: null,
+          reviewerName: null,
+          reviewedAt: null,
+          note: null,
+        });
+        setToast({
+          type: "success",
+          message: "Report review revoked. Status set to pending review.",
+        });
+        router.refresh();
+      } else {
+        setToast({
+          type: "error",
+          message: res.error || "Failed to revoke review",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: "error",
+        message: err.message || "An error occurred",
+      });
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const handleOpenEditPlan = (row: GridRowData) => {
+    setEditingPlanRow(row);
+    setEditTargetValue(row.plan?.dailyTarget || 100);
+  };
+
+  const handleSaveDailyPlan = async () => {
+    if (!editingPlanRow) return;
+    setIsSavingPlan(true);
+    try {
+      const res = await updateDailyPlanAction({
+        factoryId,
+        lineId: editingPlanRow.lineId,
+        productId: editingPlanRow.productId,
+        date: selectedDate,
+        planId: editingPlanRow.plan?.id,
+        newDailyTarget: editTargetValue,
+      });
+
+      if (res.success && res.plan) {
+        setRows((prev) =>
+          prev.map((r) =>
+            r.lineId === editingPlanRow.lineId && r.productId === editingPlanRow.productId
+              ? {
+                  ...r,
+                  plan: {
+                    ...r.plan,
+                    id: res.plan.id,
+                    startDate: res.plan.startDate,
+                    endDate: res.plan.endDate,
+                    initialPlannedQty: res.plan.initialPlannedQty,
+                    plannedQty: res.plan.plannedQty,
+                    weeklyPlanned: res.plan.plannedQty,
+                    dailyTarget: res.plan.dailyTarget,
+                  },
+                }
+              : r
+          )
+        );
+        setToast({
+          type: "success",
+          message: "Daily plan target updated successfully and reflected on annual plan.",
+        });
+        setEditingPlanRow(null);
+        router.refresh();
+      } else {
+        setToast({
+          type: "error",
+          message: res.error || "Failed to update daily plan",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: "error",
+        message: err.message || "Failed to update daily plan",
+      });
+    } finally {
+      setIsSavingPlan(false);
+    }
+  };
+
+  const handleReviewItem = async (row: GridRowData, status: "approved" | "denied") => {
+    const itemKey = `${row.lineId}_${row.productId}`;
+    setIsReviewingItemKey(itemKey);
+    try {
+      const res = await reviewItemAction({
+        factoryId,
+        date: selectedDate,
+        lineId: row.lineId,
+        productId: row.productId,
+        status,
+      });
+
+      if (res.success && res.itemReview) {
+        setRows((prev) =>
+          prev.map((r) =>
+            r.lineId === row.lineId && r.productId === row.productId
+              ? { ...r, itemReview: res.itemReview }
+              : r
+          )
+        );
+        setToast({
+          type: "success",
+          message: `Item marked as ${status === "approved" ? "Approved" : "Denied"} by Operation Manager.`,
+        });
+        router.refresh();
+      } else {
+        setToast({
+          type: "error",
+          message: res.error || "Failed to review item",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: "error",
+        message: err.message || "Failed to review item",
+      });
+    } finally {
+      setIsReviewingItemKey(null);
+    }
+  };
 
   // Ethiopian date resolution & quick selector state
   const isEth = (calendarSystem || "ethiopian") === "ethiopian";
@@ -206,6 +460,7 @@ export function DailyEntryClient({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
+        if (isReadOnly) return;
         if (isDirty && !isPending) {
           handleSaveAllRef.current();
         }
@@ -213,7 +468,7 @@ export function DailyEntryClient({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isDirty, isPending]);
+  }, [isDirty, isPending, isReadOnly]);
 
   const handleDateChange = (newDateStr: string) => {
     if (isDirty) {
@@ -230,6 +485,7 @@ export function DailyEntryClient({
     field: keyof GridRowData["entry"],
     value: any
   ) => {
+    if (isReadOnly) return;
     setRows((prev) => {
       const copy = [...prev];
       copy[index] = {
@@ -256,6 +512,7 @@ export function DailyEntryClient({
   }, [specialDay, selectedDate]);
 
   const handleSelectDowntimeReason = (idx: number, reasonId: string) => {
+    if (isReadOnly) return;
     if (!reasonId) {
       setRows((prev) => {
         const copy = [...prev];
@@ -308,6 +565,7 @@ export function DailyEntryClient({
   };
 
   const handleSaveAll = async () => {
+    if (isReadOnly) return;
     if (selectedDate > todayStr) {
       setToast({
         type: "error",
@@ -316,12 +574,9 @@ export function DailyEntryClient({
       return;
     }
     startTransition(async () => {
-      let savedCount = 0;
-      let errorMsg = null;
-
-      for (const row of rows) {
-        const res = await saveDailyReportEntryAction({
-          date: selectedDate,
+      const res = await saveDailyReportBatchAction({
+        date: selectedDate,
+        entries: rows.map((row) => ({
           lineId: row.lineId,
           productId: row.productId,
           finishedGood: row.entry.finishedGood,
@@ -332,28 +587,25 @@ export function DailyEntryClient({
           downtimeMinutes: row.entry.downtimeMinutes,
           issueNote: row.entry.issueNote || null,
           downtimeReasonId: row.entry.downtimeReasonId || null,
-        });
+        })),
+      });
 
-        if (res.success) {
-          savedCount++;
-        } else {
-          errorMsg = res.error || "Failed to save entry";
-          break;
-        }
-      }
-
-      if (errorMsg) {
-        setToast({ type: "error", message: errorMsg });
-      } else {
+      if (res.success) {
+        setDaySubmitted(true);
         setToast({
           type: "success",
-          message: `Saved ${savedCount} lines successfully. Store stock ledger synchronized.`,
+          message: `Saved daily production numbers successfully! 1 data entry per day recorded. The day is now locked.`,
         });
         setInitialSnapshot(JSON.stringify(rows));
         router.refresh();
+      } else {
+        setToast({
+          type: "error",
+          message: res.error || "Failed to save daily production entries",
+        });
       }
 
-      setTimeout(() => setToast(null), 4000);
+      setTimeout(() => setToast(null), 5000);
     });
   };
   handleSaveAllRef.current = handleSaveAll;
@@ -567,12 +819,29 @@ export function DailyEntryClient({
           </div>
         </td>
 
-        {/* Weekly Planned */}
+        {/* Initial Set Plan */}
         <td className="py-3 px-3">
-          {row.plan?.weeklyPlanned !== undefined ? (
-            <span className="font-mono font-bold tabular-nums text-slate-900">
-              {row.plan.weeklyPlanned.toLocaleString()}
-            </span>
+          {row.plan?.plannedQty !== undefined ? (
+            <div className="flex flex-col items-start gap-0.5 font-mono">
+              <span className="font-bold tabular-nums text-slate-700 text-xs">
+                {(row.plan.initialPlannedQty ?? row.plan.plannedQty).toLocaleString()}
+              </span>
+              <span className="text-[9px] text-slate-400 font-sans uppercase">Initial Set</span>
+            </div>
+          ) : (
+            <span className="text-slate-300 font-mono text-xs">—</span>
+          )}
+        </td>
+
+        {/* Edited Plan */}
+        <td className="py-3 px-3">
+          {row.plan?.plannedQty !== undefined ? (
+            <div className="flex flex-col items-start gap-0.5 font-mono">
+              <span className="font-black tabular-nums text-indigo-700 text-xs">
+                {row.plan.plannedQty.toLocaleString()}
+              </span>
+              <span className="text-[9px] text-indigo-400 font-sans uppercase">Edited Plan</span>
+            </div>
           ) : (
             <span className="text-slate-300 font-mono text-xs">—</span>
           )}
@@ -605,19 +874,43 @@ export function DailyEntryClient({
         <td className="py-3 px-3">
           {targetRes.hasTarget ? (
             <div>
-              <span className="font-mono font-bold tabular-nums text-slate-900">
-                {targetRes.displayTarget.toLocaleString()}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono font-black tabular-nums text-slate-900">
+                  {targetRes.displayTarget.toLocaleString()}
+                </span>
+                {canEditDailyPlans && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditPlan(row)}
+                    className="btn btn-ghost btn-xs p-1 h-6 min-h-0 text-indigo-600 hover:bg-indigo-50 rounded"
+                    title="Edit Daily Plan Target"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
               <span className="text-[10px] text-slate-400 block font-mono tabular-nums">
-                Plan: {row.plan?.plannedQty.toLocaleString()}
+                Target: {targetRes.dailyTarget.toLocaleString()}/day
               </span>
             </div>
           ) : (
-            <span className="text-xs text-slate-400 italic">
-              {targetRes.reason === "non_working_day"
-                ? "Day Off"
-                : "No plan"}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-400 italic">
+                {targetRes.reason === "non_working_day"
+                  ? "Day Off"
+                  : "No plan"}
+              </span>
+              {canEditDailyPlans && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenEditPlan(row)}
+                  className="btn btn-ghost btn-xs p-1 h-6 min-h-0 text-indigo-600 hover:bg-indigo-50 rounded"
+                  title="Set Daily Plan"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           )}
         </td>
 
@@ -632,6 +925,7 @@ export function DailyEntryClient({
             themeColor="emerald"
             size="md"
             className="w-36"
+            disabled={isReadOnly}
           />
         </td>
 
@@ -672,6 +966,7 @@ export function DailyEntryClient({
             themeColor="slate"
             size="md"
             className="w-28"
+            disabled={isReadOnly}
           />
         </td>
 
@@ -686,6 +981,7 @@ export function DailyEntryClient({
             themeColor="rose"
             size="md"
             className="w-28"
+            disabled={isReadOnly}
           />
         </td>
 
@@ -700,6 +996,7 @@ export function DailyEntryClient({
             themeColor="amber"
             size="md"
             className="w-28"
+            disabled={isReadOnly}
           />
         </td>
 
@@ -712,6 +1009,7 @@ export function DailyEntryClient({
             themeColor="blue"
             size="md"
             className="w-28"
+            disabled={isReadOnly}
           />
         </td>
 
@@ -726,7 +1024,96 @@ export function DailyEntryClient({
             themeColor="amber"
             size="md"
             className="w-28"
+            disabled={isReadOnly}
           />
+        </td>
+
+        {/* QA Review */}
+        <td className="py-3 px-3 min-w-[170px]">
+          {row.qaReview?.isReviewed ? (
+            <div className="space-y-0.5">
+              {row.qaReview.status === "approved" || row.qaReview.defects === 0 ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  QA Approved
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
+                  <AlertCircle className="w-3 h-3 text-rose-600" />
+                  QA Denied
+                </span>
+              )}
+              <div className="text-xs font-semibold text-slate-800 truncate max-w-[150px]">
+                by {row.qaReview.inspectorName || "QA Team"}
+              </div>
+              <div
+                className={`text-[10px] font-mono font-bold ${
+                  row.qaReview.defects > 0 ? "text-rose-600" : "text-emerald-700"
+                }`}
+              >
+                {row.qaReview.defects} defects ({row.qaReview.defectRate}%)
+              </div>
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/80">
+              <AlertCircle className="w-3 h-3 text-amber-500" />
+              Pending QA
+            </span>
+          )}
+        </td>
+
+        {/* OM Review */}
+        <td className="py-3 px-3 min-w-[180px]">
+          <div className="space-y-1.5">
+            {row.itemReview?.status === "approved" ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                <Check className="w-3 h-3 text-emerald-600" />
+                OM Approved
+              </span>
+            ) : row.itemReview?.status === "denied" ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
+                <X className="w-3 h-3 text-rose-600" />
+                OM Denied
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                Pending OM
+              </span>
+            )}
+
+            {canReviewItems && (
+              <div className="flex items-center gap-1 pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleReviewItem(row, "approved")}
+                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                  className={`btn btn-xs rounded-lg px-2 font-bold gap-1 min-h-[26px] ${
+                    row.itemReview?.status === "approved"
+                      ? "bg-emerald-700 text-white border-emerald-800"
+                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border-emerald-200"
+                  }`}
+                  title="Approve Daily Numbers"
+                >
+                  <Check className="w-3 h-3" />
+                  <span>Approve</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReviewItem(row, "denied")}
+                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                  className={`btn btn-xs rounded-lg px-2 font-bold gap-1 min-h-[26px] ${
+                    row.itemReview?.status === "denied"
+                      ? "bg-rose-700 text-white border-rose-800"
+                      : "bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-200"
+                  }`}
+                  title="Deny Daily Numbers"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Deny</span>
+                </button>
+              </div>
+            )}
+          </div>
         </td>
 
         {/* Issue Notes */}
@@ -734,12 +1121,13 @@ export function DailyEntryClient({
           <div className="space-y-1.5">
             <input
               type="text"
-              placeholder="Note stoppage or quality issue..."
+              placeholder={isReadOnly ? "No issue notes" : "Note stoppage or quality issue..."}
               value={row.entry.issueNote || ""}
               onChange={(e) =>
                 updateRowField(globalIndex, "issueNote", e.target.value)
               }
-              className="input input-sm input-bordered w-full text-xs placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500 leading-relaxed"
+              disabled={isReadOnly}
+              className="input input-bordered min-h-[38px] h-9.5 sm:min-h-[42px] sm:h-10 w-full text-xs sm:text-sm placeholder:text-slate-400 rounded-xl focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 leading-relaxed disabled:bg-slate-100 disabled:text-slate-600 disabled:border-slate-200"
             />
             {downtimeReasons && downtimeReasons.length > 0 && (
               <div className="flex flex-col gap-0.5">
@@ -756,7 +1144,8 @@ export function DailyEntryClient({
                   onChange={(e) =>
                     handleSelectDowntimeReason(globalIndex, e.target.value)
                   }
-                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white leading-relaxed"
+                  disabled={isReadOnly}
+                  className="select select-xs select-bordered w-full text-[11px] font-medium text-slate-700 rounded-lg bg-slate-50 focus:bg-white leading-relaxed disabled:bg-slate-100 disabled:text-slate-500"
                 >
                   <option value="">Select reason template...</option>
                   {downtimeReasons.map((r) => (
@@ -827,6 +1216,53 @@ export function DailyEntryClient({
           </div>
         </div>
 
+        {/* Annual Plans (Initial Set vs Edited) & Daily Target Strip */}
+        <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Initial Set Plan</span>
+            <span className="font-mono font-bold text-slate-700 text-xs block mt-0.5">
+              {(row.plan?.initialPlannedQty ?? row.plan?.plannedQty ?? 0).toLocaleString()} pcs
+            </span>
+            <span className="text-[9px] text-slate-400 font-sans">Baseline</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase font-bold text-indigo-600 block">Edited Plan</span>
+            <span className="font-mono font-black text-indigo-700 text-xs block mt-0.5">
+              {(row.plan?.plannedQty ?? 0).toLocaleString()} pcs
+            </span>
+            <span className="text-[9px] text-indigo-400 font-sans">Active Target</span>
+          </div>
+          <div>
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Left from Plan</span>
+            <span className="font-mono font-bold text-slate-800 text-xs block mt-0.5">
+              {(() => {
+                const total = (row.plan?.priorFinishedGood || 0) + row.entry.finishedGood;
+                const left = Math.max(0, (row.plan?.plannedQty || 0) - total);
+                return `${left.toLocaleString()} pcs`;
+              })()}
+            </span>
+            <span className="text-[9px] text-slate-400 font-sans">Remaining</span>
+          </div>
+          <div className="flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Daily Target</span>
+              <span className="font-mono font-black text-slate-900 text-xs block mt-0.5">
+                {targetRes.hasTarget ? `${targetRes.displayTarget.toLocaleString()} pcs` : "None"}
+              </span>
+            </div>
+            {canEditDailyPlans && (
+              <button
+                type="button"
+                onClick={() => handleOpenEditPlan(row)}
+                className="btn btn-xs btn-outline border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-400 text-indigo-700 rounded-lg gap-1 font-bold mt-1 self-start"
+              >
+                <Pencil className="w-3 h-3 text-indigo-600" />
+                <span>Edit Daily Plan</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Visual Line Tally Progress Bar */}
         <LineTallyVisualizer
           compact={true}
@@ -860,6 +1296,7 @@ export function DailyEntryClient({
               themeColor="emerald"
               size="lg"
               className="w-full"
+              disabled={isReadOnly}
             />
           </div>
 
@@ -876,6 +1313,7 @@ export function DailyEntryClient({
                 themeColor="slate"
                 size="lg"
                 className="w-full"
+                disabled={isReadOnly}
               />
             </div>
 
@@ -890,6 +1328,7 @@ export function DailyEntryClient({
                 themeColor="rose"
                 size="lg"
                 className="w-full"
+                disabled={isReadOnly}
               />
             </div>
 
@@ -904,6 +1343,7 @@ export function DailyEntryClient({
                 themeColor="amber"
                 size="lg"
                 className="w-full"
+                disabled={isReadOnly}
               />
             </div>
 
@@ -918,6 +1358,7 @@ export function DailyEntryClient({
                 themeColor="blue"
                 size="lg"
                 className="w-full"
+                disabled={isReadOnly}
               />
             </div>
 
@@ -934,6 +1375,7 @@ export function DailyEntryClient({
                 themeColor="amber"
                 size="lg"
                 className="w-full"
+                disabled={isReadOnly}
               />
             </div>
           </div>
@@ -946,12 +1388,13 @@ export function DailyEntryClient({
           </label>
           <input
             type="text"
-            placeholder="Note stoppage or quality issue..."
+            placeholder={isReadOnly ? "No issue notes" : "Note stoppage or quality issue..."}
             value={row.entry.issueNote || ""}
             onChange={(e) =>
               updateRowField(globalIndex, "issueNote", e.target.value)
             }
-            className="input input-sm sm:input-md input-bordered w-full text-xs sm:text-sm rounded-xl focus:outline-hidden focus:border-indigo-500 leading-relaxed"
+            disabled={isReadOnly}
+            className="input input-bordered min-h-[44px] h-11 w-full text-base sm:text-sm rounded-xl focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 leading-relaxed disabled:bg-slate-100 disabled:text-slate-600 disabled:border-slate-200"
           />
           {downtimeReasons && downtimeReasons.length > 0 && (
             <div className="flex flex-col gap-0.5 pt-0.5">
@@ -968,7 +1411,8 @@ export function DailyEntryClient({
                 onChange={(e) =>
                   handleSelectDowntimeReason(globalIndex, e.target.value)
                 }
-                className="select select-sm select-bordered w-full text-xs font-medium text-slate-700 rounded-xl bg-slate-50 focus:bg-white leading-relaxed touch-target"
+                disabled={isReadOnly}
+                className="select select-sm select-bordered w-full text-xs font-medium text-slate-700 rounded-xl bg-slate-50 focus:bg-white leading-relaxed touch-target disabled:bg-slate-100 disabled:text-slate-500"
               >
                 <option value="">Select reason template...</option>
                 {downtimeReasons.map((r) => (
@@ -980,12 +1424,159 @@ export function DailyEntryClient({
             </div>
           )}
         </div>
+
+        {/* QA Section Review Status on Report Card */}
+        <div className="mt-3.5 pt-3.5 border-t border-slate-100">
+          <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>QA Section Review (የጥራት ቁጥጥር ክለሳ)</span>
+            {row.qaReview?.createdAt && (
+              <span className="text-[10px] text-slate-400 font-mono normal-case">
+                {format(parseISO(row.qaReview.createdAt), "MMM d, yyyy HH:mm")}
+              </span>
+            )}
+          </div>
+
+          {row.qaReview?.isReviewed ? (
+            <div
+              className={`rounded-2xl p-3 space-y-2.5 border ${
+                row.qaReview.status === "approved" || row.qaReview.defects === 0
+                  ? "bg-emerald-50/70 border-emerald-200/90"
+                  : "bg-rose-50/70 border-rose-200/90"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  {row.qaReview.status === "approved" || row.qaReview.defects === 0 ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      QA Approved (ፅድቅ / Spec OK)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                      QA Denied (ውድቅ / Defects Found)
+                    </span>
+                  )}
+                  <span className="text-xs text-slate-700 font-medium">
+                    Reviewed by:{" "}
+                    <b className="text-slate-900 font-bold">
+                      {row.qaReview.inspectorName || "QA Inspector"}
+                    </b>
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="bg-white/90 p-2 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">Inspected Units</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {row.qaReview.checked.toLocaleString()} pcs
+                  </span>
+                </div>
+                <div className="bg-white/90 p-2 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">Defects</span>
+                  <span
+                    className={`font-mono font-bold ${
+                      row.qaReview.defects > 0 ? "text-rose-600" : "text-emerald-700"
+                    }`}
+                  >
+                    {row.qaReview.defects.toLocaleString()} ({row.qaReview.defectRate}%)
+                  </span>
+                </div>
+                <div className="bg-white/90 p-2 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <span className="text-[10px] text-slate-500 uppercase font-bold block">QA Notes</span>
+                  <span
+                    className="text-slate-700 font-medium truncate block"
+                    title={row.qaReview.note || "No QA note recorded"}
+                  >
+                    {row.qaReview.note || "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                  Pending QA Inspection
+                </span>
+                <span className="text-xs text-slate-500">
+                  Pending inspection by QA section for this product line.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* OM Item Review Section on Report Card */}
+        <div className="mt-3.5 pt-3.5 border-t border-slate-100">
+          <div className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>Operation Manager Review (የስራ አስኪያጅ ክለሳ)</span>
+            {row.itemReview?.reviewedAt && (
+              <span className="text-[10px] text-slate-400 font-mono normal-case">
+                {format(parseISO(row.itemReview.reviewedAt), "MMM d, HH:mm")}
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-slate-50/80 border border-slate-200/90 rounded-2xl p-3">
+            <div className="flex items-center gap-2">
+              {row.itemReview?.status === "approved" ? (
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  OM Approved (በስራ አስኪያጅ የጸደቀ)
+                </span>
+              ) : row.itemReview?.status === "denied" ? (
+                <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
+                  <X className="w-3.5 h-3.5 text-rose-600" />
+                  OM Denied (በስራ አስኪያጅ ውድቅ የተደረገ)
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                  Pending OM Review
+                </span>
+              )}
+            </div>
+
+            {canReviewItems && (
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => handleReviewItem(row, "approved")}
+                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                  className={`btn btn-xs rounded-xl px-3 font-bold gap-1 min-h-[32px] ${
+                    row.itemReview?.status === "approved"
+                      ? "bg-emerald-600 text-white border-emerald-700"
+                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border-emerald-300"
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Approve Item</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReviewItem(row, "denied")}
+                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                  className={`btn btn-xs rounded-xl px-3 font-bold gap-1 min-h-[32px] ${
+                    row.itemReview?.status === "denied"
+                      ? "bg-rose-600 text-white border-rose-700"
+                      : "bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-300"
+                  }`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Deny Item</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-36">
+    <div className="max-w-7xl 2xl:max-w-8xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16 py-6 pb-36">
       {/* Top Header & Date Navigation */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
@@ -1202,6 +1793,81 @@ export function DailyEntryClient({
           <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2.5 py-1 rounded-full font-mono font-bold shrink-0">
             Daily Target: 0
           </span>
+        </div>
+      )}
+
+      {/* Operation Manager Review Mode Banner */}
+      {isOM && (
+        <div className="mb-6 p-4 rounded-2xl border bg-amber-50/90 border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-800">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2">
+                <span>Operation Manager Review Mode</span>
+                <span className="badge badge-warning badge-sm font-bold">Read-Only</span>
+              </div>
+              <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
+                You have read-only audit access for factory daily numbers. Steppers and inputs cannot be modified. Review QA inspection status and line metrics below, then mark this report as reviewed.
+              </p>
+            </div>
+          </div>
+          {currentReview?.isReviewed ? (
+            <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Reviewed by {currentReview.reviewerName || "OM"}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0">
+              <AlertCircle className="w-4 h-4 text-amber-700" />
+              <span>Pending Your Review</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* FM 1 Data Entry Per Day Completed Banner */}
+      {!isOM && userRole === "fm" && daySubmitted && (
+        <div className="mb-6 p-4 rounded-2xl border bg-emerald-50/90 border-emerald-200 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-800">
+              <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
+                <span>Daily Data Entry Completed (የዕለቱ መረጃ ተመዝግቧል)</span>
+                <span className="badge badge-success badge-sm font-bold text-white">1 Entry Per Day Locked</span>
+              </div>
+              <p className="text-xs text-emerald-800/90 mt-0.5 leading-relaxed">
+                Only one data entry is permitted per day. Today&apos;s daily numbers have been recorded and submitted. All fields are locked for factory modifications and pending Operation Manager review.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 self-start sm:self-auto">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+            <span>Entry Recorded & Locked</span>
+          </div>
+        </div>
+      )}
+
+      {/* Sys Admin Override Banner */}
+      {!isOM && userRole === "sys_admin" && daySubmitted && (
+        <div className="mb-6 p-4 rounded-2xl border bg-indigo-50/90 border-indigo-200 text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-300 flex items-center justify-center shrink-0 text-indigo-800">
+              <Shield className="w-5 h-5 text-indigo-700" />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
+                <span>Admin Override Mode</span>
+                <span className="badge badge-info badge-sm font-bold text-white">Sys Admin Access</span>
+              </div>
+              <p className="text-xs text-indigo-800/90 mt-0.5 leading-relaxed">
+                Daily numbers have been submitted. As System Administrator, you retain emergency administrative override to correct values if needed.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1436,9 +2102,10 @@ export function DailyEntryClient({
                   <th className="py-3 px-4 min-w-[210px] sticky left-0 bg-slate-100 z-20 sticky-col-shadow">
                     Line & Product
                   </th>
-                  <th className="py-3 px-3 min-w-[130px]">Weekly Planned</th>
-                  <th className="py-3 px-3 min-w-[150px]">Left from Weekly Planned</th>
-                  <th className="py-3 px-3 min-w-[110px]">Daily Target</th>
+                  <th className="py-3 px-3 min-w-[130px]">Initial Set Plan</th>
+                  <th className="py-3 px-3 min-w-[130px]">Edited Plan</th>
+                  <th className="py-3 px-3 min-w-[150px]">Left from Plan</th>
+                  <th className="py-3 px-3 min-w-[130px]">Daily Target</th>
                   <th className="py-3 px-3 min-w-[170px] bg-emerald-50/50 text-emerald-950 font-extrabold">
                     Finished Good
                   </th>
@@ -1448,20 +2115,22 @@ export function DailyEntryClient({
                   <th className="py-3 px-3 min-w-[140px]">Scrap</th>
                   <th className="py-3 px-3 min-w-[140px]">WIP</th>
                   <th className="py-3 px-3 min-w-[140px]">Downtime (min)</th>
+                  <th className="py-3 px-3 min-w-[170px]">QA Review</th>
+                  <th className="py-3 px-3 min-w-[180px]">OM Review</th>
                   <th className="py-3 px-4 min-w-[260px]">Issue Notes</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="text-center py-12 text-slate-400">
+                    <td colSpan={15} className="text-center py-12 text-slate-400">
                       <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                       No active lines or products configured for this factory.
                     </td>
                   </tr>
                 ) : displayedRows.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="text-center py-12 text-slate-400">
+                    <td colSpan={15} className="text-center py-12 text-slate-400">
                       <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                       No production lines producing the selected product.
                       <div className="mt-2">
@@ -1480,7 +2149,7 @@ export function DailyEntryClient({
                     <React.Fragment key={`group_${group.product.id}`}>
                       {/* Product Group Header Banner Row */}
                       <tr className="bg-indigo-50/80 border-y-2 border-indigo-200">
-                        <td colSpan={12} className="py-2.5 px-4 sticky left-0 z-10 bg-indigo-50/90">
+                        <td colSpan={15} className="py-2.5 px-4 sticky left-0 z-10 bg-indigo-50/90">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="flex items-center gap-2.5">
                               <Boxes className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -1665,7 +2334,7 @@ export function DailyEntryClient({
 
       {/* Sticky Bottom Save Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-2.5 sm:py-3 shadow-xl pb-safe">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+        <div className="max-w-7xl 2xl:max-w-8xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
             <span className="text-xs sm:text-sm font-semibold text-slate-700 truncate leading-relaxed">
               Date:{" "}
@@ -1689,51 +2358,116 @@ export function DailyEntryClient({
                 {totalFG.toLocaleString()}
               </b>
             </span>
-            {isDirty && (
+            {isDirty && !isReadOnly && (
               <span className="badge badge-warning badge-sm font-bold shadow-2xs">
                 {modifiedRowCount} modified
+              </span>
+            )}
+            {!isOM && currentReview?.isReviewed && (
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-xl border border-emerald-300">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Reviewed by OM ({currentReview.reviewerName})
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {isDirty && (
-              <button
-                type="button"
-                onClick={handleReset}
-                disabled={isPending}
-                className="btn btn-sm sm:btn-md min-h-[44px] min-w-[44px] btn-ghost text-slate-500 hover:text-slate-800 rounded-xl font-bold touch-manipulation"
-              >
-                <RotateCcw className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Reset</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleSaveAll}
-              disabled={isPending || !isDirty}
-              className={`btn btn-sm sm:btn-md min-h-[44px] px-4 sm:px-7 rounded-2xl font-black shadow-md transition-all flex items-center gap-2 touch-manipulation ${
-                isDirty
-                  ? "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border-none shadow-emerald-200 active:scale-95 cursor-pointer"
-                  : "btn-disabled opacity-40 bg-slate-200 text-slate-400 border-none"
-              }`}
-            >
-              {isPending ? (
-                <>
-                  <span className="loading loading-spinner loading-xs" />
-                  <span>Saving...</span>
-                </>
+            {isOM ? (
+              // OM Review Actions
+              currentReview?.isReviewed ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 bg-emerald-50 text-emerald-900 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Reviewed by {currentReview.reviewerName || "OM"}</span>
+                    {currentReview.reviewedAt && (
+                      <span className="text-slate-400 font-mono text-xs hidden md:inline">
+                        ({format(parseISO(currentReview.reviewedAt), "MMM d, HH:mm")})
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleUnmarkReviewed}
+                    disabled={isReviewing}
+                    className="btn btn-sm btn-ghost text-slate-600 hover:text-rose-600 rounded-xl text-xs font-bold"
+                  >
+                    {isReviewing ? "Updating..." : "Revoke Review"}
+                  </button>
+                </div>
               ) : (
-                <>
-                  <Save className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                  <span>Save Daily Numbers</span>
-                  <span className="hidden lg:inline-flex items-center text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded font-mono text-emerald-100 font-bold">
-                    Ctrl+S
-                  </span>
-                </>
-              )}
-            </button>
+                <button
+                  type="button"
+                  onClick={handleMarkReviewed}
+                  disabled={isReviewing}
+                  className="btn btn-sm sm:btn-md min-h-[44px] px-5 sm:px-8 rounded-2xl font-black shadow-md transition-all flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white border-none shadow-indigo-200 active:scale-95 cursor-pointer touch-manipulation"
+                >
+                  {isReviewing ? (
+                    <>
+                      <span className="loading loading-spinner loading-xs" />
+                      <span>Reviewing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      <span>Mark as Reviewed</span>
+                      <span className="hidden sm:inline text-xs font-normal opacity-90">
+                        (በኦፕሬሽን ስራ አስኪያጅ አጽድቅ)
+                      </span>
+                    </>
+                  )}
+                </button>
+              )
+            ) : isDayLocked ? (
+              // FM 1 Data Entry Per Day - Locked State
+              <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-2xl font-bold text-xs sm:text-sm shadow-2xs">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Daily Entry Completed (የዕለቱ መረጃ ተመዝግቧል)</span>
+                <span className="text-[10px] text-emerald-700 font-mono hidden md:inline font-normal">
+                  — 1 Data Entry Recorded
+                </span>
+              </div>
+            ) : (
+              // FM Standard Actions
+              <>
+                {isDirty && (
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={isPending}
+                    className="btn btn-sm sm:btn-md min-h-[44px] min-w-[44px] btn-ghost text-slate-500 hover:text-slate-800 rounded-xl font-bold touch-manipulation"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1" />
+                    <span className="hidden sm:inline">Reset</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSaveAll}
+                  disabled={isPending || !isDirty}
+                  className={`btn btn-sm sm:btn-md min-h-[44px] px-4 sm:px-7 rounded-2xl font-black shadow-md transition-all flex items-center gap-2 touch-manipulation ${
+                    isDirty
+                      ? "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border-none shadow-emerald-200 active:scale-95 cursor-pointer"
+                      : "btn-disabled opacity-40 bg-slate-200 text-slate-400 border-none"
+                  }`}
+                >
+                  {isPending ? (
+                    <>
+                      <span className="loading loading-spinner loading-xs" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      <span>Save Daily Numbers</span>
+                      <span className="hidden lg:inline-flex items-center text-[10px] bg-emerald-700/80 px-1.5 py-0.5 rounded font-mono text-emerald-100 font-bold">
+                        Ctrl+S
+                      </span>
+                    </>
+                  )}
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1866,6 +2600,113 @@ export function DailyEntryClient({
                   አረጋግጥ (Apply)
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OM Edit Daily Plan Modal */}
+      {editingPlanRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 leading-relaxed">
+                    Edit Daily Plan Target
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Adjust daily target — automatically updates and reflects on annual plan
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPlanRow(null)}
+                className="btn btn-ghost btn-sm btn-circle text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-4 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-bold uppercase tracking-wider">Line:</span>
+                <span className="font-extrabold text-slate-900">{editingPlanRow.lineName}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-bold uppercase tracking-wider">Product:</span>
+                <span className="font-extrabold text-slate-900">
+                  {editingPlanRow.productName} ({editingPlanRow.sku})
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-bold uppercase tracking-wider">Plan Period:</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {editingPlanRow.plan?.startDate || "2026-01-01"} → {editingPlanRow.plan?.endDate || "2026-12-31"}
+                </span>
+              </div>
+            </div>
+
+            {/* Side-by-Side Annual Plans Display */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-100/90 border border-slate-200 rounded-2xl p-3.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Initial Set Annual Plan
+                </span>
+                <span className="font-mono font-black text-slate-800 text-lg block mt-1">
+                  {(editingPlanRow.plan?.initialPlannedQty ?? editingPlanRow.plan?.plannedQty ?? 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Baseline target (unaltered)</span>
+              </div>
+
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-3.5">
+                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">
+                  Current Edited Annual Plan
+                </span>
+                <span className="font-mono font-black text-indigo-700 text-lg block mt-1">
+                  {(editingPlanRow.plan?.plannedQty ?? 0).toLocaleString()}
+                </span>
+                <span className="text-[10px] text-indigo-400 font-medium">Active revised plan</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                New Daily Target (pcs / day)
+              </label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={editTargetValue}
+                onChange={(e) => setEditTargetValue(Math.max(1, Number(e.target.value)))}
+                className="input input-bordered w-full text-base font-mono font-black text-slate-900 rounded-2xl min-h-[48px] border-slate-200 focus:border-indigo-600 tabular-nums"
+              />
+              <span className="text-[11px] text-slate-500 mt-1 block">
+                Changing daily target will recalculate the annual plan based on total working days in period.
+              </span>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setEditingPlanRow(null)}
+                className="btn btn-ghost rounded-2xl min-h-[44px] px-5 font-bold text-xs sm:text-sm text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDailyPlan}
+                disabled={isSavingPlan || editTargetValue < 1}
+                className="btn btn-primary rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white border-none min-h-[44px] px-6 font-bold text-xs sm:text-sm shadow-sm"
+              >
+                {isSavingPlan ? "Saving..." : "Save Daily Plan"}
+              </button>
             </div>
           </div>
         </div>

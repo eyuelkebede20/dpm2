@@ -8,6 +8,7 @@ import {
   getOMLines,
 } from "@/actions/om-actions";
 import { OMClient } from "./om-client";
+import { PageContainer } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ export default async function OMPage() {
     ]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <PageContainer>
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           Operations Management (OM)
@@ -43,6 +44,6 @@ export default async function OMPage() {
         initialDowntimeReasons={downtimeReasons}
         linesList={linesList}
       />
-    </div>
+    </PageContainer>
   );
 }

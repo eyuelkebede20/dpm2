@@ -8,6 +8,7 @@ import {
 } from "@/actions/dashboard-actions";
 import { getFMFactory } from "@/actions/fm-actions";
 import { DashboardView } from "./dashboard-view";
+import { PageContainer } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <PageContainer>
       <DashboardView
         user={user}
         adminData={adminData}
@@ -48,6 +49,6 @@ export default async function DashboardPage() {
         factoryName={factoryName}
         calendarSystem={(context.industryProfile as any)?.calendarSystem || "ethiopian"}
       />
-    </div>
+    </PageContainer>
   );
 }

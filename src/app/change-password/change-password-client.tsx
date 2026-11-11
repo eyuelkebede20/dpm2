@@ -107,7 +107,7 @@ export function ChangePasswordClient() {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="At least 12 characters"
-                  className="input input-bordered w-full pl-10 text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
+                  className="input input-bordered min-h-[44px] h-11 w-full pl-10 text-base sm:text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
                 />
               </div>
 
@@ -163,7 +163,7 @@ export function ChangePasswordClient() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat new password"
-                  className="input input-bordered w-full pl-10 text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
+                  className="input input-bordered min-h-[44px] h-11 w-full pl-10 text-base sm:text-sm bg-slate-50/70 focus:bg-white rounded-xl focus:border-indigo-600 focus:outline-hidden transition-all"
                 />
               </div>
             </div>
