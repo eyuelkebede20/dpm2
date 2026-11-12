@@ -10,12 +10,22 @@ import {
   toggleUserActiveAction,
   getImpersonationCandidates,
   adminResetPasswordAction,
+  triggerSystemUpdateAction,
 } from "./admin-actions";
 import * as authz from "@/lib/authz";
 import { db } from "@/db";
 
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+}));
+
+vi.mock("child_process", () => ({
+  spawn: vi.fn(() => ({
+    stdout: { on: vi.fn() },
+    stderr: { on: vi.fn() },
+    on: vi.fn(),
+    unref: vi.fn(),
+  })),
 }));
 
 vi.mock("@/lib/authz", () => ({
@@ -479,6 +489,27 @@ describe("Admin Workflows - Sys Admin Operations", () => {
       expect(res.success).toBe(true);
       expect(res.message).toContain("Target User");
       expect(mockUpdatedUsers.some((u) => u.mustChangePassword === true)).toBe(true);
+    });
+  });
+
+  describe("triggerSystemUpdateAction", () => {
+    it("rejects non-sys_admin callers with Forbidden error", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue({
+        id: "usr_om_01",
+        name: "Operations Manager",
+        email: "om@dpm.local",
+        role: "om",
+      } as any);
+
+      await expect(triggerSystemUpdateAction()).rejects.toThrow("Forbidden");
+    });
+
+    it("successfully initiates update when invoked by sys_admin", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(adminUser);
+
+      const res = await triggerSystemUpdateAction();
+      expect(res.success).toBe(true);
+      expect(res.message).toContain("Update requested");
     });
   });
 });

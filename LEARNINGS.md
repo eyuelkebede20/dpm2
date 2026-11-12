@@ -714,4 +714,70 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 12. `.env.example`: Updated with complete Docker hosting settings.
 13. `docker.md`: Administrator and developer deployment manual.
 
+---
+
+## 2026-11-12 — Dynamic Backend URL Inputting, Server Endpoint Presets & Multi-Environment PWA Switcher (Item 17)
+
+**Goal:** Allow users to switch between local LAN factory servers (e.g. `http://192.168.1.100:3000`) and internet cloud instances (e.g. `https://dpm.homicho.et`) directly from the PWA's settings section, with admin-manageable server endpoint presets, real-time connectivity health probes (latency & version ping), persistent client configuration, and fallback resilience when offline.
+
+### Architectural Patterns & Strategy
+
+1. **Dual Switching Strategy:**
+   - **App Host Switching (PWA Context Shift):** Allows the user to transfer their browser or PWA window to another server host (`window.location.href = targetServerUrl + path`).
+   - **Client API Dynamic Resolution:** Enhances `apiClient` so relative `/api/*` requests automatically route to `getActiveBackendUrl()` if configured.
+2. **Persistence & Reactivity:**
+   - Stores active backend preference in `localStorage` (`dpm_active_backend_url`) and cookie (`dpm_backend_url`).
+   - Emits a custom window event `"dpm:backend-changed"` so all components, hooks, and banners re-render reactively without page reloads when needed.
+3. **Connectivity Pre-Flight Verification (Health Probe):**
+   - Before switching, users can test any preset or custom URL. The probe contacts `${url}/api/health` and `${url}/api/version` with a 5000ms timeout.
+   - Measures round-trip latency in milliseconds, checks database connectivity, and retrieves remote app version and git commit.
+4. **Admin Endpoint Management:**
+   - Database table `server_endpoints` stores shared corporate endpoints (LAN factory server, HQ cloud, edge gateway, etc.).
+   - Admins (`sys_admin`) can add, update, toggle active/inactive, or delete server presets via Server Actions (`src/actions/server-endpoint-actions.ts`) and Admin Portal (`/admin` under "Servers" tab).
+   - Authenticated/unauthenticated users receive active presets via `/api/server-endpoints` with hardcoded fallback presets if database or network is unreachable.
+5. **Universal Accessibility:**
+   - Available to logged-in users from Navbar desktop menu and mobile navigation drawer.
+   - Available to logged-out users directly on the Login page (`/login`) so mobile workers can switch between LAN and Internet before authenticating.
+
+### Edge cases & gotchas discovered
+
+- **Mixed Content Warnings (HTTPS vs HTTP):** If the PWA is installed from an HTTPS origin (e.g., `https://dpm.cloud`), modern browsers block background `fetch()` calls to non-secure HTTP LAN IP addresses (`http://192.168.x.x`) due to Mixed Content policies. For HTTP LAN destinations, full host navigation (`window.location.href`) is the compliant, working approach. The UI displays an informational badge explaining this when switching between HTTPS and HTTP.
+- **Trailing Slashes & URL Sanitation:** Users may enter URLs with trailing slashes, extra whitespace, or missing protocol schemes (`192.168.1.50:3000` instead of `http://192.168.1.50:3000`). `normalizeServerUrl` auto-prepends `http://` or `https://` if missing and strips trailing slashes to guarantee clean endpoint concatenation.
+- **Offline / Isolated LAN Fallback:** If the client is completely offline or the primary DB is unreachable, the server switcher must still function using local presets and `localStorage` so users can switch to an available edge server.
+
+---
+
+## 2026-11-12 — Self-Healing System Updater, Host Flag Protocol & Live Log Streaming (Item 18)
+
+**Goal:** Implement a self-healing in-app system updater on the SysAdmin portal (`/admin` -> System Updates) replicating the architecture from `Bure_Card`, allowing administrators to pull latest commits, run database migrations, and perform zero-downtime container reloads with live terminal log streaming and auto-rollback protection.
+
+### Reference Architecture Studied
+
+- `../Bure_Card/src/features/admin/components/system-updater.tsx`
+- `../Bure_Card/src/app/api/update-status/route.ts`
+- `../Bure_Card/deploy/clinic-watcher.sh`
+
+### Architecture & Security Decisions
+
+1. **Flag File Decoupling (`/run/updater/update.request`):**
+   - The web container is run as non-root (`node:1000`) and does **not** mount the dangerous host `/var/run/docker.sock`.
+   - Instead, the container writes a flag file into the shared volume `./run:/run/updater`.
+   - The host watcher daemon (`deploy/dpm-watcher.sh` or systemd service) detects the flag, triggers `update.sh` (or `start.sh --quick`), pipes logs to `run/update.status`, and cleans up the flag.
+2. **Real-time Terminal Log Streaming (`GET /api/update-status`):**
+   - Protected endpoint restricted to `sys_admin` role only.
+   - Reads `run/update.status` and parses lines, completion status (`done`), and rollback/failure indicators (`failed`).
+   - The UI polls every 2 seconds, auto-scrolls the terminal output, and formats status messages with color indicators.
+3. **Post-Restart Health Probe (`GET /api/health`):**
+   - When the host script reports completion and recycles the container, the frontend transitions to the `restarting` phase.
+   - Polls `/api/health` every 4 seconds until the new container returns HTTP 200, confirming both web server and PostgreSQL connectivity.
+4. **Troubleshooting Diagnostics:**
+   - If the update request sits on `[0/4] Waiting for host updater daemon...` for > 24 seconds without progress, the UI automatically surfaces troubleshooting commands (`sudo ./deploy/install-watcher.sh` or manual `./update.sh` execution).
+5. **Testing & Verification:**
+   - Unit tests covering `triggerSystemUpdateAction()` for both authorized sysadmin and unauthorized roles (`src/actions/admin-actions.test.ts`).
+   - Endpoint tests for `/api/update-status` covering unauthenticated, forbidden, running, complete, and rollback states (`src/app/api/update-status/route.test.ts`).
+   - Component tests for `<SystemUpdater />` with mock timers/intervals verifying confirmation modal, trigger execution, terminal log streaming, health polling, and failure recovery (`src/components/admin/system-updater.test.tsx`).
+   - Integration test for SysAdmin navigation tab (`src/app/admin/admin-client.test.tsx`).
+
+
+
 

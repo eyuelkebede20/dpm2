@@ -1,5 +1,7 @@
 "use server";
 
+import fs from "fs";
+import path from "path";
 import { z } from "zod";
 import { requireUser, can } from "@/lib/authz";
 import { Role } from "@/lib/rbac";
@@ -471,4 +473,119 @@ export async function getImpersonationCandidates() {
     .orderBy(users.role, users.name);
 
   return candidates.filter((c) => ["om", "fm"].includes(c.role));
+}
+
+// -------------------------------------------------------------
+// System Updater (Learned from Bure_Card self-healing updater)
+// -------------------------------------------------------------
+export async function triggerSystemUpdateAction() {
+  const user = await requireUser();
+  if (user.role !== "sys_admin") {
+    throw new Error("Forbidden: Only System Administrators can initiate system updates.");
+  }
+
+  const isWindows = process.platform === "win32";
+  const inContainer = fs.existsSync("/run/updater");
+
+  if (isWindows) {
+    try {
+      const localRunDir = path.join(process.cwd(), "run");
+      const statusFile = path.join(localRunDir, "update.status");
+      fs.mkdirSync(localRunDir, { recursive: true });
+      fs.writeFileSync(statusFile, "=== DPM2 Update started ===\n");
+
+      const { spawn } = await import("child_process");
+      const script = fs.existsSync(path.join(process.cwd(), "UPDATE.bat"))
+        ? path.join(process.cwd(), "UPDATE.bat")
+        : path.join(process.cwd(), "deploy", "update.bat");
+
+      const proc = spawn("cmd.exe", ["/c", script], {
+        cwd: process.cwd(),
+        detached: true,
+        windowsHide: true,
+      });
+
+      proc.stdout?.on("data", (data: any) => fs.appendFileSync(statusFile, data));
+      proc.stderr?.on("data", (data: any) => fs.appendFileSync(statusFile, data));
+      proc.on("close", (code: any) => {
+        fs.appendFileSync(statusFile, `\nProcess exited with code ${code}\n`);
+        if (code === 0) {
+          fs.appendFileSync(statusFile, "✓ Update complete and application is healthy.\n");
+        } else {
+          fs.appendFileSync(statusFile, "!! Update failed - rollback executed to previous stable version.\n");
+        }
+      });
+      proc.unref();
+    } catch (error: any) {
+      throw new Error(`Failed to start local update script: ${error.message}`);
+    }
+  } else if (inContainer) {
+    const flagPath = "/run/updater/update.request";
+    const statusPath = "/run/updater/update.status";
+    try {
+      fs.writeFileSync(
+        statusPath,
+        "=== DPM2 Update requested ===\n[0/4] Waiting for host updater daemon...\n",
+        { mode: 0o666 }
+      );
+    } catch {}
+    try {
+      fs.mkdirSync(path.dirname(flagPath), { recursive: true });
+      fs.writeFileSync(flagPath, "", { mode: 0o666 });
+    } catch (error: any) {
+      throw new Error(
+        `Could not write update flag: ${error.message}. ` +
+        `Make sure the compose volume ./run:/run/updater is mounted and writable by uid 1000.`
+      );
+    }
+  } else {
+    // Direct Linux/Unix host execution
+    try {
+      const localRunDir = path.join(process.cwd(), "run");
+      const statusFile = path.join(localRunDir, "update.status");
+      fs.mkdirSync(localRunDir, { recursive: true });
+      fs.writeFileSync(statusFile, "=== DPM2 Update started ===\n");
+
+      const { spawn } = await import("child_process");
+      const script = fs.existsSync(path.join(process.cwd(), "update.sh"))
+        ? path.join(process.cwd(), "update.sh")
+        : path.join(process.cwd(), "start.sh");
+
+      const shell = fs.existsSync("/bin/bash") ? "/bin/bash" : "sh";
+      const args = script.endsWith("start.sh")
+        ? [script, "--quick", "--no-color"]
+        : [script];
+
+      const proc = spawn(shell, args, {
+        cwd: process.cwd(),
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      proc.stdout?.on("data", (data: any) => fs.appendFileSync(statusFile, data));
+      proc.stderr?.on("data", (data: any) => fs.appendFileSync(statusFile, data));
+      proc.on("close", (code: any) => {
+        fs.appendFileSync(statusFile, `\nProcess exited with code ${code}\n`);
+        if (code === 0) {
+          fs.appendFileSync(statusFile, "✓ Update complete and application is healthy.\n");
+        } else {
+          fs.appendFileSync(statusFile, "!! Update failed - rollback executed to previous stable version.\n");
+        }
+      });
+      proc.unref();
+    } catch (error: any) {
+      throw new Error(`Failed to start local update script: ${error.message}`);
+    }
+  }
+
+  logSecurityEvent({
+    userId: user.id,
+    event: "SYSTEM_UPDATE_TRIGGERED",
+    details: { message: "Admin initiated system update via flag file" },
+  });
+
+  return {
+    success: true,
+    message: "Update requested. The system will update and restart in about a minute.",
+  };
 }

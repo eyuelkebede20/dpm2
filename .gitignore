@@ -14,7 +14,10 @@
 # production
 /build
 
-# misc
+# runtime flag and status files
+/run/
+run/
+
 .DS_Store
 *.pem
 
@@ -33,3 +36,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# runtime updater flags and status logs
+/run/
+run/
+

@@ -119,3 +119,47 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] PWA Install Prompt handling (`beforeinstallprompt`) with 1-tap "Install App" button (`src/components/pwa/pwa-ota-banner.test.tsx`)
 - [x] Offline fallback page with bilingual messaging and "Try Reconnecting" button (`src/app/offline/page.test.tsx`)
 
+---
+
+## 7. Backend Server Endpoint Switcher & LAN / Cloud Configuration
+
+### `<BackendServerSettingsModal />` (User Settings Section)
+- [x] Accessible dialog (`role="dialog"`, title, backdrop click, Escape key close) (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Displays currently active server with live green pulse status and custom route indicator (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Preset server list selection (Factory LAN, Internet Cloud, Localhost) (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Custom URL input with scheme auto-prefixing (`http://` / `https://` quick toggles) (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] "Test Connection" button with real-time ping latency (ms), HTTP status, and app version diagnostics (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] "Switch & Connect" button saving selection to `localStorage` and cookie, executing pre-flight verification, and navigating to new host (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] "Reset Host" button restoring default window origin (`src/lib/backend-config.test.ts`)
+- [x] Admin inline "+ Add Preset" form expanding directly for `sys_admin` (`src/components/settings/backend-server-settings-modal.test.tsx`)
+
+### Admin Portal Server Management (`/admin` -> Servers Tab)
+- [x] Tab navigation: 3rd tab "Server Endpoints (LAN / Cloud)" with item count badge (`src/app/admin/admin-client.test.tsx`)
+- [x] Server presets table displaying Name, URL, Environment, Default status, and Active status (`src/app/admin/admin-client.test.tsx`)
+- [x] "Add Server Preset" modal: provisions new shared presets into PostgreSQL (`src/app/admin/admin-client.test.tsx`)
+- [x] Ping connectivity test button per server row displaying latency in milliseconds (`src/app/admin/admin-client.test.tsx`)
+- [x] Active / Inactive status toggle button (`src/actions/server-endpoint-actions.test.ts`)
+- [x] Delete preset confirmation and database deletion (`src/actions/server-endpoint-actions.test.ts`)
+
+### Access Entrypoints
+- [x] Desktop Navbar Profile Dropdown: "Server Settings (LAN / Cloud)" item (`src/components/navbar.test.tsx`)
+- [x] Mobile Navigation Drawer: "Server Settings (LAN / Cloud)" button (`src/components/navbar.test.tsx`)
+- [x] Login Screen: "Server: ... Change Server" quick pill allowing pre-login server switching (`src/app/login/login-client.test.tsx`)
+
+---
+
+## 8. System Updates & Self-Healing Deployment (Learned from Bure_Card)
+
+### `<SystemUpdater />` (`/admin` -> System Updates Tab)
+- [x] Tab navigation: 4th tab "System Updates & Deployment (የሲስተም ማዘመኛ)" in SysAdmin portal (`src/app/admin/admin-client.test.tsx`)
+- [x] Automated host-container update pipeline explanation banner with rollback protection details (`src/components/admin/system-updater.test.tsx`)
+- [x] "Pull Latest Updates & Rebuild" trigger button with accessible loading states (`aria-busy`, disabled lockout) (`src/components/admin/system-updater.test.tsx`)
+- [x] Modal confirmation dialog with warning on automatic restart and database migration execution (`src/components/admin/system-updater.test.tsx`)
+- [x] Server Action `triggerSystemUpdateAction()` writes flag file `/run/updater/update.request` or runs host script (`src/actions/admin-actions.test.ts`)
+- [x] Live log terminal pane streaming real-time output from `/api/update-status` (`src/components/admin/system-updater.test.tsx`)
+- [x] Status polling loop every 2 seconds with troubleshooting diagnostics if host watcher is uninstalled (`src/components/admin/system-updater.test.tsx`)
+- [x] Healthcheck verification polling `/api/health` every 4 seconds during container reboot until HTTP 200 (`src/components/admin/system-updater.test.tsx`)
+- [x] Accessible completion alerts: emerald success banner on recovery or rose alert on failure/rollback (`src/components/admin/system-updater.test.tsx`)
+
+
+
