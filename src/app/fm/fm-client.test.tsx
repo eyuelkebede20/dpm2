@@ -281,4 +281,49 @@ describe("Button Interaction Tests - FMClient", () => {
       );
     });
   });
+
+  it("renders Initial Set Plan and Edited Plan side by side in the Plans table", () => {
+    const plansWithDiffQty = [
+      {
+        ...samplePlans[0],
+        initialPlannedQty: 45000,
+        plannedQty: 50000,
+      },
+    ];
+
+    render(
+      <FMClient
+        factoryName="Hawassa Mega Plant"
+        lines={sampleLines}
+        products={sampleProducts}
+        lineProducts={sampleLinks}
+        plans={plansWithDiffQty}
+      />
+    );
+
+    expect(screen.getAllByText("Initial Set Plan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Edited Plan").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("45,000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("50,000").length).toBeGreaterThan(0);
+  });
+
+  it("renders read-only view for Factory Manager (fm) without New Plan or Edit buttons", () => {
+    render(
+      <FMClient
+        factoryName="Hawassa Mega Plant"
+        lines={sampleLines}
+        products={sampleProducts}
+        lineProducts={sampleLinks}
+        plans={samplePlans}
+        userRole="fm"
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: /new production plan/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+    expect(screen.getByText("Read-Only View")).toBeDefined();
+    expect(
+      screen.getByText(/Production Plans Managed by Operation Management/i)
+    ).toBeDefined();
+  });
 });

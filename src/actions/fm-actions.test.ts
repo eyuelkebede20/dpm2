@@ -272,7 +272,23 @@ describe("FM Workflows - Factory Manager Operations", () => {
   });
 
   describe("Production Plans Management", () => {
-    it("denies plan creation when forbidden", async () => {
+    it("denies plan creation when FM role attempts to create plan", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(fmUser);
+
+      const res = await createPlanAction({
+        lineId: "line_01",
+        productId: "prod_01",
+        startDate: "2026-11-01",
+        endDate: "2026-11-30",
+        plannedQty: 2500,
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Factory Managers cannot create production plans");
+    });
+
+    it("denies plan creation when forbidden by authorization", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(adminUser);
       vi.mocked(authz.can).mockResolvedValue(false);
 
       const res = await createPlanAction({
@@ -288,6 +304,8 @@ describe("FM Workflows - Factory Manager Operations", () => {
     });
 
     it("fails plan creation when end date is before start date", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(adminUser);
+
       const res = await createPlanAction({
         lineId: "line_01",
         productId: "prod_01",
@@ -301,6 +319,8 @@ describe("FM Workflows - Factory Manager Operations", () => {
     });
 
     it("fails plan creation when plannedQty is zero or negative", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(adminUser);
+
       const res1 = await createPlanAction({
         lineId: "line_01",
         productId: "prod_01",
@@ -322,6 +342,8 @@ describe("FM Workflows - Factory Manager Operations", () => {
     });
 
     it("fails plan creation when date format is invalid", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(adminUser);
+
       const res = await createPlanAction({
         lineId: "line_01",
         productId: "prod_01",
@@ -335,6 +357,8 @@ describe("FM Workflows - Factory Manager Operations", () => {
     });
 
     it("successfully creates production plan with valid parameters", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(adminUser);
+
       const res = await createPlanAction({
         lineId: "line_01",
         productId: "prod_01",

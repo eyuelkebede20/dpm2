@@ -14,11 +14,13 @@ import {
   industryProfile,
   qaAssignments,
   qaInspections,
+  qaApprovals,
   specialDays,
   downtimeReasons,
+  dailyReportReviews,
 } from "@/db/schema";
 import { requireUser, can } from "@/lib/authz";
-import { eq, and, sql, gte, lte, desc, asc } from "drizzle-orm";
+import { eq, and, sql, gte, lte, desc, asc, inArray } from "drizzle-orm";
 import { calculateDailyTarget } from "@/lib/target";
 
 export async function getCurrentUserContext() {
@@ -145,11 +147,93 @@ export async function getDailyGridData(factoryId: string, date: string) {
     .limit(1);
 
   // Fetch active downtime reasons ordered by sortOrder asc
-  const activeDowntimeReasons = await db
-    .select()
-    .from(downtimeReasons)
-    .where(eq(downtimeReasons.isActive, true))
-    .orderBy(asc(downtimeReasons.sortOrder));
+  let activeDowntimeReasons: any[] = [];
+  try {
+    activeDowntimeReasons = await db
+      .select()
+      .from(downtimeReasons)
+      .where(eq(downtimeReasons.isActive, true))
+      .orderBy(asc(downtimeReasons.sortOrder));
+  } catch {
+    activeDowntimeReasons = [];
+  }
+
+  // Fetch QA inspections for this date with inspector names
+  let dateInspections: any[] = [];
+  try {
+    dateInspections = await db
+      .select({
+        id: qaInspections.id,
+        lineId: qaInspections.lineId,
+        productId: qaInspections.productId,
+        checked: qaInspections.checked,
+        defects: qaInspections.defects,
+        note: qaInspections.note,
+        createdBy: qaInspections.createdBy,
+        createdAt: qaInspections.createdAt,
+        inspectorName: users.name,
+      })
+      .from(qaInspections)
+      .innerJoin(users, eq(qaInspections.createdBy, users.id))
+      .where(eq(qaInspections.date, date));
+  } catch {
+    dateInspections = [];
+  }
+
+  // Fetch QA approvals (decisions made on /qa) for this date's report entries
+  let dateApprovals: any[] = [];
+  try {
+    const dayEntryIds = reportEntriesList
+      .filter((e) => e.date === date)
+      .map((e) => e.id);
+
+    if (dayEntryIds.length > 0) {
+      dateApprovals = await db
+        .select({
+          id: qaApprovals.id,
+          reportEntryId: qaApprovals.reportEntryId,
+          status: qaApprovals.status,
+          note: qaApprovals.note,
+          qaUserId: qaApprovals.qaUserId,
+          qaUserName: users.name,
+          updatedAt: qaApprovals.updatedAt,
+        })
+        .from(qaApprovals)
+        .innerJoin(users, eq(qaApprovals.qaUserId, users.id))
+        .where(inArray(qaApprovals.reportEntryId, dayEntryIds));
+    }
+  } catch {
+    dateApprovals = [];
+  }
+
+  // Fetch OM review sign-off for this factory and date
+  let reportReviewRecord: any = null;
+  try {
+    const reviews = await db
+      .select({
+        id: dailyReportReviews.id,
+        factoryId: dailyReportReviews.factoryId,
+        date: dailyReportReviews.date,
+        status: dailyReportReviews.status,
+        reviewedBy: dailyReportReviews.reviewedBy,
+        reviewedAt: dailyReportReviews.reviewedAt,
+        note: dailyReportReviews.note,
+        itemReviews: dailyReportReviews.itemReviews,
+        reviewerName: users.name,
+      })
+      .from(dailyReportReviews)
+      .innerJoin(users, eq(dailyReportReviews.reviewedBy, users.id))
+      .where(
+        and(
+          eq(dailyReportReviews.factoryId, factoryId),
+          eq(dailyReportReviews.date, date)
+        )
+      )
+      .limit(1);
+    reportReviewRecord = reviews[0] || null;
+  } catch {
+    reportReviewRecord = null;
+  }
 
   // Build grid items
   const gridRows = [];
@@ -217,6 +301,85 @@ export async function getDailyGridData(factoryId: string, date: string) {
           )
         : null;
 
+      const qaApproval = entry
+        ? (dateApprovals as any[]).find((a) => a.reportEntryId === entry.id)
+        : null;
+
+      const qaInspection = (dateInspections as any[]).find(
+        (qa) => qa.lineId === line.id && qa.productId === prod.id
+      );
+
+      let qaReview: any;
+
+      if (qaApproval) {
+        // QA decision recorded via /qa (1-Click Approve / Reject)
+        const isApproved = qaApproval.status === "approved";
+        qaReview = {
+          isReviewed: true,
+          status: isApproved ? ("approved" as const) : ("denied" as const),
+          verdict: isApproved ? "QA Approved" : "QA Denied",
+          inspectorId: qaApproval.qaUserId,
+          inspectorName: qaApproval.qaUserName || "QA Inspector",
+          checked: qaInspection?.checked ?? (entry ? entry.finishedGood + entry.rework + entry.reject : 0),
+          defects: qaInspection?.defects ?? (entry ? entry.reject + entry.scrap : 0),
+          defectRate: qaInspection
+            ? qaInspection.checked > 0
+              ? Number(((qaInspection.defects / qaInspection.checked) * 100).toFixed(1))
+              : 0
+            : entry && entry.finishedGood + entry.rework + entry.reject > 0
+            ? Number(
+                (
+                  ((entry.reject + entry.scrap) /
+                    (entry.finishedGood + entry.rework + entry.reject)) *
+                  100
+                ).toFixed(1)
+              )
+            : 0,
+          note: qaApproval.note || qaInspection?.note || null,
+          createdAt: qaApproval.updatedAt
+            ? new Date(qaApproval.updatedAt).toISOString()
+            : null,
+        };
+      } else if (qaInspection) {
+        qaReview = {
+          isReviewed: true,
+          status: qaInspection.defects === 0 ? ("approved" as const) : ("denied" as const),
+          verdict: qaInspection.defects === 0 ? "QA Approved" : "QA Denied",
+          inspectorId: qaInspection.createdBy,
+          inspectorName: qaInspection.inspectorName,
+          checked: qaInspection.checked,
+          defects: qaInspection.defects,
+          defectRate:
+            qaInspection.checked > 0
+              ? Number(
+                  ((qaInspection.defects / qaInspection.checked) * 100).toFixed(
+                    1
+                  )
+                )
+              : 0,
+          note: qaInspection.note || null,
+          createdAt: qaInspection.createdAt
+            ? new Date(qaInspection.createdAt).toISOString()
+            : null,
+        };
+      } else {
+        qaReview = {
+          isReviewed: false,
+          status: "pending" as const,
+          verdict: "Pending QA Inspection",
+          inspectorId: null,
+          inspectorName: null,
+          checked: 0,
+          defects: 0,
+          defectRate: 0,
+          note: null,
+          createdAt: null,
+        };
+      }
+
+      const itemKey = `${line.id}_${prod.id}`;
+      const itemReview = (reportReviewRecord?.itemReviews as any)?.[itemKey] || null;
+
       gridRows.push({
         lineId: line.id,
         lineName: line.name,
@@ -225,9 +388,11 @@ export async function getDailyGridData(factoryId: string, date: string) {
         sku: prod.sku,
         plan: plan
           ? {
+              id: plan.id,
               startDate: plan.startDate,
               endDate: plan.endDate,
               plannedQty: plan.plannedQty,
+              initialPlannedQty: plan.initialPlannedQty ?? plan.plannedQty,
               weeklyPlanned: plan.plannedQty,
               priorFinishedGood,
               cumulativeProduced,
@@ -245,15 +410,30 @@ export async function getDailyGridData(factoryId: string, date: string) {
           issueNote: "",
           downtimeReasonId: null,
         },
+        qaReview,
+        itemReview,
       });
     }
   }
+
+  const factoryLineIds = factoryLines.map((l) => l.id);
+  const existingDayEntries = reportEntriesList.filter(
+    (e) => e.date === date && factoryLineIds.includes(e.lineId)
+  );
+  const isDaySubmitted = existingDayEntries.length > 0;
+  const submittedAt = existingDayEntries[0]?.updatedAt
+    ? new Date(existingDayEntries[0].updatedAt).toISOString()
+    : null;
+  const submittedBy = existingDayEntries[0]?.updatedBy || null;
 
   return {
     date,
     factoryId,
     workingDays,
     gridRows,
+    isDaySubmitted,
+    submittedAt,
+    submittedBy,
     specialDay: specialDayRecord
       ? {
           nameEn: specialDayRecord.nameEn,
@@ -272,6 +452,25 @@ export async function getDailyGridData(factoryId: string, date: string) {
       nameAm: r.nameAm,
       category: r.category,
     })),
+    reportReview: reportReviewRecord
+      ? {
+          isReviewed: reportReviewRecord.status === "reviewed",
+          reviewedBy: reportReviewRecord.reviewedBy,
+          reviewerName: reportReviewRecord.reviewerName,
+          reviewedAt: reportReviewRecord.reviewedAt
+            ? new Date(reportReviewRecord.reviewedAt).toISOString()
+            : null,
+          note: reportReviewRecord.note || null,
+          itemReviews: (reportReviewRecord.itemReviews as any) || {},
+        }
+      : {
+          isReviewed: false,
+          reviewedBy: null,
+          reviewerName: null,
+          reviewedAt: null,
+          note: null,
+          itemReviews: {},
+        },
   };
 }
 

@@ -1032,7 +1032,8 @@ export function DailyEntryClient({
         <td className="py-3 px-3 min-w-[170px]">
           {row.qaReview?.isReviewed ? (
             <div className="space-y-0.5">
-              {row.qaReview.status === "approved" || row.qaReview.defects === 0 ? (
+              {row.qaReview.status === "approved" ||
+              (!row.qaReview.status && row.qaReview.defects === 0) ? (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                   QA Approved
@@ -1446,7 +1447,8 @@ export function DailyEntryClient({
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  {row.qaReview.status === "approved" || row.qaReview.defects === 0 ? (
+                  {row.qaReview.status === "approved" ||
+                  (!row.qaReview.status && row.qaReview.defects === 0) ? (
                     <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       QA Approved (ፅድቅ / Spec OK)
@@ -2333,7 +2335,7 @@ export function DailyEntryClient({
       )}
 
       {/* Sticky Bottom Save Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-2.5 sm:py-3 shadow-xl pb-safe">
+      <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-2 sm:py-3 shadow-xl pb-safe">
         <div className="max-w-7xl 2xl:max-w-8xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap min-w-0">
             <span className="text-xs sm:text-sm font-semibold text-slate-700 truncate leading-relaxed">

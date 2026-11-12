@@ -248,6 +248,125 @@ describe("Data & Calendar Workflows - data.ts", () => {
       expect(row.entry.issueNote).toBe("Good run");
     });
 
+    it("maps QA approvals from qaApprovals table to qaReview with status approved and inspector name", async () => {
+      // 1. Profile
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          limit: vi.fn().mockResolvedValue([{ workingDays: [1, 2, 3, 4, 5, 6] }]),
+        })),
+      } as any);
+
+      // 2. Lines
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([{ id: "line_1", name: "Line 1" }]),
+        })),
+      } as any);
+
+      // 3. Products
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([{ id: "prod_1", name: "Polo Shirt", sku: "POLO-01" }]),
+        })),
+      } as any);
+
+      // 4. LineProducts
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => Promise.resolve([{ lineId: "line_1", productId: "prod_1" }])),
+      } as any);
+
+      // 5. Plans
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([]),
+        })),
+      } as any);
+
+      // 6. Report entries
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn().mockResolvedValue([
+            {
+              id: "rep_2026-11-08_line_1_prod_1",
+              date: "2026-11-08",
+              lineId: "line_1",
+              productId: "prod_1",
+              finishedGood: 100,
+              rework: 0,
+              reject: 0,
+              scrap: 0,
+              wip: 0,
+              downtimeMinutes: 0,
+              issueNote: null,
+            },
+          ]),
+        })),
+      } as any);
+
+      // 7. Special day
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      } as any);
+
+      // 8. Downtime reasons
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            orderBy: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      } as any);
+
+      // 9. QA inspections
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([]),
+        })),
+      } as any);
+
+      // 10. QA approvals
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockResolvedValue([
+            {
+              id: "app_1",
+              reportEntryId: "rep_2026-11-08_line_1_prod_1",
+              status: "approved",
+              note: "Quality looks good",
+              qaUserId: "usr_qa_1",
+              qaUserName: "Tewodros QA",
+              updatedAt: new Date(),
+            },
+          ]),
+        })),
+      } as any);
+
+      // 11. Daily report review
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          innerJoin: vi.fn().mockReturnThis(),
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([]),
+          })),
+        })),
+      } as any);
+
+      const gridData = await getDailyGridData("fac_01", "2026-11-08");
+      expect(gridData.gridRows.length).toBe(1);
+      const row = gridData.gridRows[0];
+      expect(row.qaReview?.isReviewed).toBe(true);
+      expect(row.qaReview?.status).toBe("approved");
+      expect(row.qaReview?.verdict).toBe("QA Approved");
+      expect(row.qaReview?.inspectorName).toBe("Tewodros QA");
+      expect(row.qaReview?.note).toBe("Quality looks good");
+    });
+
     it("evaluates daily target to 0 on non-working special day and returns holiday and reasons", async () => {
       // 1. Profile
       vi.mocked(db.select).mockReturnValueOnce({

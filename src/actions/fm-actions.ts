@@ -293,16 +293,89 @@ const createPlanSchema = z
     path: ["endDate"],
   });
 
-export async function getPlans() {
-  const factory = await getFMFactory();
-  const myLines = await getLines();
-  const lineIds = myLines.map((l) => l.id);
+export async function getPlans(targetFactoryId?: string) {
+  const user = await requireUser();
+  let factoryFilterId: string | undefined = targetFactoryId;
 
-  if (lineIds.length === 0) return [];
+  if (user.role === "fm") {
+    const factory = await getFMFactory();
+    factoryFilterId = factory.id;
+  } else if (user.role === "om" && !factoryFilterId) {
+    // Return all plans across factories owned by this OM
+    const omFactories = await db
+      .select({ id: factories.id })
+      .from(factories)
+      .where(eq(factories.omId, user.id));
+    const omFactoryIds = omFactories.map((f) => f.id);
+    if (omFactoryIds.length === 0) return [];
+
+    const rawPlans = await db
+      .select({
+        id: plans.id,
+        factoryId: lines.factoryId,
+        factoryName: factories.name,
+        lineId: plans.lineId,
+        lineName: lines.name,
+        productId: plans.productId,
+        productName: products.name,
+        productSku: products.sku,
+        startDate: plans.startDate,
+        endDate: plans.endDate,
+        plannedQty: plans.plannedQty,
+        initialPlannedQty: plans.initialPlannedQty,
+        createdAt: plans.createdAt,
+      })
+      .from(plans)
+      .innerJoin(lines, eq(plans.lineId, lines.id))
+      .innerJoin(products, eq(plans.productId, products.id))
+      .innerJoin(factories, eq(lines.factoryId, factories.id))
+      .where(sql`${lines.factoryId} IN ${omFactoryIds}`)
+      .orderBy(desc(plans.startDate));
+
+    const allEntries = await db
+      .select({
+        lineId: reportEntries.lineId,
+        productId: reportEntries.productId,
+        date: reportEntries.date,
+        finishedGood: reportEntries.finishedGood,
+      })
+      .from(reportEntries);
+
+    return rawPlans.map((p) => {
+      const totalProduced = allEntries
+        .filter(
+          (e) =>
+            e.lineId === p.lineId &&
+            e.productId === p.productId &&
+            e.date >= p.startDate &&
+            e.date <= p.endDate
+        )
+        .reduce((sum, e) => sum + (e.finishedGood || 0), 0);
+
+      const leftFromWeeklyPlanned = Math.max(0, p.plannedQty - totalProduced);
+
+      return {
+        ...p,
+        initialPlannedQty: p.initialPlannedQty ?? p.plannedQty,
+        weeklyPlanned: p.plannedQty,
+        totalProduced,
+        leftFromWeeklyPlanned,
+      };
+    });
+  }
+
+  // Single factory query (for FM or OM with specific factoryId or Sys Admin)
+  let whereClause = factoryFilterId ? eq(lines.factoryId, factoryFilterId) : undefined;
+  if (!factoryFilterId && user.role !== "sys_admin") {
+    const factory = await getFMFactory();
+    whereClause = eq(lines.factoryId, factory.id);
+  }
 
   const rawPlans = await db
     .select({
       id: plans.id,
+      factoryId: lines.factoryId,
+      factoryName: factories.name,
       lineId: plans.lineId,
       lineName: lines.name,
       productId: plans.productId,
@@ -311,12 +384,14 @@ export async function getPlans() {
       startDate: plans.startDate,
       endDate: plans.endDate,
       plannedQty: plans.plannedQty,
+      initialPlannedQty: plans.initialPlannedQty,
       createdAt: plans.createdAt,
     })
     .from(plans)
     .innerJoin(lines, eq(plans.lineId, lines.id))
     .innerJoin(products, eq(plans.productId, products.id))
-    .where(eq(lines.factoryId, factory.id))
+    .innerJoin(factories, eq(lines.factoryId, factories.id))
+    .where(whereClause)
     .orderBy(desc(plans.startDate));
 
   // Compute cumulative produced finished goods and left from weekly planned
@@ -344,6 +419,7 @@ export async function getPlans() {
 
     return {
       ...p,
+      initialPlannedQty: p.initialPlannedQty ?? p.plannedQty,
       weeklyPlanned: p.plannedQty,
       totalProduced,
       leftFromWeeklyPlanned,
@@ -353,13 +429,13 @@ export async function getPlans() {
 
 export async function createPlanAction(rawInput: unknown) {
   const user = await requireUser();
-  const factory = await getFMFactory();
 
-  const allowed = await can(user, "create", {
-    type: "plan",
-    factoryId: factory.id,
-  });
-  if (!allowed) return { success: false, error: "Forbidden" };
+  if (user.role === "fm") {
+    return {
+      success: false,
+      error: "Forbidden: Factory Managers cannot create production plans. Only Operation Managers can manage plans.",
+    };
+  }
 
   const parsed = createPlanSchema.safeParse(rawInput);
   if (!parsed.success) {
@@ -367,6 +443,21 @@ export async function createPlanAction(rawInput: unknown) {
   }
 
   const { lineId, productId, startDate, endDate, plannedQty } = parsed.data;
+
+  // Resolve factoryId from the line
+  const [lineRecord] = await db
+    .select({ factoryId: lines.factoryId })
+    .from(lines)
+    .where(eq(lines.id, lineId))
+    .limit(1);
+
+  const factoryId = lineRecord?.factoryId;
+
+  const allowed = await can(user, "create", {
+    type: "plan",
+    factoryId,
+  });
+  if (!allowed) return { success: false, error: "Forbidden" };
 
   try {
     const planId = `plan_${Date.now()}`;
@@ -377,9 +468,12 @@ export async function createPlanAction(rawInput: unknown) {
       startDate,
       endDate,
       plannedQty,
+      initialPlannedQty: plannedQty,
     });
 
     revalidatePath("/fm");
+    revalidatePath("/planning");
+    revalidatePath("/calendar");
     return { success: true };
   } catch (err: any) {
     console.error("Create plan error:", err);
@@ -404,13 +498,13 @@ const updatePlanSchema = z
 
 export async function updatePlanAction(rawInput: unknown) {
   const user = await requireUser();
-  const factory = await getFMFactory();
 
-  const allowed = await can(user, "update", {
-    type: "plan",
-    factoryId: factory.id,
-  });
-  if (!allowed) return { success: false, error: "Forbidden" };
+  if (user.role === "fm") {
+    return {
+      success: false,
+      error: "Forbidden: Factory Managers cannot edit production plans. Only Operation Managers can manage plans.",
+    };
+  }
 
   const parsed = updatePlanSchema.safeParse(rawInput);
   if (!parsed.success) {
@@ -419,7 +513,33 @@ export async function updatePlanAction(rawInput: unknown) {
 
   const { id, lineId, productId, startDate, endDate, plannedQty } = parsed.data;
 
+  // Resolve factoryId from the line
+  const [lineRecord] = await db
+    .select({ factoryId: lines.factoryId })
+    .from(lines)
+    .where(eq(lines.id, lineId))
+    .limit(1);
+
+  const factoryId = lineRecord?.factoryId;
+
+  const allowed = await can(user, "update", {
+    type: "plan",
+    factoryId,
+  });
+  if (!allowed) return { success: false, error: "Forbidden" };
+
   try {
+    const [existing] = await db
+      .select({
+        initialPlannedQty: plans.initialPlannedQty,
+        plannedQty: plans.plannedQty,
+      })
+      .from(plans)
+      .where(eq(plans.id, id))
+      .limit(1);
+
+    const initialQty = existing?.initialPlannedQty ?? existing?.plannedQty ?? plannedQty;
+
     await db
       .update(plans)
       .set({
@@ -428,10 +548,13 @@ export async function updatePlanAction(rawInput: unknown) {
         startDate,
         endDate,
         plannedQty,
+        initialPlannedQty: initialQty,
       })
       .where(eq(plans.id, id));
 
     revalidatePath("/fm");
+    revalidatePath("/planning");
+    revalidatePath("/calendar");
     return { success: true };
   } catch (err: any) {
     console.error("Update plan error:", err);
@@ -441,6 +564,14 @@ export async function updatePlanAction(rawInput: unknown) {
 
 export async function deletePlanAction(planId: string) {
   const user = await requireUser();
+
+  if (user.role === "fm") {
+    return {
+      success: false,
+      error: "Forbidden: Factory Managers cannot delete production plans. Only Operation Managers can manage plans.",
+    };
+  }
+
   const factory = await getFMFactory();
 
   const allowed = await can(user, "delete", {

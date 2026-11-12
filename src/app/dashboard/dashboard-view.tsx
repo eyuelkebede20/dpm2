@@ -156,10 +156,10 @@ export function DashboardView({
           {user.role === "qa" && (
             <Link
               href="/qa"
-              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5 transition-transform active:scale-95"
+              className="btn btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl border-none shadow-xs font-bold gap-1.5 transition-transform active:scale-95"
             >
               <ClipboardCheck className="w-4 h-4" />
-              <span>New Inspection</span>
+              <span>QA Approvals (ማጽደቂያ)</span>
             </Link>
           )}
 
@@ -694,9 +694,9 @@ export function DashboardView({
               </div>
               <Link
                 href="/qa"
-                className="btn btn-xs bg-indigo-600 hover:bg-indigo-700 text-white border-none rounded-xl font-bold"
+                className="btn btn-xs bg-emerald-600 hover:bg-emerald-700 text-white border-none rounded-xl font-bold"
               >
-                New Inspection Form
+                QA Approvals (ማጽደቂያ)
               </Link>
             </div>
 

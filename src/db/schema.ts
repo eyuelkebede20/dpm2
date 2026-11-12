@@ -9,6 +9,7 @@ import {
   primaryKey,
   pgEnum,
   json,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -187,6 +188,7 @@ export const plans = pgTable("plans", {
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
   plannedQty: integer("planned_qty").notNull(),
+  initialPlannedQty: integer("initial_planned_qty"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -285,6 +287,29 @@ export const qaInspections = pgTable("qa_inspections", {
 });
 
 // -------------------------------------------------------------
+// QA Approvals & Rejections of FM Daily Report Entries
+// -------------------------------------------------------------
+export const qaApprovals = pgTable(
+  "qa_approvals",
+  {
+    id: text("id").primaryKey(),
+    reportEntryId: text("report_entry_id")
+      .notNull()
+      .references(() => reportEntries.id, { onDelete: "cascade" }),
+    status: text("status").notNull(), // 'approved' | 'rejected'
+    note: text("note"),
+    qaUserId: text("qa_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqueReportEntry: uniqueIndex("uniq_qa_approval_report_entry").on(t.reportEntryId),
+  })
+);
+
+// -------------------------------------------------------------
 // Stock Ledger
 // -------------------------------------------------------------
 export const stockLedger = pgTable("stock_ledger", {
@@ -300,6 +325,64 @@ export const stockLedger = pgTable("stock_ledger", {
     onDelete: "set null",
   }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// -------------------------------------------------------------
+// Daily Report Reviews (Operation Manager Sign-off)
+// -------------------------------------------------------------
+export const dailyReportReviews = pgTable(
+  "daily_report_reviews",
+  {
+    id: text("id").primaryKey(),
+    factoryId: text("factory_id")
+      .notNull()
+      .references(() => factories.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    status: text("status").notNull().default("reviewed"),
+    reviewedBy: text("reviewed_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
+    note: text("note"),
+    itemReviews: jsonb("item_reviews").$type<
+      Record<
+        string,
+        {
+          status: "approved" | "denied";
+          note?: string | null;
+          reviewedAt: string;
+        }
+      >
+    >(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqueFactoryDate: uniqueIndex("uniq_daily_report_review_factory_date").on(
+      t.factoryId,
+      t.date
+    ),
+  })
+);
+
+// -------------------------------------------------------------
+// Notifications
+// -------------------------------------------------------------
+export const notifications = pgTable("notifications", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").notNull().default("report_submitted"),
+  link: text("link").notNull(),
+  factoryId: text("factory_id").references(() => factories.id, { onDelete: "cascade" }),
+  reportDate: text("report_date").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // -------------------------------------------------------------
@@ -427,6 +510,17 @@ export const qaInspectionsRelations = relations(qaInspections, ({ one }) => ({
   }),
   inspector: one(users, {
     fields: [qaInspections.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const qaApprovalsRelations = relations(qaApprovals, ({ one }) => ({
+  reportEntry: one(reportEntries, {
+    fields: [qaApprovals.reportEntryId],
+    references: [reportEntries.id],
+  }),
+  qaUser: one(users, {
+    fields: [qaApprovals.qaUserId],
     references: [users.id],
   }),
 }));

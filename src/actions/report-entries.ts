@@ -66,6 +66,12 @@ export async function saveDailyReportEntry(rawInput: SaveReportEntryInput) {
     let reportEntryId = existing?.id;
     let delta = 0;
 
+    if (existing && user.role === "fm") {
+      throw new Error(
+        "Only one data entry is permitted per day. The daily entry for this date has already been recorded."
+      );
+    }
+
     if (existing) {
       delta = validated.finishedGood - existing.finishedGood;
 

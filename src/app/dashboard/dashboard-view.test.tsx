@@ -113,7 +113,7 @@ describe("Button & Link Interaction Tests - DashboardView", () => {
       />
     );
 
-    const inspectBtns = screen.getAllByRole("link", { name: /new inspection/i });
+    const inspectBtns = screen.getAllByRole("link", { name: /qa approvals/i });
     expect(inspectBtns[0].getAttribute("href")).toBe("/qa");
   });
 

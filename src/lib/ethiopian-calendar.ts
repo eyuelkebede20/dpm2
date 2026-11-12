@@ -214,7 +214,7 @@ export function gregorianToEth(gregorian: string | Date): EthiopianDate {
  */
 export function formatEthDate(
   date: EthiopianDate,
-  format: "iso" | "full_am" | "full_en" | "short" = "full_en"
+  format: "iso" | "full_am" | "full_en" | "short" | "short_am" = "full_en"
 ): string {
   const mm = String(date.month).padStart(2, "0");
   const dd = String(date.day).padStart(2, "0");
@@ -223,6 +223,9 @@ export function formatEthDate(
   }
   if (format === "full_am") {
     return `${ETH_MONTH_NAMES_AM[date.month]} ${date.day} ቀን ${date.year} ዓ.ም`;
+  }
+  if (format === "short_am") {
+    return `${ETH_MONTH_NAMES_AM[date.month]} ${date.day}, ${date.year}`;
   }
   if (format === "short") {
     return `${ETH_MONTH_NAMES_EN[date.month]} ${date.day}, ${date.year}`;

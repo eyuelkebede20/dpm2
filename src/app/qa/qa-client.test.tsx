@@ -14,38 +14,65 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/actions/qa-actions", () => ({
+  reviewQAEntryAction: vi.fn().mockResolvedValue({ success: true }),
+  getQAEntriesAction: vi.fn().mockResolvedValue({ success: true, entries: [], userRole: "qa" }),
   createQAInspectionAction: vi.fn().mockResolvedValue({ success: true }),
 }));
 
-describe("Button Interaction Tests - QAClient", () => {
-  const sampleProducts = [
+describe("Button & Approval Interaction Tests - QAClient", () => {
+  const sampleEntries: qaActions.QAEntryItem[] = [
     {
-      id: "prod_1",
-      name: "Water 1L Bottle",
-      sku: "WAT-1L",
-      factoryId: "fac_1",
-    },
-  ];
-
-  const sampleLines = [
-    {
-      id: "line_1",
-      name: "Line A - Packaging",
-      factoryId: "fac_1",
-    },
-  ];
-
-  const sampleInspections = [
-    {
-      id: "insp_1",
-      date: "2026-03-24",
-      checked: 200,
-      defects: 4,
-      note: "Minor label wrinkle / የክዳን መላላት",
-      createdAt: new Date(),
+      id: "entry_1",
+      date: "2026-11-08",
+      lineId: "line_1",
+      lineName: "Sewing Line 1",
+      productId: "prod_1",
       productName: "Water 1L Bottle",
       productSku: "WAT-1L",
-      lineName: "Line A - Packaging",
+      factoryId: "fac_1",
+      factoryName: "Hawassa Plant",
+      finishedGood: 1200,
+      rework: 15,
+      reject: 5,
+      scrap: 2,
+      wip: 40,
+      downtimeMinutes: 10,
+      issueNote: "Needle tension adjusted / መርፌ ማስተካከል",
+      downtimeReasonCode: "MAC-01",
+      downtimeReasonName: "Mechanical",
+      downtimeReasonNameAm: "የማሽን ብልሽት",
+      reporterName: "Abebe FM",
+      updatedAt: new Date().toISOString(),
+      status: "pending",
+      qaApprovalId: null,
+      qaNote: null,
+      qaReviewerName: null,
+      qaReviewedAt: null,
+    },
+    {
+      id: "entry_2",
+      date: "2026-11-07",
+      lineId: "line_2",
+      lineName: "Bottling Line 2",
+      productId: "prod_1",
+      productName: "Water 1L Bottle",
+      productSku: "WAT-1L",
+      factoryId: "fac_1",
+      factoryName: "Hawassa Plant",
+      finishedGood: 800,
+      rework: 0,
+      reject: 3,
+      scrap: 0,
+      wip: 10,
+      downtimeMinutes: 0,
+      issueNote: null,
+      reporterName: "Dawit FM",
+      updatedAt: new Date().toISOString(),
+      status: "approved",
+      qaApprovalId: "qapp_1",
+      qaNote: "Tolerances verified",
+      qaReviewerName: "Hanna QA",
+      qaReviewedAt: new Date().toISOString(),
     },
   ];
 
@@ -57,130 +84,120 @@ describe("Button Interaction Tests - QAClient", () => {
     cleanup();
   });
 
-  const renderQA = (products = sampleProducts, lines = sampleLines, inspections = sampleInspections) => {
-    return render(
-      <QAClient
-        assignedProducts={products}
-        availableLines={lines}
-        inspections={inspections}
-      />
-    );
+  const renderQA = (initial = sampleEntries) => {
+    return render(<QAClient initialEntries={initial} userRole="qa" />);
   };
 
-  it("updates defect quantity using quick-click pill buttons (0 defects, +1, +5)", () => {
+  it("renders pending review entries with FM reported numbers", () => {
     renderQA();
 
-    const defectInput = screen.getAllByRole("spinbutton")[1] as HTMLInputElement;
-    expect(defectInput.value).toBe("0");
+    // Summary counts
+    expect(screen.getAllByText("Pending Review").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Water 1L Bottle")).toBeDefined();
+    expect(screen.getByText(/Sewing Line 1/i)).toBeDefined();
+    expect(screen.getByText(/1,200/i)).toBeDefined();
+    expect(screen.getByText(/Abebe FM/i)).toBeDefined();
 
-    // Click "+1" button
-    const plus1Btn = screen.getByRole("button", { name: "+1" });
-    fireEvent.click(plus1Btn);
-    expect(defectInput.value).toBe("1");
-
-    // Click "+5" button
-    const plus5Btn = screen.getByRole("button", { name: "+5" });
-    fireEvent.click(plus5Btn);
-    expect(defectInput.value).toBe("6");
-
-    // Click "0 defects" button
-    const zeroBtn = screen.getByRole("button", { name: /0 defects/i });
-    fireEvent.click(zeroBtn);
-    expect(defectInput.value).toBe("0");
-  }, 15000);
-
-  it("recalculates live defect rate when defect pill buttons are clicked", () => {
-    renderQA();
-
-    // Checked Qty is 100 by default, 0 defects -> 0%
-    expect(screen.getByText("0%")).toBeDefined();
-
-    // Click "+1" defect -> 1 / 100 = 1%
-    const plus1Btn = screen.getByRole("button", { name: "+1" });
-    fireEvent.click(plus1Btn);
-    expect(screen.getByText("1%")).toBeDefined();
-
-    // Click "+5" defect -> 6 / 100 = 6%
-    const plus5Btn = screen.getByRole("button", { name: "+5" });
-    fireEvent.click(plus5Btn);
-    expect(screen.getByText("6%")).toBeDefined();
+    // Verify Action buttons exist
+    expect(screen.getByRole("button", { name: /Approve \(አጽድቅ\)/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /Reject \(ውድቅ አድርግ\)/i })).toBeDefined();
   });
 
-  it("submits inspection report when 'Submit Inspection Report' button is clicked", async () => {
+  it("approves pending entry calling reviewQAEntryAction with status = 'approved'", async () => {
     renderQA();
 
-    // Increase defects using quick button
-    const plus1Btn = screen.getByRole("button", { name: "+1" });
-    fireEvent.click(plus1Btn);
-
-    // Enter note
-    const noteArea = screen.getByPlaceholderText(/e\.g\. Cap misalignment on bottle neck #4/i);
-    fireEvent.change(noteArea, { target: { value: "Cap loose on sample 3" } });
-
-    // Click Submit
-    const submitBtn = screen.getByRole("button", { name: /submit inspection report/i });
-    fireEvent.click(submitBtn);
+    const approveBtn = screen.getByRole("button", { name: /Approve \(አጽድቅ\)/i });
+    fireEvent.click(approveBtn);
 
     await waitFor(() => {
-      expect(qaActions.createQAInspectionAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          productId: "prod_1",
-          lineId: "line_1",
-          checked: 100,
-          defects: 1,
-          note: "Cap loose on sample 3",
-        })
-      );
+      expect(qaActions.reviewQAEntryAction).toHaveBeenCalledWith({
+        reportEntryId: "entry_1",
+        status: "approved",
+        note: undefined,
+      });
+    });
+  });
+
+  it("opens rejection modal and submits rejection with note calling reviewQAEntryAction with status = 'rejected'", async () => {
+    renderQA();
+
+    // Click Reject button
+    const rejectBtn = screen.getByRole("button", { name: /Reject \(ውድቅ አድርግ\)/i });
+    fireEvent.click(rejectBtn);
+
+    // Modal opens
+    expect(screen.getByText(/Reject Production Batch/i)).toBeDefined();
+
+    // Fill rejection reason
+    const reasonInput = screen.getByPlaceholderText(/Reject rate exceeds 5% threshold/i);
+    fireEvent.change(reasonInput, {
+      target: { value: "Seal integrity failure on batch 12" },
     });
 
-    // Check success message appears
-    expect(await screen.findByText(/inspection logged successfully!/i)).toBeDefined();
+    // Confirm Rejection
+    const confirmBtn = screen.getByRole("button", { name: /Confirm Rejection/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(qaActions.reviewQAEntryAction).toHaveBeenCalledWith({
+        reportEntryId: "entry_1",
+        status: "rejected",
+        note: "Seal integrity failure on batch 12",
+      });
+    });
   });
 
-  it("disables 'Submit Inspection Report' button when no products are assigned", () => {
-    renderQA([]);
-
-    const submitBtn = screen.getByRole("button", { name: /submit inspection report/i }) as HTMLButtonElement;
-    expect(submitBtn.disabled).toBe(true);
-  });
-
-  it("renders summary statistics cards for Total Checked, Defect Rate, and Passed Units", () => {
+  it("switches tabs to Previous Approvals & Decisions and displays past approvals", () => {
     renderQA();
 
-    // Summary cards exist
-    expect(screen.getByText("Total Checked")).toBeDefined();
-    expect(screen.getByText("Defect Rate")).toBeDefined();
-    expect(screen.getByText("Passed Units")).toBeDefined();
+    // Switch to history tab
+    const historyTab = screen.getByRole("button", {
+      name: /Previous Approvals & Decisions/i,
+    });
+    fireEvent.click(historyTab);
 
-    // In sampleInspections: checked = 200, defects = 4 => passed = 196, rate = 2.0%
-    expect(screen.getAllByText("200").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("2.0%")).toBeDefined();
-    expect(screen.getByText("196")).toBeDefined();
-    expect(screen.getByText(/98% pass rate/i)).toBeDefined();
+    // Approved item from history is displayed
+    expect(screen.getByText("Approved (የጸደቀ)")).toBeDefined();
+    expect(screen.getByText(/Bottling Line 2/i)).toBeDefined();
+    expect(screen.getByText("Hanna QA")).toBeDefined();
+    expect(screen.getByText(/Tolerances verified/i)).toBeDefined();
   });
 
-  it("toggles pass/fail verdict between 'Pass (Spec OK)' and 'Defects Found'", () => {
+  it("filters previous approvals by filter pills (Approved Only / Rejected Only)", () => {
     renderQA();
 
-    const defectInput = screen.getAllByRole("spinbutton")[1] as HTMLInputElement;
-    expect(defectInput.value).toBe("0");
+    // Switch to history tab
+    const historyTab = screen.getByRole("button", {
+      name: /Previous Approvals & Decisions/i,
+    });
+    fireEvent.click(historyTab);
 
-    const failToggleBtn = screen.getByRole("button", { name: /defects found/i });
-    const passToggleBtn = screen.getByRole("button", { name: /pass \(spec ok\)/i });
+    // Filter to Rejected Only (there are 0 rejected initially)
+    const rejectedOnlyBtn = screen.getByRole("button", { name: /Rejected Only/i });
+    fireEvent.click(rejectedOnlyBtn);
 
-    // Tap Defects Found -> should set defects to at least 1
-    fireEvent.click(failToggleBtn);
-    expect(defectInput.value).toBe("1");
+    expect(screen.getByText(/No decisions found for this filter/i)).toBeDefined();
 
-    // Tap Pass (Spec OK) -> should reset defects to 0
-    fireEvent.click(passToggleBtn);
-    expect(defectInput.value).toBe("0");
+    // Filter back to Approved Only (1 item)
+    const approvedOnlyBtn = screen.getByRole("button", { name: /Approved Only/i });
+    fireEvent.click(approvedOnlyBtn);
+
+    expect(screen.getByText("Approved (የጸደቀ)")).toBeDefined();
   });
 
-  it("displays past inspection notes with Amharic / Ethiopic defect descriptions", () => {
+  it("allows reversing decision on an approved entry via 'Change to Rejected'", async () => {
     renderQA();
 
-    // Confirms Amharic defect note renders properly
-    expect(screen.getByText(/Minor label wrinkle \/ የክዳን መላላት/i)).toBeDefined();
+    // Switch to history tab
+    const historyTab = screen.getByRole("button", {
+      name: /Previous Approvals & Decisions/i,
+    });
+    fireEvent.click(historyTab);
+
+    const changeBtn = screen.getByRole("button", { name: /Change to Rejected/i });
+    fireEvent.click(changeBtn);
+
+    // Opens modal for reversal
+    expect(screen.getByText(/Reject Production Batch/i)).toBeDefined();
   });
 });

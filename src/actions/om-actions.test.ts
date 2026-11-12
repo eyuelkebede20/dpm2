@@ -351,9 +351,46 @@ describe("OM Workflows - Operation Manager Operations", () => {
     });
 
     it("successfully toggles status when called by OM", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+
+      // Mock user lookup and factory association lookup
+      vi.mocked(db.select)
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn().mockResolvedValue([{ id: "usr_qa_01", role: "qa" }]),
+            })),
+          })),
+        } as any)
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({
+                limit: vi.fn().mockResolvedValue([{ factoryId: "fac_1" }]),
+              })),
+            })),
+          })),
+        } as any);
+
       const res = await toggleFactoryUserStatusAction("usr_qa_01", false);
       expect(res.success).toBe(true);
       expect(db.update).toHaveBeenCalled();
+    });
+
+    it("denies OM from deactivating an admin or OM from another factory", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+
+      vi.mocked(db.select).mockReturnValueOnce({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([{ id: "usr_admin_1", role: "sys_admin" }]),
+          })),
+        })),
+      } as any);
+
+      const res = await toggleFactoryUserStatusAction("usr_admin_1", false);
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Forbidden");
     });
   });
 

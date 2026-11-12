@@ -54,9 +54,12 @@ export default async function EntryPage({ searchParams }: EntryPageProps) {
       workingDays={data.workingDays}
       initialRows={data.gridRows}
       userRole={user.role}
+      isDaySubmitted={data.isDaySubmitted}
+      submittedAt={data.submittedAt}
       calendarSystem={(context.industryProfile as any)?.calendarSystem || "ethiopian"}
       specialDay={data.specialDay}
       downtimeReasons={data.downtimeReasons}
+      reportReview={data.reportReview}
     />
   );
 }

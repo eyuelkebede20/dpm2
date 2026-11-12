@@ -8,6 +8,7 @@ import { industryProfile, users, accounts, factories, sessions } from "@/db/sche
 import { eq, and, desc } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
 import { revalidatePath } from "next/cache";
+import { validatePasswordStrength, sanitizeString, logSecurityEvent } from "@/lib/security";
 
 // -------------------------------------------------------------
 // Industry Profile
@@ -178,6 +179,16 @@ export async function createUserAction(rawInput: unknown) {
 
   const { name, email, password, role } = parsed.data;
 
+  const pwdCheck = validatePasswordStrength(password);
+  if (!pwdCheck.valid) {
+    return { success: false, error: pwdCheck.reason || "Password does not meet security requirements" };
+  }
+
+  const sanitizedName = sanitizeString(name);
+  if (!sanitizedName || sanitizedName.length < 2) {
+    return { success: false, error: "Name must be at least 2 characters" };
+  }
+
   try {
     const existing = await db
       .select({ id: users.id })
@@ -316,6 +327,11 @@ export async function toggleUserActiveAction(userId: string, active: boolean) {
     return { success: false, error: "Forbidden" };
   }
 
+  // Prevent self-lockout of administrator (OWASP A04/A05)
+  if (userId === user.id) {
+    return { success: false, error: "Forbidden: Cannot deactivate your own administrator account" };
+  }
+
   try {
     await db
       .update(users)
@@ -356,6 +372,11 @@ export async function adminResetPasswordAction(rawInput: unknown) {
   }
 
   const { userId, newPassword, mustChangePassword } = parsed.data;
+
+  const pwdCheck = validatePasswordStrength(newPassword);
+  if (!pwdCheck.valid) {
+    return { success: false, error: pwdCheck.reason || "Password does not meet security requirements" };
+  }
 
   try {
     const [targetUser] = await db

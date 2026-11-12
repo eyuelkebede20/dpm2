@@ -71,11 +71,12 @@ describe("Better Auth RBAC Configuration", () => {
   });
 
   describe("Factory Manager (fm) RBAC Permissions", () => {
-    it("can create lines, products, plans, and record production entries", () => {
+    it("can create lines, products, read plans, and record production entries", () => {
       expect(hasRolePermission("fm", "factory", "read")).toBe(true);
       expect(hasRolePermission("fm", "line", "create")).toBe(true);
       expect(hasRolePermission("fm", "product", "create")).toBe(true);
-      expect(hasRolePermission("fm", "plan", "create")).toBe(true);
+      expect(hasRolePermission("fm", "plan", "read")).toBe(true);
+      expect(hasRolePermission("fm", "plan", "create")).toBe(false);
       expect(hasRolePermission("fm", "report_entry", "create")).toBe(true);
       expect(hasRolePermission("fm", "report_entry", "record_entry")).toBe(true);
       expect(hasRolePermission("fm", "stock_ledger", "read")).toBe(true);

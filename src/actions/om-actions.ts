@@ -20,6 +20,7 @@ import {
 import { eq, and, desc, asc, inArray, gte, lte } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
 import { revalidatePath } from "next/cache";
+import { validatePasswordStrength, sanitizeString, logSecurityEvent } from "@/lib/security";
 
 // -------------------------------------------------------------
 // Factories Management
@@ -146,6 +147,16 @@ export async function provisionFactoryUserAction(rawInput: unknown) {
 
   const { name, email, password, role, factoryId, assignedProductIds } = parsed.data;
 
+  const pwdCheck = validatePasswordStrength(password);
+  if (!pwdCheck.valid) {
+    return { success: false, error: pwdCheck.reason || "Password does not meet security requirements" };
+  }
+
+  const sanitizedName = sanitizeString(name);
+  if (!sanitizedName || sanitizedName.length < 2) {
+    return { success: false, error: "Name must be at least 2 characters" };
+  }
+
   // Verify factory ownership if OM
   if (user.role === "om") {
     const [factory] = await db
@@ -223,6 +234,41 @@ export async function toggleFactoryUserStatusAction(userId: string, active: bool
   const user = await requireUser();
   if (user.role !== "om" && user.role !== "sys_admin") {
     return { success: false, error: "Forbidden" };
+  }
+
+  // Ensure OM cannot toggle status of Sys Admin or other OMs
+  // and ensure target user belongs to a factory owned by this OM
+  if (user.role === "om") {
+    const [targetUser] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!targetUser || ["sys_admin", "om"].includes(targetUser.role)) {
+      logSecurityEvent({
+        event: "PRIVILEGE_ESCALATION_BLOCKED",
+        userId: user.id,
+        details: { action: "toggleUserStatus", targetUserId: userId },
+      });
+      return { success: false, error: "Forbidden: Cannot alter status of this user" };
+    }
+
+    const userFactories = await db
+      .select({ factoryId: factoryUsers.factoryId })
+      .from(factoryUsers)
+      .innerJoin(factories, eq(factories.id, factoryUsers.factoryId))
+      .where(and(eq(factoryUsers.userId, userId), eq(factories.omId, user.id)))
+      .limit(1);
+
+    if (userFactories.length === 0) {
+      logSecurityEvent({
+        event: "BOLA_ATTEMPT_BLOCKED",
+        userId: user.id,
+        details: { action: "toggleUserStatus", targetUserId: userId },
+      });
+      return { success: false, error: "Forbidden: Target user is not in your factories" };
+    }
   }
 
   try {
@@ -380,6 +426,55 @@ export async function toggleQAProductAssignmentAction(rawInput: unknown) {
   } catch (err: any) {
     console.error("QA assignment toggle error:", err);
     return { success: false, error: "Failed to update QA assignment" };
+  }
+}
+
+const bulkAssignQAProductsSchema = z
+  .object({
+    qaUserId: z.string().min(1),
+    productIds: z.array(z.string().min(1)),
+    assignAll: z.boolean(),
+  })
+  .strict();
+
+export async function bulkAssignQAProductsAction(rawInput: unknown) {
+  const user = await requireUser();
+  if (user.role !== "om" && user.role !== "sys_admin") {
+    return { success: false, error: "Forbidden" };
+  }
+
+  const parsed = bulkAssignQAProductsSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { success: false, error: "Invalid payload" };
+  }
+
+  const { qaUserId, productIds, assignAll } = parsed.data;
+  if (productIds.length === 0) {
+    return { success: true };
+  }
+
+  try {
+    if (assignAll) {
+      await db
+        .insert(qaAssignments)
+        .values(productIds.map((productId) => ({ qaUserId, productId })))
+        .onConflictDoNothing();
+    } else {
+      await db
+        .delete(qaAssignments)
+        .where(
+          and(
+            eq(qaAssignments.qaUserId, qaUserId),
+            inArray(qaAssignments.productId, productIds)
+          )
+        );
+    }
+
+    revalidatePath("/om");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Bulk QA assignment error:", err);
+    return { success: false, error: "Failed to update QA assignments" };
   }
 }
 
