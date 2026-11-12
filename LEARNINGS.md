@@ -435,3 +435,283 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 4. Refactored repeated search bars and form fields across Admin, OM, FM, QA, and Store views to use the unified components.
 5. Added unit tests for each new primitive (`page-container.test.tsx`, `input.test.tsx`, `search-input.test.tsx`, `select.test.tsx`). 35 UI unit tests pass; all 68 component tests pass.
 
+---
+
+## 2026-11-11 — Mobile App Bottom Navigation Bar & Impeccable Ergonomic Audit (Item 14)
+
+**Goal:** Implement an accessible, thumb-friendly persistent mobile bottom navigation bar (`md:hidden`) with role-tailored destinations, high-contrast active state indicators, and an accessible "More" sheet for secondary views, eliminating mobile header hamburger dependency and ensuring page content and sticky save bars are never obscured.
+
+### Libraries & Primitives Evaluated
+
+| Component / Layer | Pattern | Verdict | Reason |
+| :--- | :--- | :--- | :--- |
+| **Mobile Bottom Bar (`<nav aria-label="Mobile Navigation">`)** | Native Fixed HTML5 Nav + Tailwind Backdrop Blur | **Selected** | Placed in the primary thumb sweep zone (`fixed bottom-0 inset-x-0 z-40 md:hidden bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]`). Adheres to Apple HIG and Material Design max-5-destination rule with `grid grid-cols-5` (or `grid-cols-3` for QA/Admin). |
+| **Role-Specific Tab Destination Allocation** | Config-driven Tab Mapping | **Selected** | Tailors primary mobile destinations per role: FM (`Dashboard`, `Lines`, `Entry`, `Calendar`, `More`), OM (`Dashboard`, `Plants`, `Review`, `Calendar`, `More`), QA (`Dashboard`, `Inspections`, `More`), Sys Admin (`Dashboard`, `Admin Portal`, `More`). |
+| **Overflow "More" Sheet** | Accessible Modal Bottom Sheet (`role="dialog"`) | **Selected** | Houses secondary destinations (e.g. `Production Plans`, `Store Stock`, `Change Password`, `Sign Out`). Displays a prominent indicator dot on the "More" tab if the active view lives inside the overflow sheet. |
+| **Page Layout Clearance (`src/app/layout.tsx`)** | Global `<main className="flex-1 pb-16 md:pb-0">` | **Selected** | Guarantees that mobile screens maintain 64px bottom clearance so tables, cards, and buttons are never hidden behind the bottom navigation bar. |
+| **Sticky Save Bar Elevation (`DailyEntryClient`)** | Responsive Offset (`bottom-16 md:bottom-0`) | **Selected** | On mobile devices, the daily entry sticky save bar floats neatly at `bottom-16` directly atop the bottom navigation bar, allowing one-thumb batch saving without overlapping navigation controls. |
+
+### Edge Cases & Gotchas Discovered
+
+- **iOS Home Indicator Overlap:** Devices with home indicators (iPhone X and newer) require safe-area padding. Using `pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]` prevents navigation buttons from sitting directly on the physical gesture bar.
+- **Save Bar Occlusion on Mobile:** Fixed bottom bars (e.g., in daily production entry) previously anchored to `bottom-0`, which would sit behind a persistent bottom navigation bar. Elevating to `bottom-16 md:bottom-0` maintains stacked visibility on mobile while docking flush to `bottom-0` on desktop.
+- **Multiple Elements in Test Assertions:** When navigation destinations exist in both the top desktop header and the mobile bottom bar simultaneously, strict `getByText` queries throw `Found multiple elements`. Using `getAllByText` or scoping to `getByRole("navigation", { name: /mobile navigation/i })` ensures deterministic assertions.
+
+### Decision
+
+1. Added mobile bottom navigation bar in `src/components/navbar.tsx` with role-specific item mapping and active indicator styling.
+2. Updated `src/app/layout.tsx` to provide `pb-16 md:pb-0` bottom clearance on mobile viewports.
+3. Updated `src/components/entry-grid/daily-entry-client.tsx` sticky save bar to `bottom-16 md:bottom-0`.
+4. Expanded test suite in `src/components/navbar.test.tsx` with 6 dedicated mobile bottom navigation tests (all 14 tests pass).
+5. Ran full verification: all 56 tests across `navbar.test.tsx`, `notifications-dropdown.test.tsx`, `daily-entry-client.test.tsx`, and `calendar-client.test.tsx` passed.
+6. Ran `pnpm typecheck` (`tsc --noEmit`) with 0 errors.
+
+
+---
+
+## 2026-11-11 — PostgreSQL `ON CONFLICT` Target Rules & QA Inspection/Approval Synchronization
+
+**Goal:** Resolve PostgreSQL error `42P10: there is no unique or exclusion constraint matching the ON CONFLICT specification` during OM report reviews, and synchronize QA 1-click approvals (`qa_approvals`) across the Daily Entry Grid and Operation Manager views.
+
+### Libraries evaluated
+
+| Library | Maintained? | License | Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Drizzle ORM `onConflictDoUpdate`** | Yes (v0.39) | Apache-2.0 | Core | **Used** | PostgreSQL requires an explicit unique constraint or index matching the columns specified in `target: [...]`. Targeting the primary key `dailyReportReviews.id` (`daily_report_reviews_pkey`) or using a pre-check query avoids runtime `42P10` exceptions. |
+| **Next.js `revalidatePath`** | Yes | MIT | Core | **Used** | Ensures server action mutations on `/qa` immediately invalidate `/entry`, `/om`, and `/calendar` cache tags. |
+
+### Edge cases & gotchas discovered
+
+- **PostgreSQL `42P10` Error with Composite Columns:** In PostgreSQL, an `INSERT ... ON CONFLICT (col_a, col_b) DO UPDATE` query requires a unique index or unique constraint specifically on `(col_a, col_b)`. If the underlying table in the live database lacks an explicit unique composite constraint on `(factory_id, date)`, passing `target: [dailyReportReviews.factoryId, dailyReportReviews.date]` fails at runtime with `42P10`. Querying for an existing record by `factoryId` and `date` first and branching (`update` by `existing.id` if found, `insert` with PK `target: dailyReportReviews.id` if not) guarantees safety across all database instances without requiring schema migrations.
+- **Dual QA Domain Entities:** DPM has two distinct QA workflows:
+  1. `qaInspections`: Piece-level physical inspection (checked count, defect count, defect rate).
+  2. `qaApprovals`: 1-click batch/line approvals or denials performed by QA personnel on the `/qa` portal.
+  Previously, `getDailyGridData` only queried `qaInspections`, ignoring `qaApprovals`. As a result, when QA marked an item approved or denied on `/qa`, the Daily Entry Grid and OM review screens remained stuck on "Pending QA Inspection". Joining `qaApprovals` and checking `status` ensures the review card and table row instantly reflect "QA Approved" or "QA Denied" with inspector details and feedback notes.
+- **Defects vs. Explicit Denial Precedence:** The badge logic in `DailyEntryClient` previously fell back to "QA Approved" when `row.qaReview.defects === 0`. If a QA officer explicitly rejected a submission (status `"denied"` or `"rejected"`) even with 0 reported defects, the UI erroneously showed "QA Approved". Updating the condition to check `row.qaReview.status === "approved" || (!row.qaReview.status && row.qaReview.defects === 0)` ensures explicit QA denials are respected.
+
+### Decision
+
+1. In `src/actions/review-actions.ts`:
+   - Updated `markDailyReportReviewedAction` and `reviewItemAction` to check for existing `dailyReportReviews` record first.
+   - If present, execute `db.update` targeted by `existing.id`.
+   - If absent, execute `db.insert` targeted by primary key `dailyReportReviews.id`.
+2. In `src/actions/data.ts`:
+   - Query `qaApprovals` joined with `users` (`name as qaUserName`) for all `reportEntryIds` on the date.
+   - Map `qaApproval` status, verdict ("QA Approved" / "QA Denied"), inspector name, and note into `qaReview` for each product line.
+   - Preserve physical inspection data fallback when no QA approval decision has been made.
+3. In `src/actions/qa-actions.ts`:
+   - Added `revalidatePath("/entry")`, `revalidatePath("/om")`, and `revalidatePath("/calendar")` to `reviewQAEntryAction`.
+4. In `src/components/entry-grid/daily-entry-client.tsx`:
+   - Corrected QA status rendering so explicit denials show "QA Denied" rather than defaulting to approved.
+
+---
+
+## 2026-11-11 — Full Seed Reset with Homicho Defense Manufacturing Dataset (HAEI)
+
+**Goal:** Cleanly wipe all legacy demo/added database records in DPM2 and seed the authoritative defense manufacturing dataset from `../DPM` (Homicho Ammunition Engineering Industry - HAEI), harmonizing user roles to DPM2's 4 roles (`sys_admin`, `om`, `fm`, `qa`).
+
+### Seed Source & Dataset Mapped
+
+- **Source Reference:** `../DPM/backend/src/db/seeds/01_production_seed.ts`, `02_test_seed.ts`, and `../DPM/backend/src/modules/catalogs/homicho-sample-data.service.ts`.
+- **Enterprise Profile:**
+  - Company: `Homicho Ammunition Engineering Industry` (HAEI)
+  - Working Days: Monday–Saturday (`[1, 2, 3, 4, 5, 6]`, Sunday off)
+  - Unit of Measure: `pcs`
+  - Calendar System: `ethiopian`
+- **5 Munitions Production Plants:**
+  1. `Small Arm Factory (SAF)` (`fac_sac`)
+  2. `Medium Arm Factory (MAF)` (`fac_mac`)
+  3. `Heavy Weapon Factory (HWF)` (`fac_hwc`)
+  4. `Chemical Charging Shop (CCS)` (`fac_chem`)
+  5. `Tool and Auxiliary Shop (TAS)` (`fac_tool`)
+- **15 Munitions Production Lines:**
+  - SAF: `SAF-39-L01: 39mm Cartridge Line`, `SAF-39-L02: 39mm Bullet Line`, `SAF-39-L03: 39mm Final Assembly`, `SAF-54-L01: 54mm Cartridge Line`, `SAF-54-L02: 54mm Bullet Line`, `SAF-54-L03: 54mm Final Assembly`
+  - MAF: `MAF-127-L01: 12.7mm Cartridge Line`, `MAF-127-L02: 12.7mm Steel Core Line`, `MAF-127-L03: 12.7mm Final Assembly`
+  - HWF: `HWF-L01: 100mm/122mm Machining Line`, `HWF-L02: 82mm/60mm Mortar Line`
+  - CCS: `CCS-L01: Warhead Melt-Cast Filling Bay`, `CCS-L02: Propellant Charging & Sealing`
+  - TAS: `TAS-L01: CNC Punch & Die Toolmaking`, `TAS-L02: Die Heat Treatment & Calibration`
+- **12 Munitions Products & Calibers:**
+  - `39mm Cartridge Case (7.62x39)` (`SAP-39-CR`), `39mm Bullet Core & Jacket` (`SAP-39-BL`), `7.62x39mm Final Round` (`SAP-39-ASM`), `54mm Rimmed Case (7.62x54R)` (`SAP-54-CR`), `7.62x54mmR PKM Final Round` (`SAP-54-ASM`), `12.7mm Cartridge Case` (`MAP-127-CR`), `12.7mm Armor-Piercing Core` (`MAP-127-SC`), `12.7x108mm DShK Heavy Round` (`MAP-127-ASM`), `122mm Howitzer Shell Body` (`HWP-122-WH`), `82mm Mortar Bomb Machined` (`HWP-82-MB`), `122mm Warhead TNT Melt Charge` (`CCS-122-WHC`), `Tungsten Carbide Drawing Punch` (`TAS-DD-PUNCH`).
+- **9 Defense Munitions Downtime Classifications:**
+  - `DOW-01` (Punch / Die Tool Wear or Breakage), `DOW-02` (CNC Control / Scale & Sensor Fault), `DOW-03` (Tooling & Caliber Changeover), `DOW-04` (Brass Strip / Steel / Powder Shortage), `DOW-05` (Ballistic Test & Chamber Verification), `DOW-06` (Chemical & Pyrotechnic Safety Clearance), `DOW-07` (Preventive Press Maintenance & Lubrication), `DOW-08` (Power Cut / Generator Transition), `DOW-09` (Machine Breakdown).
+- **Leadership & Role Conflict Resolution:**
+  - DPM2 enforces 4 strict roles: `sys_admin`, `om`, `fm`, `qa`.
+  - Legacy `stock` role from `../DPM` (Dawit Kebede) was omitted in compliance with prompt ("review the roles and if there are conflicts forget those names").
+  - Mapped Users:
+    - Sys Admin: `Col. Kebede Worku (Sys Admin)` (`admin@dpm.local`)
+    - Operation Manager: `Mr. Mihretab Guramela (OM)` (`om@dpm.local`)
+    - Factory Managers: `Sisay Milkessa` (`fm@dpm.local` / SAF), `Eliyas Bekele` (`fm_mac@dpm.local` / MAF), `Maru Tessema` (`fm_hwc@dpm.local` / HWF), `Getenet Sahelu` (`fm_chem@dpm.local` / CCS), `Solomon Geleta` (`fm_tool@dpm.local` / TAS)
+    - Quality Assurance: `Capt. Tigist Haile (QA)` (`qa@dpm.local`, assigned to all 5 plants)
+
+### Verification
+
+- Database reset and seed executed cleanly with `pnpm db:seed`.
+- Full Vitest suite: 44 test files passed, 477 tests passed with 0 failures.
+- TypeScript typecheck: `tsc --noEmit` passed with 0 errors.
+- ESLint: `next lint` passed with 0 errors, 0 warnings.
+- Production build: `next build` compiled all routes and static pages with exit code 0.
+
+
+---
+
+## 2026-11-11 — Operation Manager Navigation & Workspace Polish (and Cross-Role UX Standardization)
+
+**Goal:** Conduct an in-depth audit on the Operation Manager navigation bar and page complexity, resolve semantic navigation mismatches across roles, eliminate redundant nested drilldown friction in `/om`, and standardize polished UX across FM, QA, and Sys Admin.
+
+### Audit Findings & Root Causes
+
+1. **Semantic Navigation Mismatches:**
+   - The desktop navigation previously labeled `/entry` as `"Daily Entry"` for all roles. While appropriate for Factory Managers, Operation Managers are strictly barred from entering daily counts; their role is to **review**, **inspect QA approvals/denials**, and **tune daily targets**. Presenting a `"Daily Entry"` pen-tool item to an OM conveyed confusing intent.
+   - `/om` was previously labeled `"OM Operations"`, which is bureaucratic and abstract compared to concrete domain responsibilities.
+2. **Plant Drilldown & Context Switching:**
+   - In `/om`, drilling down into a plant completely replaced the view, requiring OMs managing multiple plants to repeatedly click "Back to Plants" to switch facilities.
+   - Plant cards lacked direct quick shortcuts to jump straight into plant-scoped team management or QA matrix assignment.
+
+### Decisions & Solutions
+
+1. **Role-Tailored Desktop Navigation (`src/components/navbar.tsx`):**
+   - **For OM:**
+     - `/entry` &rarr; **`"Daily Reports"`** with `ClipboardCheck` icon.
+     - `/om` &rarr; **`"Operations Hub"`** with `Building2` icon.
+     - Retains `"Production Plans"`, `"Calendar"`, and `"Dashboard"`.
+   - **For FM:**
+     - `/entry` &rarr; **`"Daily Entry"`** with `PenTool` icon.
+     - `/fm` &rarr; **`"Lines & Floor"`**, `/planning` &rarr; **`"Production Plans"`**, `/fm/store` &rarr; **`"Store Stock"`**.
+   - **For QA:**
+     - `/qa` &rarr; **`"QA Approvals"`** with `ClipboardCheck` icon.
+   - **For Sys Admin:**
+     - `/admin` &rarr; **`"Admin Portal"`** with `Shield` icon.
+2. **OM Workspace Polish (`src/app/om/om-client.tsx` & `src/app/om/page.tsx`):**
+   - **Plant Switcher in Plant Hub:** Added an instant `<select aria-label="Switch Plant">` dropdown inside the Plant Hub header, allowing OMs to switch between plants in 1 click without navigating back to the card grid.
+   - **Breadcrumb Navigation:** Added `Operating Plants / [Plant Name]` clickable breadcrumb.
+   - **Direct Jump Shortcuts on Plant Cards:** Added clean 1-click shortcut badges (`Team`, `QA Matrix`, `Lines`) on each plant card so the OM can immediately jump to the relevant tab pre-filtered to that facility.
+   - **Visual Polish:** Standardized active plant counts, refined typography, and ensured all interactive targets meet the 44px touch guideline.
+3. **Cross-Role Quality Verification:**
+   - Standardized `src/app/offline/page.tsx` button and link layout.
+   - Full Vitest suite: 44 test files passed, 477 tests passed.
+   - `tsc --noEmit`: 0 TypeScript errors.
+   - `next lint`: 0 warnings, 0 errors.
+
+---
+
+## 2026-11-11 — Progressive Web App (PWA) with Over-The-Air (OTA) Updates Engine
+
+**Goal:** Transform DPM into an installable Progressive Web App (PWA) featuring an automated Over-The-Air (OTA) updates engine, version tracking endpoint, intelligent Service Worker caching (network-first for pages/API, stale-while-revalidate for static assets), offline resilience fallback, and interactive update prompts.
+
+### Libraries & Architectures Evaluated
+
+| Approach / Library | Maintained? | License | Bundle Size | Verdict | Reason |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`@ducanh2912/next-pwa` / `next-pwa`** | Mixed | MIT | ~28kB | Rejected | Known compilation and worker hook conflicts with Next.js 15, React 19 App Router, and Turbopack (`--turbo`). Introduces heavy Webpack plugin layers that complicate build pipelines. |
+| **Native Web Standards (Next.js 15 `manifest.ts` + Custom `sw.js` + `navigator.serviceWorker`)** | W3C Standard | MIT | 0kB ext | **Selected** | 100% native compatibility with Next.js 15 App Router, zero external npm dependencies, native `MetadataRoute.Manifest` support, direct lifecycle event control (`updatefound`, `waiting`, `SKIP_WAITING`, `controllerchange`), full offline fallback resilience, and seamless OTA prompt execution. |
+
+### Architecture & Key Mechanisms
+
+1. **Web App Manifest (`src/app/manifest.ts`):**
+   - Automatically serves `/manifest.webmanifest` and injects link tags.
+   - Branded for `Homicho Ammunition Engineering Industry - DPM` (`HAEI DPM`).
+   - `display: standalone`, `orientation: portrait-primary`, `theme_color: #1e293b`, `background_color: #0f172a`.
+   - Complete icon suite: `icon-192.png`, `icon-512.png`, `icon-maskable.png`, `apple-touch-icon.png`, and `icon.svg`.
+2. **Version Architecture (`src/lib/version.ts` & `/api/version`):**
+   - Centralizes version constants (`CURRENT_APP_VERSION = "1.0.1"`, `GITHUB_REPO = "eyuelkebede20/dpm"`, `CURRENT_GIT_COMMIT = "bc4b2e1"`).
+   - Next.js App Router route rule: HTTP route handlers (`route.ts`) must only export HTTP methods (`GET`, `POST`) and segment configs (`dynamic`), never arbitrary constant values (which fail Next.js internal type constraint check `checkFields<Diff<...>>`). Moving constants to `src/lib/version.ts` resolved this cleanly.
+   - Endpoint `/api/version` returns version, build timestamp, application name, git commit hash, repository link, and release notes.
+3. **Service Worker & Cache Headers (`public/sw.js` & `next.config.ts`):**
+   - Version-stamped cache bucket (`haei-dpm-v1.0.1`).
+   - Pre-caches critical offline assets (`/offline`, `/icons/icon.svg`, `/icons/icon-192.png`, `/icons/icon-512.png`, `/icons/icon-maskable.png`, `/icons/apple-touch-icon.png`, `/manifest.webmanifest`).
+   - **OTA Skip Waiting Control:** During updates, does *not* auto-skip waiting, keeping the new worker in `waiting` state until receiving `{ type: 'SKIP_WAITING' }` from user confirmation.
+   - **Cache Purge:** Purges obsolete cache buckets during `activate`.
+   - **Network Routing:** Network-first for HTML pages with fallback to cached `/offline`; cache-first with stale-while-revalidate for static assets; network-only with graceful 503 JSON for offline API calls.
+   - **HTTP Cache Headers:** Explicit `Cache-Control: no-cache, no-store, must-revalidate` configured in `next.config.ts` for `/sw.js` and `/api/version` so browsers immediately detect new OTA versions without HTTP disk caching delays.
+4. **Client PWA & OTA Engine (`src/hooks/use-pwa-ota.ts` & `src/components/pwa/pwa-ota-manager.tsx`):**
+   - Safe context provider with default fallback for SSR and tests.
+   - Listens for `updatefound` on service worker registration and `statechange` to `installed`.
+   - Surfaces high-contrast, accessible `<PwaOtaBanner />` (`role="alert"`) informing user of the new version, release notes, and direct GitHub commit link.
+   - `applyUpdate()` sends `SKIP_WAITING` to the waiting worker; the `controllerchange` event catches worker takeover and triggers `window.location.reload()`.
+   - Captures `beforeinstallprompt` for native "Install App" triggers.
+   - Provides manual "Check for Updates" button with version indicator in the desktop profile menu and mobile drawer.
+5. **Offline Fallback Page (`src/app/offline/page.tsx`):**
+   - Displays accessible offline emblem with bilingual messaging.
+   - Includes "Try Reconnecting" button (`window.location.reload()`) and "Dashboard" link.
+
+### Verification
+
+- Scoped Vitest tests: `pwa-ota-banner.test.tsx`, `offline/page.test.tsx`, `version/route.test.ts`, `navbar.test.tsx`, `om-actions.test.ts`, and `switch-role/route.test.ts` all passing.
+- Full Vitest suite: 50 test files passed, 505 tests passed (0 failures).
+- `tsc --noEmit`: 0 TypeScript errors.
+- `next lint`: 0 warnings, 0 errors.
+- Production build: `next build` compiled all routes including `○ /manifest.webmanifest`, `ƒ /offline`, and `ƒ /api/version` with exit code 0.
+
+---
+
+## 2026-11-11 — Authentication, Multi-Tenant Authorization, OWASP Top 10 & API Security Hardening (Item 15)
+
+**Goal:** Implement comprehensive defense-in-depth security covering Authentication (password strength, lockout), Authorization (least privilege, Broken Object Level Authorization / BOLA prevention), API Security (sliding-window rate limiting), Security Misconfigurations (HSTS, CSP, COOP, CORP), and Structured Audit Logging.
+
+### Threat Modeling & Mitigations Evaluated
+
+| Threat / OWASP Category | Attack Vector / Risk | Architectural Mitigation | Status |
+| :--- | :--- | :--- | :--- |
+| **A01: Broken Access Control (BOLA / IDOR)** | Cross-tenant deletion or state tampering (e.g. deleting plans or toggling users belonging to another OM's plant). | Guarded `deletePlanAction` in `plan-actions.ts` and `fm-actions.ts`, `toggleFactoryUserStatusAction` in `om-actions.ts`, and `revokeDailyReportReviewAction` in `review-actions.ts` with strict factory ownership and tenant boundary validation. Stripped `create`/`update`/`delete` from `roles.fm.plan` in `rbac.ts` (least privilege). | **Enforced** |
+| **A03: Injection & Path Traversal** | Directory traversal (`../../etc/passwd`), prototype pollution (`__proto__`), or XSS scripts in notes/inputs. | Next.js Edge Middleware inspects full request URLs, blocking traversal and proto pollution attacks with 400 Bad Request. Added `sanitizeString()` to strip script tags and inline event handlers from user text fields. | **Enforced** |
+| **A04: Insecure Design & Brute Force** | High-velocity automated credential stuffing or API resource exhaustion. | Built `checkRateLimit()` token bucket / sliding window limiter with memory leak protection (5-minute stale key purge). Enforced in `src/middleware.ts` (15 req/min on `/api/auth/*`, 120 req/min on `/api/*`). | **Enforced** |
+| **A05: Security Misconfiguration** | Missing transport security, framing vulnerabilities, or leaking dev test endpoints in production. | Configured strict HTTP security headers in `next.config.ts` and `src/middleware.ts` (`Strict-Transport-Security: max-age=63072000; preload`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `COOP: same-origin`, `CORP: same-origin`, `X-XSS-Protection: 1; mode=block`). Hard-locked dev role-switcher (`/api/dev/switch-role`) to return 404 in production. | **Enforced** |
+| **A07: Authentication Failures** | Weak user-supplied passwords and admin self-lockout. | Enforced OWASP ASVS password complexity (min 12 chars, uppercase, lowercase, number, special character) via `validatePasswordStrength()` across user provisioning and password resets. Added self-lockout guard preventing admins from deactivating their own accounts. | **Enforced** |
+| **A09: Security Logging & Monitoring** | Silent failures or unrecorded privilege escalations and brute-force attempts. | Built structured audit logger `logSecurityEvent()` with timestamp, event code, IP, and masked details, writing structured `[SECURITY_AUDIT]` records without leaking secrets. | **Enforced** |
+
+### Decision & Key Files
+
+1. `src/lib/rate-limit.ts` & `src/lib/rate-limit.test.ts`: High-performance sliding window rate limiter.
+2. `src/lib/security.ts` & `src/lib/security.test.ts`: Password complexity validator, XSS sanitizer, PII email masking, and structured audit logger.
+3. `src/middleware.ts` & `src/middleware.test.ts`: Next.js security middleware enforcing anti-brute force rate limiting, path traversal blocks, and OWASP headers.
+4. `src/lib/rbac.ts` & `src/lib/rbac.test.ts`: Harmonized Factory Manager role to `plan: ["read"]` only.
+5. `src/actions/plan-actions.ts` & `src/actions/fm-actions.ts`: Added BOLA checks to `deletePlanAction` validating factory ownership.
+6. `src/actions/om-actions.ts`: Added multi-tenant checks to `toggleFactoryUserStatusAction` and password strength validation to `provisionFactoryUserAction`.
+7. `src/actions/review-actions.ts`: Added factory ownership validation to `revokeDailyReportReviewAction`.
+8. `src/actions/admin-actions.ts`: Added admin self-lockout prevention to `toggleUserActiveAction` and password strength validation to `createUserAction` and `adminResetPasswordAction`.
+9. `next.config.ts`: Enriched security headers (`Strict-Transport-Security`, `COOP`, `CORP`, `X-Permitted-Cross-Domain-Policies`).
+10. `src/app/api/dev/switch-role/route.ts`: Enforced strict production 404 lockout.
+
+### Verification & Quality Gates
+
+- Unit & Security tests: 45 security tests and 102 action tests passing (147/147 passed).
+- TypeScript: `pnpm typecheck` passed with 0 errors.
+
+---
+
+## 2026-11-12 — Production Docker Containerization, LAN Working IP Exposure & Robust Shell Automation (Item 16)
+
+**Goal:** Implement a production-grade Docker container hosting architecture for DPM2 (Next.js 15 Standalone + PostgreSQL 16 Alpine + Drizzle ORM + Better Auth) with automatic LAN host IP discovery, zero-downtime updates with automatic rollback, unprivileged container execution, and shell scripts learned directly from `../Bure_Card`.
+
+### Architectural Reference & Patterns Studied
+
+- `../Bure_Card/Dockerfile` — Learned multi-stage caching pattern (`deps`, `build`, `runtime`), standalone Next.js tracing, non-root `node` user execution, and `postgresql-client` runtime utility inclusion for database backups.
+- `../Bure_Card/docker-compose.yml` — Learned network isolation strategy (internal bridge network `backend` where PostgreSQL port 5432 is strictly private and never exposed to the external LAN), container healthchecks using built-in `fetch` and `pg_isready`, and resource constraints (`1g` memory limit for app, `2g` for database).
+- `../Bure_Card/start.sh` & `update.sh` — Learned interactive progress bars, self-updating Git logic, pre-flight Docker Engine & Compose validation, permission remediation for `run/backups/logs`, dynamic host LAN IP detection (`ip -4 route get 1.1.1.1`), and zero-downtime `--quick` updates with automated `pg_dump` backups and instant rollback on healthcheck timeout.
+- `../Bure_Card/deploy/` — Studied `show-url.sh`, `static-ip.sh`, and `clinic-watcher.sh` background update daemon.
+
+### Edge Cases & Gotchas Discovered
+
+- **Standalone Output Mode in Next.js 15:** By default, Next.js does not package dependencies into `.next/standalone`. Setting `output: "standalone"` in `next.config.ts` enables tracing and creates a minimal self-contained production bundle, drastically shrinking runtime image size from ~1.2GB to < 220MB.
+- **Better Auth Cookies over LAN HTTP vs. HTTPS:** When clients access the application across an on-premises factory LAN (e.g. `http://192.168.1.50:3000`), `NODE_ENV === "production"` would normally set `secure: true` on cookies. Because browsers reject Secure cookies on non-localhost HTTP, users could not stay logged in. Making `useSecureCookies` conditional on `COOKIE_SECURE=true` or an `https://` base URL allows seamless LAN authentication without compromising production reverse-proxy security.
+- **Dynamic Origin Validation on Industrial Networks:** Plant managers and inspectors access the server using different IP addresses or hostnames. Adding dynamic `trustedOrigins` in `src/lib/auth.ts` extracts the incoming `origin` and `host` headers, allowing Better Auth to accept requests across all local LAN subnets without hardcoding IP addresses.
+- **Drizzle Migrations in Standalone Container:** Running Drizzle migrations at container boot without devDependencies is achieved via `scripts/migrate.mjs`, utilizing native `drizzle-orm/node-postgres/migrator` and `pg` already in runtime dependencies.
+- **Docker Socket Security:** Exposing `/var/run/docker.sock` to the web container creates root-equivalent vulnerabilities. In this architecture, updates are requested via an unprivileged flag file (`run/update.request`), monitored by host-side `deploy/dpm-watcher.sh`.
+
+### Decision & Delivered Artifacts
+
+1. `Dockerfile`: Multi-stage build (`node:22-alpine`), pnpm cache mounts, standalone build, `postgresql-client`, non-root user `node`, port 3000 exposed, and automatic migration on startup.
+2. `docker-compose.yml`: `db` (Postgres 16 Alpine, 512MB shared buffers, healthcheck) and `app` (Next.js standalone, healthcheck probe, 1GB memory limit, internal bridge network).
+3. `.dockerignore`: Prevents node_modules, .next, .git, and local logs from entering build context.
+4. `start.sh`: Full Linux start script with self-update, pre-flight checks, LAN IP detection (`http://${LAN_IP}:${APP_PORT}`), live build animation, and zero-downtime quick update (`--quick`) with automated pre-update database backup and rollback.
+5. `update.sh`: Host update script writing live progress to `run/update.status`.
+6. `deploy/show-url.sh` & `deploy/static-ip.sh`: Interactive terminal scripts displaying LAN IP endpoints and guiding network configuration.
+7. `deploy/dpm-watcher.sh` & `deploy/install-watcher.sh`: Systemd / cron background daemon watching `run/update.request`.
+8. `START.bat`, `UPDATE.bat`, `deploy/show-url.bat`, `deploy/static-ip.bat`: Native Windows companion scripts for local execution.
+9. `src/app/api/health/route.ts` & `src/app/api/health/route.test.ts`: Healthcheck endpoint verifying PostgreSQL connectivity (`SELECT 1`), tested and verified.
+10. `next.config.ts`: Configured `output: "standalone"`.
+11. `src/lib/auth.ts`: Dynamic `trustedOrigins` and LAN-safe `useSecureCookies`.
+12. `.env.example`: Updated with complete Docker hosting settings.
+13. `docker.md`: Administrator and developer deployment manual.
+
+

@@ -19,6 +19,7 @@ vi.mock("@/actions/om-actions", () => ({
   toggleFactoryUserStatusAction: vi.fn().mockResolvedValue({ success: true }),
   updateFactoryUserRoleAction: vi.fn().mockResolvedValue({ success: true }),
   toggleQAProductAssignmentAction: vi.fn().mockResolvedValue({ success: true }),
+  bulkAssignQAProductsAction: vi.fn().mockResolvedValue({ success: true }),
   getOMFactoryCalendarDataAction: vi.fn().mockResolvedValue({
     success: true,
     data: {
@@ -386,5 +387,112 @@ describe("Button Interaction Tests - OMClient", () => {
 
     expect(screen.getByText("Tadesse FM")).toBeDefined();
     expect(screen.queryByText("Bethlehem QA")).toBeNull();
+  });
+
+  it("renders separate QA product assignment matrix tables for each plant with plant-specific products", async () => {
+    const multiFactories = [
+      { id: "fac_1", name: "Hawassa Plant", omId: "usr_om_1", active: true, createdAt: new Date() },
+      { id: "fac_2", name: "Addis Ababa Plant", omId: "usr_om_1", active: true, createdAt: new Date() },
+    ];
+
+    const multiMatrix = {
+      qaUsers: [
+        {
+          id: "usr_qa_1",
+          name: "Bethlehem QA",
+          email: "bethlehem@dpm.local",
+          active: true,
+          factoryId: "fac_1",
+          factoryName: "Hawassa Plant",
+        },
+        {
+          id: "usr_qa_2",
+          name: "Yonas QA",
+          email: "yonas@dpm.local",
+          active: true,
+          factoryId: "fac_2",
+          factoryName: "Addis Ababa Plant",
+        },
+      ],
+      productsList: [
+        {
+          id: "prod_1",
+          name: "Standard Bottle",
+          sku: "BOT-STD",
+          factoryId: "fac_1",
+          factoryName: "Hawassa Plant",
+        },
+        {
+          id: "prod_2",
+          name: "Polo Shirt",
+          sku: "POLO-01",
+          factoryId: "fac_2",
+          factoryName: "Addis Ababa Plant",
+        },
+      ],
+      assignments: [
+        { qaUserId: "usr_qa_1", productId: "prod_1" },
+      ],
+    };
+
+    render(
+      <OMClient
+        factories={multiFactories}
+        factoryUsers={[]}
+        matrixData={multiMatrix}
+      />
+    );
+
+    // Switch to QA Assignment Matrix tab
+    const matrixTab = screen.getByRole("button", { name: /qa assignment matrix/i });
+    fireEvent.click(matrixTab);
+
+    // Both plant section cards should be visible
+    expect(screen.getByRole("heading", { name: "Hawassa Plant" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Addis Ababa Plant" })).toBeDefined();
+
+    // Hawassa Plant matrix table should show Standard Bottle and Bethlehem QA
+    expect(screen.getByText("Standard Bottle")).toBeDefined();
+    expect(screen.getByText("Bethlehem QA")).toBeDefined();
+
+    // Addis Ababa Plant matrix table should show Polo Shirt and Yonas QA
+    expect(screen.getByText("Polo Shirt")).toBeDefined();
+    expect(screen.getByText("Yonas QA")).toBeDefined();
+
+    // Test Bulk Clear All for Bethlehem QA in Hawassa Plant (since prod_1 is already assigned)
+    const clearAllBtns = screen.getAllByRole("button", { name: /clear all/i });
+    expect(clearAllBtns.length).toBeGreaterThan(0);
+    fireEvent.click(clearAllBtns[0]);
+
+    await waitFor(() => {
+      expect(omActions.bulkAssignQAProductsAction).toHaveBeenCalledWith({
+        qaUserId: "usr_qa_1",
+        productIds: ["prod_1"],
+        assignAll: false,
+      });
+    });
+
+    // Test Bulk Assign All for Yonas QA in Addis Ababa Plant (since prod_2 is unassigned)
+    const assignAllBtns = screen.getAllByRole("button", { name: /assign all/i });
+    expect(assignAllBtns.length).toBeGreaterThan(0);
+    fireEvent.click(assignAllBtns[1]);
+
+    await waitFor(() => {
+      expect(omActions.bulkAssignQAProductsAction).toHaveBeenCalledWith({
+        qaUserId: "usr_qa_2",
+        productIds: ["prod_2"],
+        assignAll: true,
+      });
+    });
+
+    // Test Plant Switcher Pill: Click "Addis Ababa Plant" filter pill
+    const addisFilterPill = screen.getByRole("button", { name: /^addis ababa plant/i });
+    fireEvent.click(addisFilterPill);
+
+    // Now only Addis Ababa Plant matrix table should be visible
+    expect(screen.getByRole("heading", { name: "Addis Ababa Plant" })).toBeDefined();
+    expect(screen.queryByRole("heading", { name: "Hawassa Plant" })).toBeNull();
+    expect(screen.getByText("Polo Shirt")).toBeDefined();
+    expect(screen.getByText("Yonas QA")).toBeDefined();
   });
 });
