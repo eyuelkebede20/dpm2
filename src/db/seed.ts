@@ -23,6 +23,7 @@ import {
   notifications,
   specialDays,
   downtimeReasons,
+  serverEndpoints,
 } from "./schema";
 import { getEthiopianHolidaysForYear } from "../lib/ethiopian-holidays";
 import { hashPassword } from "better-auth/crypto";
@@ -55,6 +56,7 @@ export async function seedDatabase(options: { reset?: boolean } = { reset: true 
     await db.delete(specialDays);
     await db.delete(downtimeReasons);
     await db.delete(industryProfile);
+    await db.delete(serverEndpoints);
     console.log("   ✓ All existing and added database records wiped cleanly.");
   }
 
@@ -74,6 +76,44 @@ export async function seedDatabase(options: { reset?: boolean } = { reset: true 
     units: "pcs",
     calendarSystem: "ethiopian",
   });
+
+  // 1b. Backend Server Endpoints & Network Presets (Factory LAN vs Cloud)
+  console.log("2b. Seeding Standard Server Endpoints (LAN / Internet / Localhost)...");
+  const defaultServerEndpoints = [
+    {
+      id: "srv_lan_factory",
+      name: "Main Plant Factory LAN",
+      url: "http://192.168.1.100:3000",
+      description: "On-premises high-speed factory local area network server",
+      environment: "lan",
+      isDefault: true,
+      isActive: true,
+      createdBy: "usr_admin",
+    },
+    {
+      id: "srv_hq_cloud",
+      name: "Homicho HQ Internet Cloud",
+      url: "https://dpm.homicho.et",
+      description: "Central cloud server accessible over public internet and mobile data",
+      environment: "cloud",
+      isDefault: false,
+      isActive: true,
+      createdBy: "usr_admin",
+    },
+    {
+      id: "srv_localhost",
+      name: "Localhost Edge / Developer",
+      url: "http://localhost:3000",
+      description: "Local development gateway running on localhost",
+      environment: "local",
+      isDefault: false,
+      isActive: true,
+      createdBy: "usr_admin",
+    },
+  ];
+  for (const srv of defaultServerEndpoints) {
+    await db.insert(serverEndpoints).values(srv);
+  }
 
   // 2. Standard Defense Munition Downtime Reasons (DOW-01 through DOW-09)
   console.log("3. Seeding Standard Defense Downtime Reasons (DOW-01 .. DOW-09)...");
@@ -699,6 +739,7 @@ export async function seedDatabase(options: { reset?: boolean } = { reset: true 
     lines: linesRecords.length,
     products: productsRecords.length,
     plans: samplePlans.length,
+    servers: defaultServerEndpoints.length,
   };
 }
 

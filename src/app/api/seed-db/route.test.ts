@@ -56,6 +56,7 @@ describe("Seed Database API Route - GET /api/seed-db", () => {
       lines: 10,
       products: 12,
       plans: 9,
+      servers: 3,
     });
 
     const req = new NextRequest("http://localhost:3000/api/seed-db");
@@ -82,6 +83,7 @@ describe("Seed Database API Route - GET /api/seed-db", () => {
       lines: 10,
       products: 12,
       plans: 9,
+      servers: 3,
     });
 
     const req = new NextRequest("http://localhost:3000/api/seed-db?force=true");

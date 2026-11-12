@@ -90,8 +90,28 @@ export async function apiClient<T = unknown>(
     jitter = true,
     idempotent,
     signal: userSignal,
+    credentials,
     ...fetchOptions
   } = options;
+
+  // Resolve relative URLs to active custom backend server if set in localStorage
+  let resolvedUrl = url;
+  let defaultCredentials = credentials;
+
+  if (typeof window !== "undefined" && url.startsWith("/")) {
+    try {
+      const customBackend = window.localStorage.getItem("dpm_active_backend_url");
+      if (customBackend && customBackend.trim()) {
+        const cleanBackend = customBackend.trim().replace(/\/+$/, "");
+        if (cleanBackend && cleanBackend !== window.location.origin) {
+          resolvedUrl = `${cleanBackend}${url}`;
+          defaultCredentials = defaultCredentials || "include";
+        }
+      }
+    } catch {
+      // Ignore localStorage read errors and fall back to relative URL
+    }
+  }
 
   const isIdempotent = idempotent !== undefined ? idempotent : IDEMPOTENT_METHODS.has(method);
   // Only retry idempotent operations by default
@@ -139,12 +159,13 @@ export async function apiClient<T = unknown>(
         }
       }
 
-      const response = await fetch(url, {
+      const response = await fetch(resolvedUrl, {
         ...fetchOptions,
         method,
         headers,
         body: formattedBody,
         signal: controller.signal,
+        ...(defaultCredentials ? { credentials: defaultCredentials } : {}),
       });
 
       clearTimeout(timeoutId);

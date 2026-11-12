@@ -4,6 +4,7 @@ import {
   getOperationManagers,
   getAllUsersForAdmin,
 } from "@/actions/admin-actions";
+import { getAllServerEndpointsForAdminAction } from "@/actions/server-endpoint-actions";
 import { AdminClient } from "./admin-client";
 import { PageContainer } from "@/components/ui";
 
@@ -15,6 +16,7 @@ export default async function AdminPage() {
   const profile = await getIndustryProfile();
   const oms = await getOperationManagers();
   const allUsers = await getAllUsersForAdmin();
+  const serverEndpoints = await getAllServerEndpointsForAdminAction();
 
   const isDevImpersonationEnabled =
     process.env.NODE_ENV !== "production" &&
@@ -59,6 +61,7 @@ export default async function AdminPage() {
         }}
         initialOms={oms}
         initialUsers={allUsers}
+        initialServerEndpoints={serverEndpoints}
         currentUserId={user.id}
         isDevImpersonationEnabled={isDevImpersonationEnabled}
       />

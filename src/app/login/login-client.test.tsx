@@ -116,4 +116,14 @@ describe("Button Interaction Tests - LoginClient", () => {
     expect(await screen.findByText(/too many failed attempts/i)).toBeDefined();
     expect(signInBtn.disabled).toBe(true);
   });
+
+  it("renders server endpoint pill and opens backend server settings modal when 'Change Server' is clicked", () => {
+    render(<LoginClient />);
+
+    const changeServerBtn = screen.getByRole("button", { name: /change server/i });
+    expect(changeServerBtn).toBeDefined();
+
+    fireEvent.click(changeServerBtn);
+    expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+  });
 });

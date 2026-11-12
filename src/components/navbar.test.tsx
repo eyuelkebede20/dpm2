@@ -288,5 +288,29 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       );
       expect(activeMobileLink).toBeDefined();
     });
+
+    it("opens backend server settings modal when 'Server Settings' is clicked from profile dropdown", () => {
+      render(<Navbar user={sampleUser} />);
+      const profileBtn = screen.getByRole("button", { name: /user profile menu/i });
+      fireEvent.click(profileBtn);
+
+      const serverSettingsBtn = screen.getByRole("button", { name: /server settings/i });
+      expect(serverSettingsBtn).toBeDefined();
+
+      fireEvent.click(serverSettingsBtn);
+      expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+    });
+
+    it("opens backend server settings modal when clicked from mobile drawer", () => {
+      render(<Navbar user={sampleUser} />);
+      const hamburgerBtn = screen.getByRole("button", { name: /toggle navigation menu/i });
+      fireEvent.click(hamburgerBtn);
+
+      const mobileServerBtn = screen.getByRole("button", { name: /server settings \(lan \/ cloud\)/i });
+      expect(mobileServerBtn).toBeDefined();
+
+      fireEvent.click(mobileServerBtn);
+      expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+    });
   });
 });

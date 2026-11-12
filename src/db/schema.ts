@@ -95,6 +95,22 @@ export const industryProfile = pgTable("industry_profile", {
 });
 
 // -------------------------------------------------------------
+// Server Endpoints & Backend URL Presets (PWA LAN / Internet)
+// -------------------------------------------------------------
+export const serverEndpoints = pgTable("server_endpoints", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  description: text("description"),
+  environment: text("environment").notNull().default("production"), // 'lan' | 'cloud' | 'local' | 'backup'
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// -------------------------------------------------------------
 // Factories & Factory Users
 // -------------------------------------------------------------
 export const factories = pgTable("factories", {
@@ -537,5 +553,12 @@ export const stockLedgerRelations = relations(stockLedger, ({ one }) => ({
   reportEntry: one(reportEntries, {
     fields: [stockLedger.reportEntryId],
     references: [reportEntries.id],
+  }),
+}));
+
+export const serverEndpointsRelations = relations(serverEndpoints, ({ one }) => ({
+  creator: one(users, {
+    fields: [serverEndpoints.createdBy],
+    references: [users.id],
   }),
 }));

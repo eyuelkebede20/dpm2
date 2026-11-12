@@ -23,11 +23,13 @@ import {
   Key,
   MoreHorizontal,
   RefreshCw,
+  Server,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SessionUser } from "@/lib/authz";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { usePwaOtaContext } from "@/components/pwa/pwa-ota-manager";
+import { BackendServerSettingsModal } from "@/components/settings/backend-server-settings-modal";
 
 interface NavbarProps {
   user: SessionUser;
@@ -40,6 +42,7 @@ export function Navbar({ user }: NavbarProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const pwa = usePwaOtaContext();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +71,7 @@ export function Navbar({ user }: NavbarProps) {
       if (event.key === "Escape") {
         setProfileOpen(false);
         setMobileMenuOpen(false);
+        setServerSettingsOpen(false);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -406,6 +410,22 @@ export function Navbar({ user }: NavbarProps) {
                       </Link>
                       <button
                         type="button"
+                        onClick={() => {
+                          setProfileOpen(false);
+                          setServerSettingsOpen(true);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Server className="w-4 h-4 text-slate-400" />
+                          <span>Server Settings</span>
+                        </div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
+                          LAN / Cloud
+                        </span>
+                      </button>
+                      <button
+                        type="button"
                         onClick={async () => {
                           setProfileOpen(false);
                           setCheckingUpdate(true);
@@ -666,6 +686,17 @@ export function Navbar({ user }: NavbarProps) {
               </Link>
               <button
                 type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setServerSettingsOpen(true);
+                }}
+                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
+              >
+                <Server className="w-4 h-4 text-slate-400" />
+                <span>Server Settings (LAN / Cloud)</span>
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
                   setMobileMenuOpen(false);
                   setCheckingUpdate(true);
@@ -705,6 +736,13 @@ export function Navbar({ user }: NavbarProps) {
           </div>
         </div>
       )}
+
+      {/* Backend Server & Network Settings Modal */}
+      <BackendServerSettingsModal
+        isOpen={serverSettingsOpen}
+        onClose={() => setServerSettingsOpen(false)}
+        isAdmin={user.role === "sys_admin"}
+      />
     </>
   );
 }

@@ -3,10 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Boxes, Lock, Mail, AlertCircle, Clock } from "lucide-react";
+import { Boxes, Lock, Mail, AlertCircle, Clock, Server } from "lucide-react";
+import { useBackendServer } from "@/hooks/use-backend-server";
+import { BackendServerSettingsModal } from "@/components/settings/backend-server-settings-modal";
 
 export function LoginClient() {
   const router = useRouter();
+  const { activeUrl, isCustom } = useBackendServer();
+  const [serverModalOpen, setServerModalOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -228,12 +232,36 @@ export function LoginClient() {
             </div>
           </div>
 
+          {/* Server endpoint selector */}
+          <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`w-2 h-2 rounded-full ${isCustom ? "bg-indigo-500" : "bg-emerald-500"}`} />
+              <Server className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="truncate font-mono text-[11px] text-slate-600">
+                {activeUrl.replace(/^https?:\/\//, "")}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setServerModalOpen(true)}
+              className="btn btn-xs btn-ghost text-indigo-600 font-bold hover:bg-indigo-50 shrink-0"
+            >
+              Change Server
+            </button>
+          </div>
+
           {/* Security info */}
-          <div className="mt-5 text-[11px] text-slate-400 text-center leading-relaxed">
+          <div className="mt-4 text-[11px] text-slate-400 text-center leading-relaxed">
             <p>Protected by Argon2id password hashing and brute-force lockout safeguards.</p>
           </div>
         </div>
       </div>
+
+      <BackendServerSettingsModal
+        isOpen={serverModalOpen}
+        onClose={() => setServerModalOpen(false)}
+        isAdmin={false}
+      />
     </div>
   );
 }

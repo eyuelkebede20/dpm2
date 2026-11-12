@@ -107,7 +107,8 @@ export type SecurityEventType =
   | "BOLA_ATTEMPT_BLOCKED"
   | "PRIVILEGE_ESCALATION_BLOCKED"
   | "PASSWORD_RESET"
-  | "ROLE_CHANGED";
+  | "ROLE_CHANGED"
+  | "SYSTEM_UPDATE_TRIGGERED";
 
 export interface SecurityEventData {
   event: SecurityEventType;
