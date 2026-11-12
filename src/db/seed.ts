@@ -1,6 +1,9 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
+import fs from "fs";
+import path from "path";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { db } from "./index";
 import {
   users,
@@ -28,35 +31,63 @@ import {
 import { getEthiopianHolidaysForYear } from "../lib/ethiopian-holidays";
 import { hashPassword } from "better-auth/crypto";
 
+export async function ensureSchema() {
+  const migrationsFolder = path.resolve(process.cwd(), "drizzle");
+  if (fs.existsSync(migrationsFolder)) {
+    try {
+      console.log("0. Verifying database schema migrations...");
+      await migrate(db as any, { migrationsFolder });
+      console.log("   ✓ Database schema verified and up to date.");
+    } catch (err: any) {
+      console.warn("   ⚠️ Schema migration check note:", err.message);
+    }
+  }
+}
+
+async function safeDelete(table: any, tableName: string) {
+  try {
+    await db.delete(table);
+  } catch (err: any) {
+    if (err.message && (err.message.includes("does not exist") || err.code === "42P01")) {
+      console.log(`   - Table ${tableName} does not exist yet (skipping wipe).`);
+      return;
+    }
+    throw err;
+  }
+}
+
 export async function seedDatabase(options: { reset?: boolean } = { reset: true }) {
   console.log("======================================================");
   console.log("🌱 RESETTING & SEEDING DPM2 WITH HOMICHO DEFENSE DATA");
   console.log("======================================================");
 
-  // 0. Clean all existing operational and catalog data if reset requested
+  // 0. Ensure all schema tables exist before executing operations
+  await ensureSchema();
+
+  // 1. Clean all existing operational and catalog data if reset requested
   if (options.reset !== false) {
     console.log("1. Clearing existing operational, reporting, and catalog data...");
-    await db.delete(notifications);
-    await db.delete(dailyReportReviews);
-    await db.delete(qaApprovals);
-    await db.delete(stockLedger);
-    await db.delete(qaInspections);
-    await db.delete(reportEntries);
-    await db.delete(plans);
-    await db.delete(qaAssignments);
-    await db.delete(lineProducts);
-    await db.delete(products);
-    await db.delete(lines);
-    await db.delete(factoryUsers);
-    await db.delete(factories);
-    await db.delete(sessions);
-    await db.delete(accounts);
-    await db.delete(users);
-    await db.delete(verifications);
-    await db.delete(specialDays);
-    await db.delete(downtimeReasons);
-    await db.delete(industryProfile);
-    await db.delete(serverEndpoints);
+    await safeDelete(notifications, "notifications");
+    await safeDelete(dailyReportReviews, "daily_report_reviews");
+    await safeDelete(qaApprovals, "qa_approvals");
+    await safeDelete(stockLedger, "stock_ledger");
+    await safeDelete(qaInspections, "qa_inspections");
+    await safeDelete(reportEntries, "report_entries");
+    await safeDelete(plans, "plans");
+    await safeDelete(qaAssignments, "qa_assignments");
+    await safeDelete(lineProducts, "line_products");
+    await safeDelete(products, "products");
+    await safeDelete(lines, "lines");
+    await safeDelete(factoryUsers, "factory_users");
+    await safeDelete(factories, "factories");
+    await safeDelete(sessions, "sessions");
+    await safeDelete(accounts, "accounts");
+    await safeDelete(users, "users");
+    await safeDelete(verifications, "verifications");
+    await safeDelete(specialDays, "special_days");
+    await safeDelete(downtimeReasons, "downtime_reasons");
+    await safeDelete(industryProfile, "industry_profile");
+    await safeDelete(serverEndpoints, "server_endpoints");
     console.log("   ✓ All existing and added database records wiped cleanly.");
   }
 

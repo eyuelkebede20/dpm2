@@ -63,6 +63,19 @@ vi.mock("@/lib/backend-config", () => ({
     version: "1.0.1",
   }),
   validateServerUrl: vi.fn((url: string) => ({ valid: true, normalizedUrl: url })),
+  FALLBACK_SERVER_ENDPOINTS: [
+    {
+      id: "srv_fallback",
+      name: "Fallback Factory LAN",
+      url: "http://192.168.1.100:3000",
+      description: "Fallback desc",
+      environment: "lan",
+      isDefault: true,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ],
 }));
 
 describe("Button Interaction Tests - AdminClient", { timeout: 20000 }, () => {

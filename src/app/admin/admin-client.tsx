@@ -41,11 +41,11 @@ import {
   updateServerEndpointAction,
   deleteServerEndpointAction,
   toggleServerEndpointActiveAction,
+  FALLBACK_SERVER_ENDPOINTS,
 } from "@/actions/server-endpoint-actions";
 import {
   testServerConnection,
   validateServerUrl,
-  FALLBACK_SERVER_ENDPOINTS,
 } from "@/lib/backend-config";
 
 export interface AdminUserItem {

@@ -7,13 +7,56 @@ import { serverEndpoints } from "@/db/schema";
 import { eq, desc, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { sanitizeString } from "@/lib/security";
-import {
-  type ServerEndpointItem,
-  FALLBACK_SERVER_ENDPOINTS,
-  cleanServerUrl,
-} from "@/lib/backend-config";
+import { cleanServerUrl } from "@/lib/backend-config";
 
-export type { ServerEndpointItem };
+export interface ServerEndpointItem {
+  id: string;
+  name: string;
+  url: string;
+  description: string | null;
+  environment: "lan" | "cloud" | "local" | "backup";
+  isDefault: boolean;
+  isActive: boolean;
+  createdBy?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const FALLBACK_SERVER_ENDPOINTS: ServerEndpointItem[] = [
+  {
+    id: "srv_lan_factory",
+    name: "Main Plant Factory LAN",
+    url: "http://192.168.1.100:3000",
+    description: "On-premises high-speed factory local area network server",
+    environment: "lan",
+    isDefault: true,
+    isActive: true,
+    createdAt: new Date("2026-11-12T00:00:00Z"),
+    updatedAt: new Date("2026-11-12T00:00:00Z"),
+  },
+  {
+    id: "srv_hq_cloud",
+    name: "Homicho HQ Internet Cloud",
+    url: "https://dpm.homicho.et",
+    description: "Central cloud server accessible over public internet and mobile data",
+    environment: "cloud",
+    isDefault: false,
+    isActive: true,
+    createdAt: new Date("2026-11-12T00:00:00Z"),
+    updatedAt: new Date("2026-11-12T00:00:00Z"),
+  },
+  {
+    id: "srv_localhost",
+    name: "Localhost Edge / Developer",
+    url: "http://localhost:3000",
+    description: "Local development gateway running on localhost",
+    environment: "local",
+    isDefault: false,
+    isActive: true,
+    createdAt: new Date("2026-11-12T00:00:00Z"),
+    updatedAt: new Date("2026-11-12T00:00:00Z"),
+  },
+];
 
 const serverEndpointSchema = z
   .object({

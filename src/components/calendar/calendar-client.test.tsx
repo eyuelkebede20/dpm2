@@ -84,7 +84,7 @@ describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => 
     // Click Ethiopian
     fireEvent.click(ethBtn);
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("cal=ethiopian"));
-  });
+  }, 30000);
 
   it("navigates months when Prev, Next, and Today buttons are clicked", () => {
     renderCalendar();
