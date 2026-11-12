@@ -13,7 +13,7 @@ describe("Version API Route - GET /api/version", () => {
     expect(data.releaseNotes).toBeDefined();
     expect(data.buildTime).toBeDefined();
     expect(data.gitCommit).toBe("bc4b2e1");
-    expect(data.githubRepo).toBe("eyuelkebede20/dpm");
-    expect(data.githubUrl).toBe("https://github.com/eyuelkebede20/dpm");
+    expect(data.githubRepo).toBe("eyuelkebede20/dpm2");
+    expect(data.githubUrl).toBe("https://github.com/eyuelkebede20/dpm2");
   });
 });
