@@ -159,7 +159,7 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       render(<Navbar user={sampleUser} />);
       expect(screen.queryByText("Daily Entry")).toBeNull();
       expect(screen.queryByText("Calendar")).toBeNull();
-      expect(screen.getByText("Admin Portal")).toBeDefined();
+      expect(screen.getAllByText("Admin Portal").length).toBeGreaterThan(0);
     });
 
     it("renders Daily Entry and Calendar for Factory Manager (fm)", () => {
@@ -175,7 +175,7 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(screen.queryByText("Admin Portal")).toBeNull();
     });
 
-    it("renders Daily Entry and Calendar for Operations Manager (om)", () => {
+    it("renders Daily Reports, Operations Hub, and Calendar for Operations Manager (om)", () => {
       const omUser = {
         ...sampleUser,
         id: "usr_om_1",
@@ -183,9 +183,110 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
         role: "om" as const,
       };
       render(<Navbar user={omUser} />);
-      expect(screen.getAllByText("Daily Entry").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Daily Reports").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Operations Hub").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Calendar").length).toBeGreaterThan(0);
       expect(screen.queryByText("Admin Portal")).toBeNull();
+    });
+  });
+
+  describe("Mobile Bottom Navigation Bar", () => {
+    it("renders mobile bottom navigation bar with accessible role and labels", () => {
+      render(<Navbar user={sampleUser} />);
+      const mobileNav = screen.getByRole("navigation", { name: /mobile navigation/i });
+      expect(mobileNav).toBeDefined();
+
+      // Check sys_admin bottom destinations
+      const adminLinks = screen.getAllByRole("link", { name: /admin portal/i });
+      expect(adminLinks.length).toBeGreaterThan(0);
+
+      // Check "More" button
+      const moreBtn = screen.getByRole("button", { name: /more navigation options/i });
+      expect(moreBtn).toBeDefined();
+      expect(moreBtn.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("renders FM specific destinations (Dashboard, Lines, Entry, Calendar, More)", () => {
+      const fmUser = {
+        ...sampleUser,
+        id: "usr_fm_1",
+        name: "Abebe FM",
+        role: "fm" as const,
+      };
+      render(<Navbar user={fmUser} />);
+      const mobileNav = screen.getByRole("navigation", { name: /mobile navigation/i });
+
+      // Inside mobile nav:
+      expect(mobileNav.textContent).toContain("Dashboard");
+      expect(mobileNav.textContent).toContain("Lines");
+      expect(mobileNav.textContent).toContain("Entry");
+      expect(mobileNav.textContent).toContain("Calendar");
+      expect(mobileNav.textContent).toContain("More");
+    });
+
+    it("renders OM specific destinations (Dashboard, Plants, Review, Calendar, More)", () => {
+      const omUser = {
+        ...sampleUser,
+        id: "usr_om_1",
+        name: "Solomon OM",
+        role: "om" as const,
+      };
+      render(<Navbar user={omUser} />);
+      const mobileNav = screen.getByRole("navigation", { name: /mobile navigation/i });
+
+      expect(mobileNav.textContent).toContain("Dashboard");
+      expect(mobileNav.textContent).toContain("Plants");
+      expect(mobileNav.textContent).toContain("Review");
+      expect(mobileNav.textContent).toContain("Calendar");
+      expect(mobileNav.textContent).toContain("More");
+    });
+
+    it("renders QA specific destinations (Dashboard, Inspections, More)", () => {
+      const qaUser = {
+        ...sampleUser,
+        id: "usr_qa_1",
+        name: "Tigist QA",
+        role: "qa" as const,
+      };
+      render(<Navbar user={qaUser} />);
+      const mobileNav = screen.getByRole("navigation", { name: /mobile navigation/i });
+
+      expect(mobileNav.textContent).toContain("Dashboard");
+      expect(mobileNav.textContent).toContain("Inspections");
+      expect(mobileNav.textContent).toContain("More");
+    });
+
+    it("toggles mobile drawer open and closed using bottom bar 'More' button", () => {
+      render(<Navbar user={sampleUser} />);
+      const moreBtn = screen.getByRole("button", { name: /more navigation options/i });
+      expect(moreBtn.getAttribute("aria-expanded")).toBe("false");
+
+      // Click More to open drawer
+      fireEvent.click(moreBtn);
+      expect(moreBtn.getAttribute("aria-expanded")).toBe("true");
+
+      const drawer = screen.getByRole("dialog", { name: /mobile navigation menu/i });
+      expect(drawer).toBeDefined();
+
+      // Drawer shows Navigation links & Account options
+      expect(screen.getByText("Navigation")).toBeDefined();
+      expect(screen.getByText("Change Password")).toBeDefined();
+
+      // Click More button again to toggle closed
+      fireEvent.click(moreBtn);
+      expect(moreBtn.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("marks the active tab with aria-current='page'", () => {
+      render(<Navbar user={sampleUser} />);
+      const mobileNav = screen.getByRole("navigation", { name: /mobile navigation/i });
+
+      // In mock, pathname is "/dashboard"
+      const dashboardLinks = screen.getAllByRole("link", { name: /dashboard/i });
+      const activeMobileLink = dashboardLinks.find((l) =>
+        mobileNav.contains(l) && l.getAttribute("aria-current") === "page"
+      );
+      expect(activeMobileLink).toBeDefined();
     });
   });
 });

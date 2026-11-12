@@ -21,9 +21,13 @@ import {
   ChevronDown,
   User,
   Key,
+  MoreHorizontal,
+  RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { SessionUser } from "@/lib/authz";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { usePwaOtaContext } from "@/components/pwa/pwa-ota-manager";
 
 interface NavbarProps {
   user: SessionUser;
@@ -35,6 +39,8 @@ export function Navbar({ user }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const pwa = usePwaOtaContext();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close profile dropdown on outside click
@@ -106,68 +112,161 @@ export function Navbar({ user }: NavbarProps) {
       qa: "የጥራት ተቆጣጣሪ",
     }[user.role] || "";
 
-  const navLinks = [
-    {
-      label: "Dashboard",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-      roles: ["sys_admin", "om", "fm", "qa"],
-      exact: true,
-    },
-    {
-      label: "Admin Portal",
-      href: "/admin",
-      icon: Shield,
-      roles: ["sys_admin"],
-    },
-    {
-      label: "OM Operations",
-      href: "/om",
-      icon: Building2,
-      roles: ["om"],
-    },
-    {
-      label: "Lines & Floor",
-      href: "/fm",
-      icon: Building2,
-      roles: ["fm"],
-      exact: true,
-    },
-    {
-      label: "Production Plans",
-      href: "/planning",
-      icon: CalendarDays,
-      roles: ["om", "fm"],
-    },
-    {
-      label: "Store Stock",
-      href: "/fm/store",
-      icon: Warehouse,
-      roles: ["fm"],
-    },
-    {
-      label: "Daily Entry",
-      href: "/entry",
-      icon: PenTool,
-      roles: ["om", "fm"],
-    },
-    {
-      label: "Calendar",
-      href: "/calendar",
-      icon: Calendar,
-      roles: ["om", "fm"],
-    },
-    {
-      label: "QA Inspections",
-      href: "/qa",
-      icon: ClipboardCheck,
-      roles: ["qa"],
-    },
-  ];
+  // Role-tailored navigation items
+  const getNavLinks = () => {
+    switch (user.role) {
+      case "om":
+        return [
+          {
+            label: "Dashboard",
+            href: "/dashboard",
+            icon: LayoutDashboard,
+            exact: true,
+          },
+          {
+            label: "Operations Hub",
+            href: "/om",
+            icon: Building2,
+          },
+          {
+            label: "Production Plans",
+            href: "/planning",
+            icon: CalendarDays,
+          },
+          {
+            label: "Daily Reports",
+            href: "/entry",
+            icon: ClipboardCheck,
+          },
+          {
+            label: "Calendar",
+            href: "/calendar",
+            icon: Calendar,
+          },
+        ];
+      case "fm":
+        return [
+          {
+            label: "Dashboard",
+            href: "/dashboard",
+            icon: LayoutDashboard,
+            exact: true,
+          },
+          {
+            label: "Lines & Floor",
+            href: "/fm",
+            icon: Building2,
+            exact: true,
+          },
+          {
+            label: "Production Plans",
+            href: "/planning",
+            icon: CalendarDays,
+          },
+          {
+            label: "Store Stock",
+            href: "/fm/store",
+            icon: Warehouse,
+          },
+          {
+            label: "Daily Entry",
+            href: "/entry",
+            icon: PenTool,
+          },
+          {
+            label: "Calendar",
+            href: "/calendar",
+            icon: Calendar,
+          },
+        ];
+      case "qa":
+        return [
+          {
+            label: "Dashboard",
+            href: "/dashboard",
+            icon: LayoutDashboard,
+            exact: true,
+          },
+          {
+            label: "QA Approvals",
+            href: "/qa",
+            icon: ClipboardCheck,
+          },
+        ];
+      case "sys_admin":
+        return [
+          {
+            label: "Dashboard",
+            href: "/dashboard",
+            icon: LayoutDashboard,
+            exact: true,
+          },
+          {
+            label: "Admin Portal",
+            href: "/admin",
+            icon: Shield,
+          },
+        ];
+      default:
+        return [
+          {
+            label: "Dashboard",
+            href: "/dashboard",
+            icon: LayoutDashboard,
+            exact: true,
+          },
+        ];
+    }
+  };
 
-  const visibleLinks = navLinks.filter((link) =>
-    link.roles.includes(user.role)
-  );
+  const visibleLinks = getNavLinks();
+
+  // Define role-specific primary bottom navigation items (Ergonomic thumb zone, max 5 destinations)
+  const getBottomNavItems = () => {
+    switch (user.role) {
+      case "fm":
+        return [
+          { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+          { label: "Lines", href: "/fm", icon: Building2, exact: true },
+          { label: "Entry", href: "/entry", icon: PenTool },
+          { label: "Calendar", href: "/calendar", icon: Calendar },
+        ];
+      case "om":
+        return [
+          { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+          { label: "Plants", href: "/om", icon: Building2 },
+          { label: "Review", href: "/entry", icon: PenTool },
+          { label: "Calendar", href: "/calendar", icon: Calendar },
+        ];
+      case "qa":
+        return [
+          { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+          { label: "Inspections", href: "/qa", icon: ClipboardCheck },
+        ];
+      case "sys_admin":
+        return [
+          { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+          { label: "Admin Portal", href: "/admin", icon: Shield },
+        ];
+      default:
+        return [
+          { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, exact: true },
+        ];
+    }
+  };
+
+  const bottomNavItems = getBottomNavItems();
+
+  // Highlight "More" tab if current active route lives inside the drawer
+  const isMoreActive =
+    visibleLinks.some((link) => {
+      const isPrimary = bottomNavItems.some((b) => b.href === link.href);
+      if (isPrimary) return false;
+      const safePathname = pathname || "";
+      return link.exact
+        ? safePathname === link.href
+        : safePathname.startsWith(link.href);
+    }) || pathname === "/change-password";
 
   const userInitial = user.name ? user.name.trim().charAt(0).toUpperCase() : "U";
 
@@ -305,6 +404,35 @@ export function Navbar({ user }: NavbarProps) {
                         <Key className="w-4 h-4 text-slate-400" />
                         <span>Change Password</span>
                       </Link>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setProfileOpen(false);
+                          setCheckingUpdate(true);
+                          try {
+                            const updateFound = await pwa.checkForUpdate();
+                            if (!updateFound) {
+                              toast.info(`DPM is up to date (v${pwa.currentVersion})`);
+                            }
+                          } finally {
+                            setCheckingUpdate(false);
+                          }
+                        }}
+                        disabled={checkingUpdate || pwa.isChecking}
+                        className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <RefreshCw
+                            className={`w-4 h-4 text-slate-400 ${
+                              checkingUpdate || pwa.isChecking ? "animate-spin" : ""
+                            }`}
+                          />
+                          <span>Check for Updates</span>
+                        </div>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-bold">
+                          v{pwa.currentVersion}
+                        </span>
+                      </button>
                     </div>
 
                     {/* Sign Out Button */}
@@ -349,13 +477,98 @@ export function Navbar({ user }: NavbarProps) {
         </div>
       </header>
 
+      {/* Mobile Bottom Navigation Bar (Persistent Ergonomic Thumb-Zone Navigation) */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="fixed bottom-0 inset-x-0 z-40 md:hidden bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]"
+      >
+        <div
+          className={`grid ${
+            bottomNavItems.length === 2
+              ? "grid-cols-3"
+              : bottomNavItems.length === 3
+              ? "grid-cols-4"
+              : "grid-cols-5"
+          } h-15 items-center px-1.5`}
+        >
+          {bottomNavItems.map((item) => {
+            const Icon = item.icon;
+            const safePathname = pathname || "";
+            const isActive = item.exact
+              ? safePathname === item.href
+              : safePathname.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl transition-all duration-150 touch-manipulation min-h-[44px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                  isActive
+                    ? "text-indigo-600 font-extrabold"
+                    : "text-slate-500 hover:text-slate-900 active:scale-95"
+                }`}
+              >
+                <div
+                  className={`p-1 rounded-full transition-all duration-150 ${
+                    isActive
+                      ? "bg-indigo-50 text-indigo-600 scale-105 shadow-2xs"
+                      : "text-slate-400 group-hover:text-slate-600"
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] leading-tight font-bold tracking-tight text-center truncate max-w-full">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          {/* More / Overflow Hub Button */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((prev) => !prev)}
+            aria-label="More navigation options"
+            aria-expanded={mobileMenuOpen}
+            className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl transition-all duration-150 touch-manipulation min-h-[44px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+              isMoreActive || mobileMenuOpen
+                ? "text-indigo-600 font-extrabold"
+                : "text-slate-500 hover:text-slate-900 active:scale-95"
+            }`}
+          >
+            <div
+              className={`relative p-1 rounded-full transition-all duration-150 ${
+                isMoreActive || mobileMenuOpen
+                  ? "bg-indigo-50 text-indigo-600 scale-105 shadow-2xs"
+                  : "text-slate-400 group-hover:text-slate-600"
+              }`}
+            >
+              <MoreHorizontal className="w-5 h-5" />
+              {isMoreActive && (
+                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-indigo-600 ring-2 ring-white" />
+              )}
+            </div>
+            <span className="text-[10px] leading-tight font-bold tracking-tight text-center truncate max-w-full">
+              More
+            </span>
+          </button>
+        </div>
+      </nav>
+
       {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile Navigation Menu"
+          className="fixed inset-0 z-50 md:hidden flex flex-col justify-end"
+        >
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
             onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
           />
 
           {/* Drawer Body */}
@@ -451,6 +664,30 @@ export function Navbar({ user }: NavbarProps) {
                 <Key className="w-4 h-4 text-slate-400" />
                 <span>Change Password</span>
               </Link>
+              <button
+                type="button"
+                onClick={async () => {
+                  setMobileMenuOpen(false);
+                  setCheckingUpdate(true);
+                  try {
+                    const updateFound = await pwa.checkForUpdate();
+                    if (!updateFound) {
+                      toast.info(`DPM is up to date (v${pwa.currentVersion})`);
+                    }
+                  } finally {
+                    setCheckingUpdate(false);
+                  }
+                }}
+                disabled={checkingUpdate || pwa.isChecking}
+                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 text-slate-400 ${
+                    checkingUpdate || pwa.isChecking ? "animate-spin" : ""
+                  }`}
+                />
+                <span>Check for Updates (v{pwa.currentVersion})</span>
+              </button>
               <button
                 type="button"
                 onClick={handleSignOut}

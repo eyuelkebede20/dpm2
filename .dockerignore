@@ -1,0 +1,12 @@
+node_modules
+.next
+.next-dev
+.git
+.github
+.env
+.env*.local
+backups
+run
+logs
+.gemini
+*.log

@@ -1,0 +1,79 @@
+name: dpm
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    shm_size: 512mb
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-dpm}
+    # Tuned for industrial / on-prem host (shared with app and OS)
+    command: >
+      postgres
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c max_connections=50
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend] # internal bridge -> port 5432 is NOT exposed to external LAN
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  app:
+    build: .
+    image: dpm-app:latest
+    restart: unless-stopped
+    init: true # proper signal handling / zombie reaping
+    env_file: .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      # Override DATABASE_URL to use compose service hostname `db`
+      DATABASE_URL: "${DOCKER_DATABASE_URL:-postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-dpm}}"
+      BETTER_AUTH_URL: "http://${LAN_IP:-localhost}:${APP_PORT:-3000}"
+      NEXT_PUBLIC_APP_URL: "http://${LAN_IP:-localhost}:${APP_PORT:-3000}"
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend]
+    volumes:
+      - ./run:/run/updater # update-request flag only, no docker socket
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  pgdata:
