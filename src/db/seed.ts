@@ -27,34 +27,36 @@ import {
 import { getEthiopianHolidaysForYear } from "../lib/ethiopian-holidays";
 import { hashPassword } from "better-auth/crypto";
 
-async function seed() {
+export async function seedDatabase(options: { reset?: boolean } = { reset: true }) {
   console.log("======================================================");
   console.log("🌱 RESETTING & SEEDING DPM2 WITH HOMICHO DEFENSE DATA");
   console.log("======================================================");
 
-  // 0. Clean all existing operational and catalog data
-  console.log("1. Clearing existing operational, reporting, and catalog data...");
-  await db.delete(notifications);
-  await db.delete(dailyReportReviews);
-  await db.delete(qaApprovals);
-  await db.delete(stockLedger);
-  await db.delete(qaInspections);
-  await db.delete(reportEntries);
-  await db.delete(plans);
-  await db.delete(qaAssignments);
-  await db.delete(lineProducts);
-  await db.delete(products);
-  await db.delete(lines);
-  await db.delete(factoryUsers);
-  await db.delete(factories);
-  await db.delete(sessions);
-  await db.delete(accounts);
-  await db.delete(users);
-  await db.delete(verifications);
-  await db.delete(specialDays);
-  await db.delete(downtimeReasons);
-  await db.delete(industryProfile);
-  console.log("   ✓ All existing and added database records wiped cleanly.");
+  // 0. Clean all existing operational and catalog data if reset requested
+  if (options.reset !== false) {
+    console.log("1. Clearing existing operational, reporting, and catalog data...");
+    await db.delete(notifications);
+    await db.delete(dailyReportReviews);
+    await db.delete(qaApprovals);
+    await db.delete(stockLedger);
+    await db.delete(qaInspections);
+    await db.delete(reportEntries);
+    await db.delete(plans);
+    await db.delete(qaAssignments);
+    await db.delete(lineProducts);
+    await db.delete(products);
+    await db.delete(lines);
+    await db.delete(factoryUsers);
+    await db.delete(factories);
+    await db.delete(sessions);
+    await db.delete(accounts);
+    await db.delete(users);
+    await db.delete(verifications);
+    await db.delete(specialDays);
+    await db.delete(downtimeReasons);
+    await db.delete(industryProfile);
+    console.log("   ✓ All existing and added database records wiped cleanly.");
+  }
 
   const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@dpm.local";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || "AdminPassword123!";
@@ -680,10 +682,35 @@ async function seed() {
   console.log(`• QA       : qa@dpm.local / ${demoPassword}`);
   console.log("======================================================");
 
-  process.exit(0);
+  return {
+    success: true,
+    message: "DPM2 Seed complete (Homicho Munitions Complex dataset)",
+    users: [
+      { role: "sys_admin", name: "Col. Kebede Worku (Sys Admin)", email: adminEmail, password: adminPassword },
+      { role: "om", name: "Mr. Mihretab Guramela (Operations Directorate Manager)", email: "om@dpm.local", password: demoPassword },
+      { role: "fm", name: "Sisay Milkessa (Small Arm Factory Manager)", email: "fm@dpm.local", password: demoPassword },
+      { role: "fm", name: "Eliyas Bekele (Medium Arm Factory Manager)", email: "fm_mac@dpm.local", password: demoPassword },
+      { role: "fm", name: "Maru Tessema (Heavy Weapon Factory Manager)", email: "fm_hwc@dpm.local", password: demoPassword },
+      { role: "fm", name: "Getenet Sahelu (Chemical Charging Shop Manager)", email: "fm_chem@dpm.local", password: demoPassword },
+      { role: "fm", name: "Solomon Geleta (Tool & Auxiliary Shop Manager)", email: "fm_tool@dpm.local", password: demoPassword },
+      { role: "qa", name: "Capt. Tigist Haile (QA Directorate Inspector)", email: "qa@dpm.local", password: demoPassword },
+    ],
+    factories: factoryRecords.length,
+    lines: linesRecords.length,
+    products: productsRecords.length,
+    plans: samplePlans.length,
+  };
 }
 
-seed().catch((err) => {
-  console.error("❌ Seeding failed:", err);
-  process.exit(1);
-});
+if (
+  process.argv[1]?.endsWith("seed.ts") ||
+  process.argv[1]?.endsWith("seed.js") ||
+  process.argv[1]?.endsWith("seed.mjs")
+) {
+  seedDatabase()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("❌ Seeding failed:", err);
+      process.exit(1);
+    });
+}
