@@ -6,6 +6,10 @@ import path from "path";
 
 const { Pool } = pg;
 
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function runMigrations() {
   const migrationsFolder = path.resolve(process.cwd(), "drizzle");
   if (!fs.existsSync(migrationsFolder)) {
@@ -17,18 +21,47 @@ async function runMigrations() {
     process.env.DATABASE_URL ||
     "postgresql://postgres:postgres@localhost:5432/dpm";
 
-  console.log("Running database migrations from", migrationsFolder);
-  const pool = new Pool({ connectionString });
-  const db = drizzle(pool);
+  console.log("Preparing to apply database migrations from", migrationsFolder);
+  
+  let pool;
+  let client;
+  const maxRetries = 5;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      pool = new Pool({ connectionString, connectionTimeoutMillis: 5000 });
+      client = await pool.connect();
+      await client.query("SELECT 1");
+      console.log("Connected to PostgreSQL database.");
+      break;
+    } catch (err) {
+      if (client) {
+        client.release();
+        client = null;
+      }
+      if (pool) {
+        await pool.end().catch(() => {});
+      }
+      console.warn(`Database connection attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+      if (attempt === maxRetries) {
+        console.error("Could not connect to database after maximum retries. Exiting.");
+        process.exit(1);
+      }
+      await sleep(2000);
+    }
+  }
 
   try {
+    const db = drizzle(pool);
+    console.log("Applying Drizzle migrations...");
     await migrate(db, { migrationsFolder });
     console.log("Database migrations applied successfully.");
   } catch (error) {
     console.error("Migration execution failed:", error);
     process.exit(1);
   } finally {
-    await pool.end();
+    if (client) client.release();
+    if (pool) await pool.end();
   }
 }
 
