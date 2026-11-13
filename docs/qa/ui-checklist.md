@@ -29,8 +29,10 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Email input: focus, validation, keyboard entry (`src/app/login/login-client.test.tsx`)
 - [x] Password input: show/hide toggle, min-length validation (`src/app/login/login-client.test.tsx`)
 - [x] Sign In button: loading spinner during in-flight request, double-click prevention (`src/app/login/login-client.test.tsx`)
+- [x] Quick Demo Credentials Removed: demo autofill pills removed from UI for production security (`src/app/login/login-client.test.tsx`)
 - [x] Error alert: surfaces clear user message on invalid credentials (`src/app/login/login-client.test.tsx`)
 - [x] Rate-limit countdown lock: disables submit button during lockout window (`src/app/login/login-client.test.tsx`)
+- [x] Backend server endpoint selector: displays active host and opens server configuration modal (`src/app/login/login-client.test.tsx`)
 - [x] Auto-redirects if already authenticated (`src/actions/auth-actions.test.ts`)
 
 ### `/change-password` (Forced Password Change)

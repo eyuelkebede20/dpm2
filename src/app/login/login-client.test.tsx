@@ -35,35 +35,13 @@ describe("Button Interaction Tests - LoginClient", () => {
     cleanup();
   });
 
-  it("autofills inputs when demo credential buttons are clicked", () => {
+  it("does not render quick demo credentials buttons on the login card", () => {
     render(<LoginClient />);
-
-    const emailInput = screen.getByPlaceholderText(/name@company\.com/i) as HTMLInputElement;
-    const passInput = screen.getByPlaceholderText(/••••••••••••/i) as HTMLInputElement;
-
-    // Click Sys Admin pill
-    const adminBtn = screen.getByRole("button", { name: /sys admin/i });
-    fireEvent.click(adminBtn);
-    expect(emailInput.value).toBe("admin@factory.et");
-    expect(passInput.value).toBe("AdminSecret123!");
-
-    // Click Operation Mgr pill
-    const omBtn = screen.getByRole("button", { name: /operation mgr/i });
-    fireEvent.click(omBtn);
-    expect(emailInput.value).toBe("om@factory.et");
-    expect(passInput.value).toBe("OmPassword123!");
-
-    // Click Factory Mgr pill
-    const fmBtn = screen.getByRole("button", { name: /factory mgr/i });
-    fireEvent.click(fmBtn);
-    expect(emailInput.value).toBe("fm@factory.et");
-    expect(passInput.value).toBe("FmPassword123!");
-
-    // Click QA Inspector pill
-    const qaBtn = screen.getByRole("button", { name: /qa inspector/i });
-    fireEvent.click(qaBtn);
-    expect(emailInput.value).toBe("qa@factory.et");
-    expect(passInput.value).toBe("QaPassword123!");
+    expect(screen.queryByText(/quick demo credentials/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /sys admin/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /operation mgr/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /factory mgr/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /qa inspector/i })).toBeNull();
   });
 
   it("submits login form when 'Sign In' button is clicked", async () => {
@@ -75,9 +53,10 @@ describe("Button Interaction Tests - LoginClient", () => {
 
     render(<LoginClient />);
 
-    // Autofill credentials
-    const adminBtn = screen.getByRole("button", { name: /sys admin/i });
-    fireEvent.click(adminBtn);
+    const emailInput = screen.getByPlaceholderText(/name@company\.com/i);
+    const passInput = screen.getByPlaceholderText(/••••••••••••/i);
+    fireEvent.change(emailInput, { target: { value: "admin@factory.et" } });
+    fireEvent.change(passInput, { target: { value: "AdminSecret123!" } });
 
     // Click Sign In
     const signInBtn = screen.getByRole("button", { name: /sign in/i });
@@ -101,8 +80,10 @@ describe("Button Interaction Tests - LoginClient", () => {
 
     render(<LoginClient />);
 
-    const omBtn = screen.getByRole("button", { name: /operation mgr/i });
-    fireEvent.click(omBtn);
+    const emailInput = screen.getByPlaceholderText(/name@company\.com/i);
+    const passInput = screen.getByPlaceholderText(/••••••••••••/i);
+    fireEvent.change(emailInput, { target: { value: "om@factory.et" } });
+    fireEvent.change(passInput, { target: { value: "OmPassword123!" } });
 
     const signInBtn = screen.getByRole("button", { name: /sign in/i });
     fireEvent.click(signInBtn);

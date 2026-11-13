@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 /**
  * Top Navigation Progress Indicator (Seamless Route Transitions)
@@ -11,7 +11,6 @@ import { usePathname, useSearchParams } from "next/navigation";
  */
 export function NavigationProgress() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isNavigating, setIsNavigating] = useState(false);
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -26,7 +25,7 @@ export function NavigationProgress() {
     };
   }, []);
 
-  // When pathname or searchParams change, the navigation has completed!
+  // When pathname changes, the navigation has completed!
   useEffect(() => {
     if (isNavigating) {
       setProgress(100);
@@ -36,7 +35,7 @@ export function NavigationProgress() {
       }, 200);
       return () => clearTimeout(finishTimer);
     }
-  }, [pathname, searchParams, isNavigating]);
+  }, [pathname, isNavigating]);
 
   // Listen for navigation clicks across the document
   useEffect(() => {

@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { getSessionContext } from "@/lib/authz";
@@ -40,9 +39,7 @@ export default async function RootLayout({
   return (
     <html lang="en" data-theme="light">
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col">
-        <Suspense fallback={null}>
-          <NavigationProgress />
-        </Suspense>
+        <NavigationProgress />
         <PwaOtaManager>
           {user && isImpersonating && (
             <ImpersonationBanner

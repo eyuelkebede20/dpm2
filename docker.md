@@ -122,12 +122,33 @@ docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | g
 gunzip -c backups/<backup-file>.sql.gz | docker compose exec -T db psql -U postgres dpm
 ```
 
-### Database Seeding
+### Database Seeding & Inspecting Users
 
-To seed or re-seed default Homicho munitions complex data:
+The production container includes standalone scripts (`scripts/seed.mjs` and `scripts/show-users.mjs`) that run directly with `node` using production dependencies, without requiring development tools (`tsx` or `pnpm`).
+
+#### Automatic Seeding
+When the app container starts (`node scripts/migrate.mjs`), it automatically checks if the `users` table is empty. If no users exist, it automatically runs initial seeding for all Homicho defense factories, production lines, standard defense downtime codes (DOW-01 through DOW-09), Ethiopian holidays, and default users.
+
+#### How to See Users on the Docker Image
+To view all registered users, roles, and factory assignments:
 
 ```bash
-docker compose exec app pnpm db:seed
+# Option 1: Formatted table via the app container (Recommended)
+docker compose exec app node scripts/show-users.mjs
+
+# Option 2: Direct SQL query via the PostgreSQL container
+docker compose exec db psql -U postgres -d dpm -c "SELECT id, name, email, role, active FROM users;"
+```
+
+#### Manual Re-Seeding (Inside Docker Container)
+If you want to manually seed or refresh data:
+
+```bash
+# Idempotent seed (keeps existing data, inserts missing records):
+docker compose exec app node scripts/seed.mjs
+
+# Full reset and clean re-seed:
+docker compose exec app node scripts/seed.mjs --reset
 ```
 
 ---
@@ -136,6 +157,9 @@ docker compose exec app pnpm db:seed
 
 | Command | Description |
 | :--- | :--- |
+| `docker compose exec app node scripts/show-users.mjs` | Display formatted table of all users and default passwords |
+| `docker compose exec app node scripts/seed.mjs` | Run standalone database seed inside Docker container |
+| `docker compose exec db psql -U postgres -d dpm -c "SELECT * FROM users;"` | Direct SQL query of users in PostgreSQL container |
 | `./start.sh` | Full initial start or rebuild |
 | `./start.sh --quick` | Fast update with automatic rollback |
 | `./start.sh --stop` | Cleanly stop all containers |

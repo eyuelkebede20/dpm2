@@ -171,57 +171,8 @@ export function LoginClient() {
             </button>
           </form>
 
-          {/* 1-Click Quick-Fill Demo Bar */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2.5 text-center">
-              Quick demo credentials
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("admin@factory.et");
-                  setPassword("AdminSecret123!");
-                }}
-                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition-colors py-2"
-              >
-                🔴 Sys Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("om@factory.et");
-                  setPassword("OmPassword123!");
-                }}
-                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-300 transition-colors py-2"
-              >
-                🔵 Operation Mgr
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("fm@factory.et");
-                  setPassword("FmPassword123!");
-                }}
-                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 transition-colors py-2"
-              >
-                🟢 Factory Mgr
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("qa@factory.et");
-                  setPassword("QaPassword123!");
-                }}
-                className="btn btn-xs btn-outline rounded-xl text-[11px] font-bold hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-colors py-2"
-              >
-                🟡 QA Inspector
-              </button>
-            </div>
-          </div>
-
           {/* Server endpoint selector */}
-          <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
             <div className="flex items-center gap-2 min-w-0">
               <span className={`w-2 h-2 rounded-full ${isCustom ? "bg-indigo-500" : "bg-emerald-500"}`} />
               <Server className="w-3.5 h-3.5 text-slate-400 shrink-0" />

@@ -3,6 +3,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 import fs from "fs";
 import path from "path";
+import { runSeed } from "./seed.mjs";
 
 const { Pool } = pg;
 
@@ -56,6 +57,20 @@ async function runMigrations() {
     console.log("Applying Drizzle migrations...");
     await migrate(db, { migrationsFolder });
     console.log("Database migrations applied successfully.");
+
+    // Check if initial database seeding is required
+    try {
+      const userCheck = await pool.query('SELECT COUNT(*) AS count FROM "users";');
+      const userCount = parseInt(userCheck.rows[0]?.count || "0", 10);
+      if (userCount === 0 || process.env.AUTO_SEED === "true") {
+        console.log(`Database has ${userCount} users. Initiating automatic seed...`);
+        await runSeed(pool);
+      } else {
+        console.log(`Database already initialized with ${userCount} existing users. Skipping automatic seed.`);
+      }
+    } catch (seedErr) {
+      console.warn("Notice: Post-migration auto-seed check encountered an issue:", seedErr.message);
+    }
   } catch (error) {
     console.error("Migration execution failed:", error);
     process.exit(1);
