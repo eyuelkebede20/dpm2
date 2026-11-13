@@ -887,3 +887,47 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
    - `src/components/navbar.test.tsx`: 18/18 tests pass.
    - `tsc --noEmit`: 0 errors.
 
+---
+
+## 2026-11-13 — Comprehensive API Endpoints Security Audit & Hardening (Cloudflare Skill)
+
+**Goal:** Conduct a multi-phase defensive security audit across all 12 Next.js API endpoints and Edge Middleware using Cloudflare's official `security-audit-skill` framework, identifying and patching all Broken Access Control, CSRF, Unauthenticated Database Reset, Rate Limit Bypass, and Information Disclosure vulnerabilities.
+
+### Libraries & Guidelines Evaluated
+
+| Tool / Framework | Source | Verdict | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`cloudflare/security-audit-skill`** | Cloudflare GitHub | **Selected** | 6-phase structured security audit framework (`RECONNAISSANCE.md`, `ATTACK-CLASSES.md`, `WEB-PROTOCOL-AND-AUTH.md`). |
+| **Better-Auth (v1.1.21)** | Existing dependency | **Audited** | Inspected session validation, CSRF origin handling, cookie prefixes, and signing keys. |
+| **Drizzle ORM Migrator** | Existing dependency | **Audited** | Hardened programmatic database migrations against unauthenticated execution. |
+| **Next.js Edge Middleware** | Existing Next.js 15 | **Audited** | Enhanced rate limiting attribution using Cloudflare's `cf-connecting-ip` header. |
+
+### Vulnerabilities Discovered & Remediated
+
+1. **Better-Auth Trusted Origins Reflection (`src/lib/auth.ts` - HIGH):**
+   - *Vulnerability:* The `trustedOrigins` callback blindly parsed and pushed whatever `Origin` or `Host` header was sent by the client into the trusted origins list. This completely bypassed Better-Auth's cross-origin request forgery protections.
+   - *Fix:* Replaced header reflection with a strict allowlist derived from `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`, and `TRUSTED_ORIGINS`. In development mode only, local RFC 1918 LAN and loopback IPs are permitted for mobile PWA testing.
+2. **Missing Authentication on Seeding & User Enumeration (`/api/seed-db`, `/api/seed` - CRITICAL):**
+   - *Vulnerability:* Unauthenticated callers sending `GET /api/seed-db` received a full JSON dump of user emails, IDs, and roles. Adding `?force=true` triggered `seedDatabase({ reset: true })`, completely wiping all database tables.
+   - *Fix:* Added hard production lockout (`NODE_ENV === "production"` returns 403 Forbidden). In development, required Sys Admin session authentication (`role === "sys_admin"`) or explicit `SEED_API_SECRET` bearer token. Removed user PII from responses and enforced `POST` for state changes.
+3. **Unauthenticated Database Migrations (`/api/push-db`, `/api/migrate-db` - HIGH):**
+   - *Vulnerability:* Any unauthenticated client reaching `/api/push-db` could trigger SQL migrations and inspect the inventory of all 21 database tables.
+   - *Fix:* Protected routes with Sys Admin session check or `MIGRATION_API_SECRET` bearer token. Masked internal database driver errors in production.
+4. **Rate Limit Bypass via Client-Controlled IP Headers (`src/middleware.ts` - MEDIUM):**
+   - *Vulnerability:* Middleware extracted client IP addresses directly from `X-Forwarded-For` and `X-Real-IP`, which can be spoofed or rotated by attackers.
+   - *Fix:* Prioritized Cloudflare's tamper-proof `cf-connecting-ip` header before fallback proxies. Extended production route lockout to `/api/seed` and `/api/seed-db`.
+5. **Database Connection Error Information Disclosure (`/api/health` - LOW):**
+   - *Vulnerability:* On database failure, `GET /api/health` returned raw driver error strings (`error.message`) to unauthenticated callers, exposing internal database hostnames, ports, and connection parameters.
+   - *Fix:* Masked errors in production with generic `"Database service unavailable"`.
+6. **Server Presets Creation Status Mapping (`/api/server-endpoints` - LOW):**
+   - *Vulnerability:* `POST /api/server-endpoints` returned 500 when unauthenticated and 400 when unauthorized.
+   - *Fix:* Added explicit `requireUser()` validation returning 401 Unauthorized for anonymous callers and 403 Forbidden for non-admin accounts.
+
+### Automated Verification Results
+
+- **API Test Files:** 11 passed (11 total)
+- **API Endpoint Tests:** 50 passed (50 total)
+- **Middleware Tests:** 5 passed (5 total)
+- **TypeScript Typecheck:** 0 errors (`pnpm typecheck` passed cleanly)
+
+
