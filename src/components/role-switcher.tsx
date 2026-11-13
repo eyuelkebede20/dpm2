@@ -95,9 +95,14 @@ interface RoleSwitcherProps {
 }
 
 export function RoleSwitcher({ currentRole, currentEmail, canSwitchRole }: RoleSwitcherProps) {
+  const [mounted, setMounted] = useState(false);
   const isSysAdmin = currentRole === "sys_admin";
   const hasAdminPrivilege = isSysAdmin || Boolean(canSwitchRole);
   const { isDeveloperMode, setDeveloperMode } = useDeveloperMode(hasAdminPrivilege);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const pathname = usePathname();
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -218,15 +223,20 @@ export function RoleSwitcher({ currentRole, currentEmail, canSwitchRole }: RoleS
     );
   });
 
-  // STRICT ACCESS CONTROL:
+  // STRICT ACCESS CONTROL & SSR HYDRATION SAFETY:
+  // Must be mounted on the client to guarantee identical SSR & initial hydration renders.
   // Only authenticated System Administrators (or impersonating sysadmin via dev token)
   // with Developer Option enabled in Settings can see this icon/button.
-  if (!hasAdminPrivilege || !isDeveloperMode) {
+  if (!mounted || !hasAdminPrivilege || !isDeveloperMode) {
     return null;
   }
 
   return (
-    <div ref={popoverRef} className="fixed bottom-20 sm:bottom-5 right-3 sm:right-5 z-50 select-none">
+    <div
+      ref={popoverRef}
+      suppressHydrationWarning
+      className="fixed bottom-20 sm:bottom-5 right-3 sm:right-5 z-50 select-none"
+    >
       {/* Expanded Popover */}
       {isOpen && (
         <div className="mb-3 w-[calc(100vw-1.5rem)] max-w-sm sm:max-w-none sm:w-[420px] bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl shadow-2xl overflow-hidden p-4 sm:p-5 animate-in fade-in slide-in-from-bottom-3 duration-200 max-h-[85vh] flex flex-col">

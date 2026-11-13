@@ -4,6 +4,22 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 
 ---
 
+## 2026-11-13 — React SSR Hydration Safety for LocalStorage-Driven Widgets (RoleSwitcher & Developer Mode)
+
+**Goal:** Resolve React hydration mismatch error where server-rendered HTML for `RoleSwitcher` (`null` / hidden comment) differed from client hydration HTML (`<div className="fixed bottom-20 ...">`).
+
+### Edge cases & gotchas discovered
+- In Next.js App Router, Client Components rendered inside `RootLayout` execute their initial render pass both on the server (SSR) and during initial DOM hydration on the client.
+- When `useDeveloperMode` initialized `enabled` state synchronously via `useState(() => isDeveloperModeActive())`, it evaluated `typeof window === 'undefined'` (returning `false`) on the server, but checked `window.localStorage.getItem(...)` (returning `true`) on the client.
+- This caused `RoleSwitcher` to render `null` on the server while simultaneously rendering the interactive floating developer action button on the client during hydration, triggering React Error: `Hydration failed because the server rendered HTML didn't match the client`.
+
+### Decision
+1. **Guaranteed Zero-Mismatch Initial Pass**: Updated `useDeveloperMode` to initialize state to `false` during the initial render pass, and read `localStorage` / cookies asynchronously inside `useEffect` which only runs after hydration is complete.
+2. **Component Mounting Guard**: Added a `mounted` state guard to `RoleSwitcher` (`const [mounted, setMounted] = useState(false); useEffect(() => setMounted(true), [])`). `RoleSwitcher` renders `null` until the client has safely completed hydration.
+3. **Automated SSR Verification Test**: Added an explicit SSR test using `renderToString` in `src/components/role-switcher.test.tsx` verifying that `RoleSwitcher` outputs empty string (`""`) on server render even when `localStorage` has developer mode enabled.
+
+---
+
 ## 2026-11-13 — Daily Entry Layout Hierarchy & Controls Accessibility (Search, Sorting, Top KPI Cards)
 
 **Goal:** Position unreviewed reminders and KPI summary cards at the top of the page and introduce a dedicated, accessible controls toolbar (search, sorting, product filter, grouping, view mode) directly above the daily entry grid.

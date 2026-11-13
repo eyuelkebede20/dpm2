@@ -20,10 +20,8 @@ export interface UseDeveloperModeReturn {
  * preventing any non-systemadmin user from accessing developer tooling.
  */
 export function useDeveloperMode(isSysAdmin: boolean = true): UseDeveloperModeReturn {
-  const [enabled, setEnabled] = useState<boolean>(() => {
-    if (!isSysAdmin) return false;
-    return isDeveloperModeActive();
-  });
+  // Always initialize with false to guarantee matching server and initial client hydration renders
+  const [enabled, setEnabled] = useState<boolean>(false);
 
   // Keep in sync with custom event and storage events
   useEffect(() => {
@@ -32,7 +30,7 @@ export function useDeveloperMode(isSysAdmin: boolean = true): UseDeveloperModeRe
       return;
     }
 
-    // Initialize from current state
+    // Initialize from current client storage safely after hydration
     setEnabled(isDeveloperModeActive());
 
     function handleCustomEvent(e: Event) {

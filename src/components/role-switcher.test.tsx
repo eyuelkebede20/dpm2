@@ -2,6 +2,7 @@ import "@/test/setup-dom";
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { RoleSwitcher } from "./role-switcher";
 import { setDeveloperModeActive, DEVELOPER_MODE_STORAGE_KEY } from "@/lib/developer-mode";
 
@@ -93,6 +94,13 @@ describe("RoleSwitcher - Strict Access Control & Interactive Audit", () => {
 
       const toggleBtn = screen.getByTitle("Switch Active Developer Role");
       expect(toggleBtn).toBeDefined();
+    });
+
+    it("guarantees SSR hydration safety by rendering null on initial server pass even when storage is active", () => {
+      setDeveloperModeActive(true);
+      const ssrHtml = renderToString(<RoleSwitcher currentRole="sys_admin" />);
+      // Server render MUST be empty string (rendered null) to match client before hydration
+      expect(ssrHtml).toBe("");
     });
   });
 
