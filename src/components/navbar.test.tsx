@@ -8,10 +8,12 @@ import { authClient } from "@/lib/auth-client";
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
+const mockPrefetch = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mockPush,
     refresh: mockRefresh,
+    prefetch: mockPrefetch,
   }),
   usePathname: () => "/dashboard",
 }));

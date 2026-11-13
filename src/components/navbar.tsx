@@ -236,7 +236,7 @@ export function Navbar({ user }: NavbarProps) {
   // Warm up Next.js client router cache for visible links so navigation is instantaneous
   useEffect(() => {
     visibleLinks.forEach((link) => {
-      router.prefetch(link.href);
+      router.prefetch?.(link.href);
     });
   }, [visibleLinks, router]);
 
@@ -299,8 +299,8 @@ export function Navbar({ user }: NavbarProps) {
               <Link
                 href="/dashboard"
                 prefetch={true}
-                onMouseEnter={() => router.prefetch("/dashboard")}
-                onTouchStart={() => router.prefetch("/dashboard")}
+                onMouseEnter={() => router.prefetch?.("/dashboard")}
+                onTouchStart={() => router.prefetch?.("/dashboard")}
                 onClick={() => {
                   if (pathname !== "/dashboard") {
                     setPendingPath("/dashboard");
@@ -334,8 +334,8 @@ export function Navbar({ user }: NavbarProps) {
                       key={link.href}
                       href={link.href}
                       prefetch={true}
-                      onMouseEnter={() => router.prefetch(link.href)}
-                      onTouchStart={() => router.prefetch(link.href)}
+                      onMouseEnter={() => router.prefetch?.(link.href)}
+                      onTouchStart={() => router.prefetch?.(link.href)}
                       onClick={() => {
                         if (link.href !== pathname) {
                           setPendingPath(link.href);
@@ -581,8 +581,8 @@ export function Navbar({ user }: NavbarProps) {
                 key={item.href}
                 href={item.href}
                 prefetch={true}
-                onMouseEnter={() => router.prefetch(item.href)}
-                onTouchStart={() => router.prefetch(item.href)}
+                onMouseEnter={() => router.prefetch?.(item.href)}
+                onTouchStart={() => router.prefetch?.(item.href)}
                 onClick={() => {
                   if (item.href !== pathname) {
                     setPendingPath(item.href);
@@ -721,8 +721,8 @@ export function Navbar({ user }: NavbarProps) {
                     key={link.href}
                     href={link.href}
                     prefetch={true}
-                    onMouseEnter={() => router.prefetch(link.href)}
-                    onTouchStart={() => router.prefetch(link.href)}
+                    onMouseEnter={() => router.prefetch?.(link.href)}
+                    onTouchStart={() => router.prefetch?.(link.href)}
                     onClick={() => {
                       if (link.href !== pathname) {
                         setPendingPath(link.href);
@@ -745,13 +745,6 @@ export function Navbar({ user }: NavbarProps) {
                           }`}
                         />
                       )}
-                      <span>{link.label}</span>
-                    </div>
-                      <Icon
-                        className={`w-5 h-5 ${
-                          isActive ? "text-white" : "text-slate-400"
-                        }`}
-                      />
                       <span>{link.label}</span>
                     </div>
                     <ChevronRight
