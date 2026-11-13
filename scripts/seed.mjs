@@ -307,22 +307,22 @@ export async function runSeed(clientOrPool, options = { reset: false }) {
     // 12. Monthly Production Plans (November 2026)
     console.log("13. Creating Baseline Production Plans for November 2026...");
     const samplePlans = [
-      { id: "plan_saf_39_asm_nov26", lineId: "line_saf_39_03", productId: "prod_sap_39_asm", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 375000, dailyTarget: 15000 },
-      { id: "plan_saf_39_cr_nov26", lineId: "line_saf_39_01", productId: "prod_sap_39_cr", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 400000, dailyTarget: 16000 },
-      { id: "plan_saf_54_asm_nov26", lineId: "line_saf_54_03", productId: "prod_sap_54_asm", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 125000, dailyTarget: 5000 },
-      { id: "plan_maf_127_asm_nov26", lineId: "line_maf_127_03", productId: "prod_map_127_asm", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 100000, dailyTarget: 4000 },
-      { id: "plan_maf_127_cr_nov26", lineId: "line_maf_127_01", productId: "prod_map_127_cr", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 125000, dailyTarget: 5000 },
-      { id: "plan_hwf_122_wh_nov26", lineId: "line_hwf_01", productId: "prod_hwp_122_wh", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 25000, dailyTarget: 1000 },
-      { id: "plan_hwf_82_mb_nov26", lineId: "line_hwf_02", productId: "prod_hwp_82_mb", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 37500, dailyTarget: 1500 },
-      { id: "plan_ccs_122_whc_nov26", lineId: "line_ccs_01", productId: "prod_ccs_122_whc", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 20000, dailyTarget: 800 },
-      { id: "plan_tas_dd_punch_nov26", lineId: "line_tas_01", productId: "prod_tas_dd_punch", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 5000, dailyTarget: 200 },
+      { id: "plan_saf_39_asm_nov26", lineId: "line_saf_39_03", productId: "prod_sap_39_asm", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 375000 },
+      { id: "plan_saf_39_cr_nov26", lineId: "line_saf_39_01", productId: "prod_sap_39_cr", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 400000 },
+      { id: "plan_saf_54_asm_nov26", lineId: "line_saf_54_03", productId: "prod_sap_54_asm", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 125000 },
+      { id: "plan_maf_127_asm_nov26", lineId: "line_maf_127_03", productId: "prod_map_127_asm", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 100000 },
+      { id: "plan_maf_127_cr_nov26", lineId: "line_maf_127_01", productId: "prod_map_127_cr", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 125000 },
+      { id: "plan_hwf_122_wh_nov26", lineId: "line_hwf_01", productId: "prod_hwp_122_wh", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 25000 },
+      { id: "plan_hwf_82_mb_nov26", lineId: "line_hwf_02", productId: "prod_hwp_82_mb", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 37500 },
+      { id: "plan_ccs_122_whc_nov26", lineId: "line_ccs_01", productId: "prod_ccs_122_whc", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 20000 },
+      { id: "plan_tas_dd_punch_nov26", lineId: "line_tas_01", productId: "prod_tas_dd_punch", startDate: "2026-11-01", endDate: "2026-11-30", plannedQty: 5000 },
     ];
     for (const pl of samplePlans) {
       await client.query(`
-        INSERT INTO "plans" ("id", "line_id", "product_id", "start_date", "end_date", "planned_qty", "initial_planned_qty", "daily_target")
-        VALUES ($1, $2, $3, $4, $5, $6, $6, $7)
+        INSERT INTO "plans" ("id", "line_id", "product_id", "start_date", "end_date", "planned_qty", "initial_planned_qty")
+        VALUES ($1, $2, $3, $4, $5, $6, $6)
         ON CONFLICT ("id") DO NOTHING;
-      `, [pl.id, pl.lineId, pl.productId, pl.startDate, pl.endDate, pl.plannedQty, pl.dailyTarget]);
+      `, [pl.id, pl.lineId, pl.productId, pl.startDate, pl.endDate, pl.plannedQty]);
     }
 
     // 13. Sample Operational Figures (November 2–5, 2026)
