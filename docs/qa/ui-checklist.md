@@ -210,6 +210,18 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Client-side form submit guard blocks creating duplicate plan for same product (`src/components/planning/planning-client.test.tsx`)
 - [x] Edit modal prevents duplicate product reassignment (`src/components/planning/planning-client.test.tsx`)
 
+### Multi-Period Tabs (Daily, Weekly, Monthly) & Batch Schedule Initialization
+- [x] Unplanned Products Warning Banner (`data-testid="unplanned-warning-banner"`) displays count, list of unplanned products, and Amharic badge (`src/components/planning/planning-client.test.tsx`)
+- [x] Batch Add Plans button (`data-testid="batch-add-plans-button"`) opens modal for OM, initializing plans across all unplanned products (`src/components/planning/planning-client.test.tsx`)
+- [x] Backend `batchCreatePlansAction` filters out products with existing plans, rejects FM role, and inserts baseline plans (`src/actions/plan-actions.test.ts`)
+- [x] Tab Switcher: seamless switching between Daily (`tab-daily`), Weekly (`tab-weekly`), Monthly (`tab-monthly`), and Master (`tab-master`) (`src/components/planning/planning-client.test.tsx`)
+- [x] Daily Tab: date navigation (Prev, Next, Today), daily target based on 26-day manufacturing cycle, day output, variance, and status (`src/components/planning/planning-client.test.tsx`)
+- [x] Weekly Tab: weekly target, 7-day trailing output, remaining balance, progress bar, and pacing status (`src/components/planning/planning-client.test.tsx`)
+- [x] Monthly Tab: monthly scheduled target, month-to-date output, remaining balance, fulfillment bar, and completion status (`src/components/planning/planning-client.test.tsx`)
+- [x] Quick `+ Set Plan` action: OM can click `set-plan-[productId]` on any unplanned product row to prefill and open create modal (`src/components/planning/planning-client.test.tsx`)
+- [x] Factory Manager Read-Only Lockdown: FM sees all 4 tabs, warnings, targets, and progress, with all alteration controls (`New Plan`, `Batch Add`, `Edit`, `Set Plan`) strictly hidden (`src/components/planning/planning-client.test.tsx`)
+
+
 
 
 

@@ -15,6 +15,7 @@ import {
   Sparkles,
   TrendingUp,
   TrendingDown,
+  AlertTriangle,
   X,
 } from "lucide-react";
 import {
@@ -248,6 +249,8 @@ export function NotificationsDropdown({ userRole }: NotificationsDropdownProps) 
                   timeAgo = "";
                 }
 
+                const isReminder = n.type === "report_reminder";
+
                 // Clean name: "Name..."
                 const displayName =
                   n.factoryName ||
@@ -259,7 +262,10 @@ export function NotificationsDropdown({ userRole }: NotificationsDropdownProps) 
                 let isPositive = n.isPositive ?? true;
 
                 if (!displayValue) {
-                  if (n.message && (n.message.startsWith("+") || n.message.startsWith("-"))) {
+                  if (isReminder) {
+                    displayValue = "Action Required";
+                    isPositive = false;
+                  } else if (n.message && (n.message.startsWith("+") || n.message.startsWith("-"))) {
                     displayValue = n.message;
                     isPositive = !n.message.startsWith("-");
                   } else {
@@ -268,7 +274,7 @@ export function NotificationsDropdown({ userRole }: NotificationsDropdownProps) 
                   }
                 }
 
-                if (!displayValue.startsWith("+") && !displayValue.startsWith("-")) {
+                if (!isReminder && !displayValue.startsWith("+") && !displayValue.startsWith("-")) {
                   displayValue = `+${displayValue}`;
                 }
 
@@ -304,22 +310,29 @@ export function NotificationsDropdown({ userRole }: NotificationsDropdownProps) 
                         </span>
                       </div>
 
-                      {/* "Value - + or -" */}
+                      {/* "Value - + or - / Alert" */}
                       <div className="shrink-0 font-mono">
-                        <span
-                          className={`inline-flex items-center gap-1 font-black text-xs sm:text-sm px-2.5 py-1 rounded-xl border ${
-                            isPositive
-                              ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                              : "text-rose-700 bg-rose-50 border-rose-200"
-                          }`}
-                        >
-                          {isPositive ? (
-                            <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          ) : (
-                            <TrendingDown className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                          )}
-                          <span>{displayValue}</span>
-                        </span>
+                        {isReminder ? (
+                          <span className="inline-flex items-center gap-1 font-black text-xs px-2.5 py-1 rounded-xl border text-amber-800 bg-amber-50 border-amber-200">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Action Required</span>
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 font-black text-xs sm:text-sm px-2.5 py-1 rounded-xl border ${
+                              isPositive
+                                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                : "text-rose-700 bg-rose-50 border-rose-200"
+                            }`}
+                          >
+                            {isPositive ? (
+                              <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : (
+                              <TrendingDown className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            )}
+                            <span>{displayValue}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -343,10 +356,23 @@ export function NotificationsDropdown({ userRole }: NotificationsDropdownProps) 
                             if (!n.isRead) handleMarkAsRead(n.id);
                             setIsOpen(false);
                           }}
-                          className="btn btn-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border-none font-bold rounded-lg gap-1 min-h-[28px] px-3 touch-manipulation transition-colors"
+                          className={`btn btn-xs rounded-lg gap-1 min-h-[28px] px-3 touch-manipulation transition-colors font-bold ${
+                            isReminder
+                              ? "bg-amber-600 hover:bg-amber-700 text-white border-none shadow-xs"
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-none"
+                          }`}
                         >
-                          <ExternalLink className="w-3 h-3 text-slate-500" />
-                          <span>View Report</span>
+                          {isReminder ? (
+                            <>
+                              <Bell className="w-3 h-3 text-white" />
+                              <span>Upload Report (አስገባ)</span>
+                            </>
+                          ) : (
+                            <>
+                              <ExternalLink className="w-3 h-3 text-slate-500" />
+                              <span>View Report</span>
+                            </>
+                          )}
                         </Link>
                       )}
 

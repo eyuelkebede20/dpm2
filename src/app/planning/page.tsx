@@ -78,6 +78,7 @@ export default async function PlanningPage({ searchParams }: PlanningPageProps) 
   const targetFactoryId = resolvedParams.factoryId || (user.role === "fm" && context.factoryId ? context.factoryId : "all");
   const plansRes = await getProductionPlansAction(targetFactoryId);
   const planItems = plansRes.success && plansRes.data ? plansRes.data : [];
+  const entries = plansRes.success && plansRes.entries ? plansRes.entries : [];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -89,6 +90,7 @@ export default async function PlanningPage({ searchParams }: PlanningPageProps) 
           products={productsList}
           lineProducts={lineProductsList}
           plans={planItems}
+          entries={entries}
           calendarSystem={calendarSystem}
           userRole={user.role}
           canManagePlans={canManagePlans}

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays, subDays, parseISO } from "date-fns";
+import { format, addDays, subDays, parseISO, getDay } from "date-fns";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -24,6 +24,9 @@ import {
   Pencil,
   ThumbsUp,
   ThumbsDown,
+  AlertTriangle,
+  Bell,
+  Lock,
 } from "lucide-react";
 import { StepperInput } from "@/components/ui/stepper-input";
 import { LineTallyVisualizer } from "./line-tally-visualizer";
@@ -37,6 +40,7 @@ import {
   unmarkDailyReportReviewedAction,
   reviewItemAction,
   updateDailyPlanAction,
+  sendReportReminderAction,
 } from "@/actions/review-actions";
 import {
   ETH_MONTH_NAMES_AM,
@@ -45,6 +49,7 @@ import {
   ethToGregorian,
   formatEthDate,
   daysInMonthEth,
+  isReportMonthPassed,
 } from "@/lib/ethiopian-calendar";
 
 export interface QAReviewInfo {
@@ -122,6 +127,16 @@ export interface SpecialDayInfo {
   type: string;
 }
 
+const ETH_PICKER_WEEKDAYS = [
+  { am: "ሰኞ", en: "Mon", isWeekend: false },
+  { am: "ማክ", en: "Tue", isWeekend: false },
+  { am: "ረቡ", en: "Wed", isWeekend: false },
+  { am: "ሐሙ", en: "Thu", isWeekend: false },
+  { am: "አርብ", en: "Fri", isWeekend: false },
+  { am: "ቅዳሜ", en: "Sat", isWeekend: false },
+  { am: "እሁድ", en: "Sun", isWeekend: true },
+];
+
 interface DailyEntryClientProps {
   initialDate: string;
   factoryId: string;
@@ -177,7 +192,11 @@ export function DailyEntryClient({
   const isOM = userRole === "om";
   const canInputDailyNumbers = userRole === "fm" || userRole === "sys_admin";
   const isDayLocked = userRole === "fm" && daySubmitted;
-  const isReadOnly = !canInputDailyNumbers || isDayLocked;
+  const isMonthPassed = useMemo(() => {
+    return isReportMonthPassed(selectedDate, calendarSystem as any);
+  }, [selectedDate, calendarSystem]);
+  const isMonthLocked = userRole === "fm" && isMonthPassed;
+  const isReadOnly = !canInputDailyNumbers || isDayLocked || isMonthLocked;
   const canEditDailyPlans = isOM || userRole === "sys_admin";
   const canReviewItems = isOM || userRole === "sys_admin";
 
@@ -185,6 +204,7 @@ export function DailyEntryClient({
   const [editTargetValue, setEditTargetValue] = useState<number>(100);
   const [isSavingPlan, setIsSavingPlan] = useState<boolean>(false);
   const [isReviewingItemKey, setIsReviewingItemKey] = useState<string | null>(null);
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
 
   const [currentReview, setCurrentReview] = useState<ReportReviewInfo | null>(
     reportReview || null
@@ -194,6 +214,35 @@ export function DailyEntryClient({
   useEffect(() => {
     setCurrentReview(reportReview || null);
   }, [reportReview]);
+
+  const handleSendFMReminder = async () => {
+    if (!canReviewItems) return;
+    setIsSendingReminder(true);
+    try {
+      const res = await sendReportReminderAction({
+        factoryId,
+        date: selectedDate,
+      });
+      if (res.success) {
+        setToast({
+          type: "success",
+          message: `Notification reminder sent to Factory Managers (${res.recipients?.join(", ")}).`,
+        });
+      } else {
+        setToast({
+          type: "error",
+          message: res.error || "Failed to notify Factory Managers.",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: "error",
+        message: err.message || "Failed to send reminder notification.",
+      });
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
 
   const handleMarkReviewed = async () => {
     if (!isOM && userRole !== "sys_admin") return;
@@ -414,6 +463,53 @@ export function DailyEntryClient({
       });
     }
   };
+
+  const handlePrevPickerMonth = () => {
+    if (pickerMonth === 1) {
+      setPickerYear((y) => y - 1);
+      setPickerMonth(13);
+    } else {
+      setPickerMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextPickerMonth = () => {
+    if (pickerMonth === 13) {
+      setPickerYear((y) => y + 1);
+      setPickerMonth(1);
+    } else {
+      setPickerMonth((m) => m + 1);
+    }
+  };
+
+  const pickerDaysCount = useMemo(() => {
+    try {
+      return daysInMonthEth(pickerYear, pickerMonth);
+    } catch {
+      return 30;
+    }
+  }, [pickerYear, pickerMonth]);
+
+  const pickerLeadingBlanks = useMemo(() => {
+    try {
+      const firstIso = ethToGregorian(pickerYear, pickerMonth, 1);
+      const dow = getDay(parseISO(firstIso)); // 0 = Sun, 1 = Mon ...
+      return (dow + 6) % 7; // Monday-first
+    } catch {
+      return 0;
+    }
+  }, [pickerYear, pickerMonth]);
+
+  const selectedIsoPreview = useMemo(() => {
+    try {
+      const maxDays = daysInMonthEth(pickerYear, pickerMonth);
+      const safeDay = Math.min(Math.max(1, pickerDay), maxDays);
+      const iso = ethToGregorian(pickerYear, pickerMonth, safeDay);
+      return format(parseISO(iso), "EEEE, MMMM d, yyyy");
+    } catch {
+      return "";
+    }
+  }, [pickerYear, pickerMonth, pickerDay]);
 
   // Sync state if initialRows changes from server navigation
   useEffect(() => {
@@ -816,6 +912,25 @@ export function DailyEntryClient({
             <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded font-semibold text-slate-600 border border-slate-200/50">
               {row.sku}
             </span>
+            {(!row.itemReview?.status || (row.itemReview.status as string) === "pending") &&
+              (!row.qaReview?.isReviewed || (row.qaReview.status as string) === "pending") && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                  title="Warning: Product daily report has not been reviewed"
+                >
+                  <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                  <span>Unreviewed</span>
+                </span>
+              )}
+            {(!row.entry || (row.entry.finishedGood === 0 && !daySubmitted)) && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-black px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs"
+                title="Warning: Daily production report not uploaded"
+              >
+                <AlertCircle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                <span>Not Uploaded</span>
+              </span>
+            )}
           </div>
         </td>
 
@@ -1195,6 +1310,25 @@ export function DailyEntryClient({
               <span className="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-600">
                 {row.sku}
               </span>
+              {(!row.itemReview?.status || (row.itemReview.status as string) === "pending") &&
+                (!row.qaReview?.isReviewed || (row.qaReview.status as string) === "pending") && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                    title="Warning: Product daily report has not been reviewed"
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                    <span>Unreviewed (ያልተገመገመ)</span>
+                  </span>
+                )}
+              {(!row.entry || (row.entry.finishedGood === 0 && !daySubmitted)) && (
+                <span
+                  className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-300 shadow-2xs"
+                  title="Warning: Daily production numbers not uploaded yet"
+                >
+                  <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                  <span>Not Uploaded (ያልተመዘገበ)</span>
+                </span>
+              )}
             </div>
           </div>
 
@@ -1725,7 +1859,13 @@ export function DailyEntryClient({
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            <div className="flex items-center gap-1.5 px-2">
+            <div
+              className={`flex items-center gap-1.5 px-2 ${
+                isEth ? "cursor-pointer hover:bg-slate-50 rounded-lg py-0.5 transition-colors" : ""
+              }`}
+              onClick={() => isEth && setShowEthPicker(true)}
+              title={isEth ? "ቀን ምረጥ / Select Ethiopian Date" : undefined}
+            >
               <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
               <input
                 type="date"
@@ -1795,6 +1935,70 @@ export function DailyEntryClient({
           <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2.5 py-1 rounded-full font-mono font-bold shrink-0">
             Daily Target: 0
           </span>
+        </div>
+      )}
+
+      {/* Unreviewed Daily Report Warning Banner */}
+      {!currentReview?.isReviewed && (
+        <div className="mb-6 p-4 rounded-2xl border bg-amber-500/10 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-800">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
+                <span>Unreviewed Daily Report (ክለሳ ያልተደረገለት ዕለታዊ ሪፖርት)</span>
+                <span className="badge badge-warning badge-sm font-bold">Review Pending</span>
+              </div>
+              <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
+                This factory report has not received Operation Manager review and sign-off. Daily figures require OM verification.
+              </p>
+            </div>
+          </div>
+          {canReviewItems && (
+            <button
+              type="button"
+              onClick={handleSendFMReminder}
+              disabled={isSendingReminder}
+              className="btn btn-sm rounded-xl font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white border-none shadow-xs shrink-0 self-start sm:self-auto touch-manipulation"
+            >
+              {isSendingReminder ? (
+                <>
+                  <span className="loading loading-spinner loading-xs" />
+                  <span>Notifying...</span>
+                </>
+              ) : (
+                <>
+                  <Bell className="w-4 h-4 text-white" />
+                  <span>Notify Factory Managers (አስታውስ)</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* FM Month-Passed Lockout Banner */}
+      {isMonthLocked && (
+        <div className="mb-6 p-4 rounded-2xl border bg-amber-500/15 border-amber-400 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-200/70 border border-amber-400 flex items-center justify-center shrink-0 text-amber-900">
+              <Lock className="w-5 h-5 text-amber-900" />
+            </div>
+            <div>
+              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
+                <span>Reporting Period Closed (የወሩ ሪፖርት ጊዜ አልፏል)</span>
+                <span className="badge badge-warning badge-sm font-bold">Month Passed • Locked</span>
+              </div>
+              <p className="text-xs text-amber-900/90 mt-0.5 leading-relaxed">
+                Factory Managers can only alter reports of the active month. This past month has closed and is locked against modifications.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 self-start sm:self-auto">
+            <Lock className="w-4 h-4 text-amber-800" />
+            <span>Read-Only Period</span>
+          </div>
         </div>
       )}
 
@@ -2419,6 +2623,15 @@ export function DailyEntryClient({
                   )}
                 </button>
               )
+            ) : isMonthLocked ? (
+              // FM Month Passed - Locked State
+              <div className="flex items-center gap-2.5 px-4 py-2.5 bg-amber-50 text-amber-800 border border-amber-300 rounded-2xl font-bold text-xs sm:text-sm shadow-2xs">
+                <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>Reporting Window Closed (የክለሳ ጊዜ አልፏል)</span>
+                <span className="text-[10px] text-amber-700 font-mono hidden md:inline font-normal">
+                  — Month Passed
+                </span>
+              </div>
             ) : isDayLocked ? (
               // FM 1 Data Entry Per Day - Locked State
               <div className="flex items-center gap-2.5 px-4 py-2.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-2xl font-bold text-xs sm:text-sm shadow-2xs">
@@ -2474,18 +2687,27 @@ export function DailyEntryClient({
         </div>
       </div>
 
-      {/* Ethiopian Date Picker Modal */}
+      {/* Ethiopian Date Picker Modal (Responsive Bottom-Sheet on Mobile, Centered on Desktop) */}
       {showEthPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ethiopian Date Selection"
+            className="bg-white w-full max-h-[92dvh] sm:max-h-[85vh] sm:max-w-md rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-200 shadow-2xl p-4 sm:p-6 pb-safe flex flex-col overflow-y-auto animate-in slide-in-from-bottom sm:slide-in-from-bottom-2 duration-200"
+          >
+            {/* Mobile Drag Handle Indicator */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2.5 sm:hidden shrink-0" />
+
+            {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🇪🇹</span>
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl" role="img" aria-label="Ethiopian Flag">🇪🇹</span>
                 <div>
-                  <h3 className="text-base font-black text-slate-900 leading-relaxed">
-                    ቀን ምረጥ (Select Ethiopian Date)
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                    ቀን ምረጥ <span className="text-xs sm:text-sm font-semibold text-slate-500">(Select Date)</span>
                   </h3>
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
                     13-Month Ethiopian Production Calendar
                   </p>
                 </div>
@@ -2494,81 +2716,140 @@ export function DailyEntryClient({
                 type="button"
                 onClick={() => setShowEthPicker(false)}
                 className="btn btn-ghost btn-sm btn-circle text-slate-400 hover:text-slate-700"
+                aria-label="Close Ethiopian date picker"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Year & Month Selection */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1 leading-relaxed">
-                  ዓመት (Year)
-                </label>
-                <select
-                  value={pickerYear}
-                  onChange={(e) => setPickerYear(Number(e.target.value))}
-                  className="select select-bordered select-sm w-full font-bold text-slate-800 rounded-xl leading-relaxed"
+            {/* Year & Month Stepper Controls */}
+            <div className="my-3 space-y-3">
+              <div className="flex items-center justify-between gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={handlePrevPickerMonth}
+                  className="btn btn-sm btn-circle btn-ghost text-slate-600 hover:bg-white min-h-[38px] min-w-[38px] touch-manipulation"
+                  aria-label="Previous Month"
                 >
-                  {[2014, 2015, 2016, 2017, 2018, 2019, 2020].map((y) => (
-                    <option key={y} value={y}>
-                      {y} ዓ.ም
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
 
-              <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1 leading-relaxed">
-                  ወር (Month)
-                </label>
-                <select
-                  value={pickerMonth}
-                  onChange={(e) => setPickerMonth(Number(e.target.value))}
-                  className="select select-bordered select-sm w-full font-bold text-slate-800 rounded-xl leading-relaxed"
-                >
-                  {Array.from({ length: 13 }, (_, i) => i + 1).map((m) => (
-                    <option key={m} value={m}>
-                      {m}. {ETH_MONTH_NAMES_AM[m]} ({ETH_MONTH_NAMES_EN[m]})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Day Selection Grid */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-600 leading-relaxed">
-                  ቀን (Day: 1 - {daysInMonthEth(pickerYear, pickerMonth)})
-                </label>
-                <span className="text-xs font-extrabold text-indigo-600 font-mono leading-relaxed">
-                  ተመርጧል: {pickerDay}
-                </span>
-              </div>
-              <div className="grid grid-cols-6 sm:grid-cols-7 gap-1.5 max-h-48 overflow-y-auto p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
-                {Array.from(
-                  { length: daysInMonthEth(pickerYear, pickerMonth) },
-                  (_, i) => i + 1
-                ).map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => setPickerDay(d)}
-                    className={`btn btn-xs min-h-[36px] rounded-lg font-mono font-bold touch-manipulation ${
-                      pickerDay === d
-                        ? "bg-indigo-600 text-white shadow-xs"
-                        : "btn-ghost text-slate-700 hover:bg-white"
-                    }`}
+                <div className="flex items-center gap-2 flex-1 justify-center">
+                  {/* Month Select */}
+                  <select
+                    value={pickerMonth}
+                    onChange={(e) => setPickerMonth(Number(e.target.value))}
+                    className="select select-sm select-bordered font-extrabold text-slate-800 rounded-xl leading-relaxed text-xs sm:text-sm h-9 min-h-0"
+                    aria-label="Select Ethiopian Month"
                   >
-                    {d}
-                  </button>
-                ))}
+                    {Array.from({ length: 13 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>
+                        {m}. {ETH_MONTH_NAMES_AM[m]} ({ETH_MONTH_NAMES_EN[m]})
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Year Select */}
+                  <select
+                    value={pickerYear}
+                    onChange={(e) => setPickerYear(Number(e.target.value))}
+                    className="select select-sm select-bordered font-extrabold text-slate-800 rounded-xl leading-relaxed font-mono text-xs sm:text-sm h-9 min-h-0"
+                    aria-label="Select Ethiopian Year"
+                  >
+                    {[2014, 2015, 2016, 2017, 2018, 2019, 2020].map((y) => (
+                      <option key={y} value={y}>
+                        {y} ዓ.ም
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleNextPickerMonth}
+                  className="btn btn-sm btn-circle btn-ghost text-slate-600 hover:bg-white min-h-[38px] min-w-[38px] touch-manipulation"
+                  aria-label="Next Month"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 7-Day Ethiopian Month Calendar Grid */}
+              <div className="bg-slate-50/70 rounded-2xl border border-slate-200/70 p-2 sm:p-2.5">
+                {/* Weekday Column Headers */}
+                <div className="grid grid-cols-7 gap-1 text-center mb-1 pb-1 border-b border-slate-200/60">
+                  {ETH_PICKER_WEEKDAYS.map((wd, idx) => (
+                    <div
+                      key={`wd_${idx}`}
+                      className={`text-[10px] sm:text-xs font-bold leading-normal ${
+                        wd.isWeekend ? "text-slate-400" : "text-slate-600"
+                      }`}
+                    >
+                      <span>{wd.am}</span>
+                      <span className="block text-[8px] sm:text-[9px] font-mono text-slate-400">{wd.en}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Date Tiles Grid */}
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                  {/* Leading blanks for month alignment */}
+                  {Array.from({ length: pickerLeadingBlanks }).map((_, idx) => (
+                    <div key={`blank_${idx}`} className="aspect-square min-h-[38px] sm:min-h-[42px] rounded-xl" />
+                  ))}
+
+                  {Array.from({ length: pickerDaysCount }, (_, i) => i + 1).map((d) => {
+                    const isSelected = pickerDay === d;
+                    let isDayToday = false;
+                    let isFutureDay = false;
+                    try {
+                      const dayIso = ethToGregorian(pickerYear, pickerMonth, d);
+                      isDayToday = dayIso === todayStr;
+                      isFutureDay = dayIso > todayStr;
+                    } catch {}
+
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        disabled={isFutureDay}
+                        onClick={() => setPickerDay(d)}
+                        className={`aspect-square min-h-[38px] sm:min-h-[42px] rounded-xl font-mono font-bold text-xs sm:text-sm flex flex-col items-center justify-center relative transition-all active:scale-95 touch-manipulation ${
+                          isSelected
+                            ? "bg-indigo-600 text-white font-extrabold shadow-md scale-105 z-10 ring-2 ring-indigo-400"
+                            : isDayToday
+                            ? "border-2 border-emerald-500 bg-white text-emerald-950 font-black shadow-2xs"
+                            : isFutureDay
+                            ? "opacity-30 cursor-not-allowed bg-slate-100 text-slate-400"
+                            : "bg-white border border-slate-200/80 hover:border-indigo-300 hover:bg-indigo-50/30 text-slate-800"
+                        }`}
+                        title={isFutureDay ? "Future Date (Disabled)" : undefined}
+                      >
+                        <span className="leading-none">{d}</span>
+                        {isDayToday && !isSelected && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-0.5 inline-block" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Live Date Preview */}
+              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl px-3 py-2 flex items-center justify-between text-xs">
+                <div className="font-bold text-indigo-950">
+                  🇪🇹 {pickerDay} {ETH_MONTH_NAMES_AM[pickerMonth]} {pickerYear} ዓ.ም
+                </div>
+                {selectedIsoPreview && (
+                  <div className="font-mono text-[11px] text-indigo-700/80 truncate ml-2">
+                    GC: {selectedIsoPreview}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 mt-auto">
               <button
                 type="button"
                 onClick={() => {
@@ -2579,7 +2860,7 @@ export function DailyEntryClient({
                     setPickerDay(todayEth.day);
                   } catch {}
                 }}
-                className="btn btn-sm btn-ghost text-slate-600 font-bold leading-relaxed touch-manipulation"
+                className="btn btn-sm btn-ghost text-slate-600 font-bold min-h-[40px] px-3 rounded-xl touch-manipulation"
               >
                 ዛሬ (Today)
               </button>
@@ -2588,7 +2869,7 @@ export function DailyEntryClient({
                 <button
                   type="button"
                   onClick={() => setShowEthPicker(false)}
-                  className="btn btn-sm min-h-[40px] btn-ghost rounded-xl leading-relaxed touch-manipulation"
+                  className="btn btn-sm min-h-[40px] btn-ghost rounded-xl leading-relaxed touch-manipulation px-3"
                 >
                   ይቅር (Cancel)
                 </button>
@@ -2597,7 +2878,7 @@ export function DailyEntryClient({
                   onClick={() =>
                     handleApplyEthDate(pickerYear, pickerMonth, pickerDay)
                   }
-                  className="btn btn-sm min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-4 leading-relaxed touch-manipulation"
+                  className="btn btn-sm min-h-[40px] bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold px-4 leading-relaxed touch-manipulation shadow-xs"
                 >
                   አረጋግጥ (Apply)
                 </button>

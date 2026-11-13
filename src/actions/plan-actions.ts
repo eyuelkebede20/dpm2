@@ -8,6 +8,7 @@ import {
   factoryUsers,
   lines,
   products,
+  lineProducts,
   plans,
   reportEntries,
   industryProfile,
@@ -15,6 +16,13 @@ import {
 import { eq, ne, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { logSecurityEvent } from "@/lib/security";
+
+export interface PlanReportEntryItem {
+  lineId: string;
+  productId: string;
+  date: string;
+  finishedGood: number;
+}
 
 export interface PlanItemWithPlant {
   id: string;
@@ -44,6 +52,7 @@ export interface PlanItemWithPlant {
 export async function getProductionPlansAction(targetFactoryId?: string): Promise<{
   success: boolean;
   data?: PlanItemWithPlant[];
+  entries?: PlanReportEntryItem[];
   calendarSystem?: "ethiopian" | "gregorian";
   canManagePlans?: boolean;
   error?: string;
@@ -155,6 +164,7 @@ export async function getProductionPlansAction(targetFactoryId?: string): Promis
     return {
       success: true,
       data: formattedPlans,
+      entries: allEntries,
       calendarSystem,
       canManagePlans,
     };
@@ -404,5 +414,122 @@ export async function deletePlanAction(id: string) {
   } catch (err: any) {
     console.error("Delete plan error:", err);
     return { success: false, error: "Failed to delete production plan" };
+  }
+}
+
+const batchCreatePlansSchema = z
+  .object({
+    factoryId: z.string().min(1, "Factory ID is required"),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid start date format (YYYY-MM-DD)"),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid end date format (YYYY-MM-DD)"),
+    defaultPlannedQty: z.number().int().positive("Default planned quantity must be greater than 0"),
+    productIds: z.array(z.string()).optional(),
+  })
+  .strict()
+  .refine((data) => data.startDate <= data.endDate, {
+    message: "End date must be on or after start date",
+    path: ["endDate"],
+  });
+
+/**
+ * Batch creates baseline production plans for all products in a plant
+ * that do not currently have an active plan.
+ * Strictly restricted to Operation Managers (OM) and System Administrators.
+ */
+export async function batchCreatePlansAction(rawInput: unknown) {
+  const user = await requireUser();
+
+  // Strict role check: Factory Managers cannot create production plans
+  if (user.role === "fm") {
+    return {
+      success: false,
+      error: "Forbidden: Factory Managers cannot create production plans. Only Operation Managers can manage plans.",
+    };
+  }
+
+  const parsed = batchCreatePlansSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.errors[0]?.message || "Invalid input" };
+  }
+
+  const { factoryId, startDate, endDate, defaultPlannedQty, productIds } = parsed.data;
+
+  const allowed = await can(user, "create", {
+    type: "plan",
+    factoryId,
+  });
+  if (!allowed) {
+    logSecurityEvent({
+      event: "BOLA_ATTEMPT_BLOCKED",
+      userId: user.id,
+      details: { action: "batchCreatePlans", factoryId },
+    });
+    return { success: false, error: "Forbidden: You do not have permission to create plans for this factory" };
+  }
+
+  try {
+    // 1. Fetch all existing plans to avoid duplicate product plans
+    const existingPlans = await db.select({ productId: plans.productId }).from(plans);
+    const plannedSet = new Set(existingPlans.map((p) => p.productId));
+
+    // 2. Fetch active products for this factory
+    const factoryProducts = await db
+      .select({ id: products.id, name: products.name })
+      .from(products)
+      .where(and(eq(products.factoryId, factoryId), eq(products.active, true)));
+
+    // 3. Filter for products that do NOT have a plan yet
+    const targetProducts = factoryProducts.filter((p) => {
+      if (plannedSet.has(p.id)) return false;
+      if (productIds && productIds.length > 0) return productIds.includes(p.id);
+      return true;
+    });
+
+    if (targetProducts.length === 0) {
+      return { success: true, count: 0, message: "All products in this plant already have active plans." };
+    }
+
+    // 4. Resolve default line for each product using lineProducts, or the first active line in factory
+    const factoryLines = await db
+      .select({ id: lines.id })
+      .from(lines)
+      .where(and(eq(lines.factoryId, factoryId), eq(lines.active, true)));
+
+    if (factoryLines.length === 0) {
+      return { success: false, error: "No active production lines found for this plant. Please add a line first." };
+    }
+
+    const defaultLineId = factoryLines[0].id;
+    const links = await db.select().from(lineProducts);
+
+    // 5. Insert plans
+    let createdCount = 0;
+    for (const prod of targetProducts) {
+      const linked = links.find((l) => l.productId === prod.id && factoryLines.some((fl) => fl.id === l.lineId));
+      const lineId = linked ? linked.lineId : defaultLineId;
+      const planId = `plan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+      await db.insert(plans).values({
+        id: planId,
+        lineId,
+        productId: prod.id,
+        startDate,
+        endDate,
+        plannedQty: defaultPlannedQty,
+        initialPlannedQty: defaultPlannedQty,
+      });
+      createdCount++;
+    }
+
+    revalidatePath("/planning");
+    revalidatePath("/fm");
+    revalidatePath("/calendar");
+    revalidatePath("/om");
+    revalidatePath("/entry");
+
+    return { success: true, count: createdCount };
+  } catch (err: any) {
+    console.error("batchCreatePlansAction error:", err);
+    return { success: false, error: "Failed to batch create production plans" };
   }
 }

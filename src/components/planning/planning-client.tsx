@@ -6,9 +6,13 @@ import {
   createPlanAction,
   updatePlanAction,
   deletePlanAction,
+  batchCreatePlansAction,
   PlanItemWithPlant,
+  PlanReportEntryItem,
 } from "@/actions/plan-actions";
 import { PlanDatePicker } from "./plan-date-picker";
+import { usePagination } from "@/hooks/use-pagination";
+import { Pagination } from "@/components/ui/pagination";
 import {
   CalendarDays,
   Plus,
@@ -26,9 +30,19 @@ import {
   Layers,
   ArrowRight,
   SlidersHorizontal,
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  TrendingUp,
+  Clock,
+  Check,
 } from "lucide-react";
+import { toast } from "sonner";
 import { gregorianToEth, ethToGregorian, formatEthDate } from "@/lib/ethiopian-calendar";
 import { format, parseISO } from "date-fns";
+
+export type PlanningTab = "daily" | "weekly" | "monthly" | "master";
 
 interface PlanningClientProps {
   factories: Array<{ id: string; name: string }>;
@@ -37,6 +51,7 @@ interface PlanningClientProps {
   products: Array<{ id: string; name: string; sku: string; factoryId?: string }>;
   lineProducts: Array<{ lineId: string; productId: string }>;
   plans: PlanItemWithPlant[];
+  entries?: PlanReportEntryItem[];
   calendarSystem: "ethiopian" | "gregorian";
   userRole: "om" | "fm" | "sys_admin" | "qa";
   canManagePlans: boolean;
@@ -49,15 +64,41 @@ export function PlanningClient({
   products,
   lineProducts,
   plans,
+  entries = [],
   calendarSystem,
   userRole,
   canManagePlans,
 }: PlanningClientProps) {
   const router = useRouter();
 
+  // Tab View State: Daily, Weekly, Monthly, or Master Plans
+  const [activeTab, setActiveTab] = useState<PlanningTab>("daily");
+
+  // Daily View Date Selector (defaults to today ISO YYYY-MM-DD)
+  const [dailyDate, setDailyDate] = useState<string>(() => {
+    return new Date().toISOString().slice(0, 10);
+  });
+
   // Filters
   const [selectedFactoryId, setSelectedFactoryId] = useState<string>(initialFactoryId);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Batch Plan Modal (for OM to add plans for all unplanned products at once)
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
+  const [batchFactoryId, setBatchFactoryId] = useState<string>(
+    initialFactoryId !== "all" ? initialFactoryId : factories[0]?.id || ""
+  );
+  const [batchStartDate, setBatchStartDate] = useState<string>(() => {
+    return new Date().toISOString().slice(0, 10);
+  });
+  const [batchEndDate, setBatchEndDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [batchDefaultQty, setBatchDefaultQty] = useState<number>(10000);
+  const [batchSaving, setBatchSaving] = useState(false);
+  const [batchError, setBatchError] = useState<string | null>(null);
 
   // Create Modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -95,6 +136,17 @@ export function PlanningClient({
     return new Set(plans.map((p) => p.productId));
   }, [plans]);
 
+  // Products belonging to the currently selected factory (or all factories)
+  const relevantProducts = useMemo(() => {
+    if (selectedFactoryId === "all") return products;
+    return products.filter((p) => !p.factoryId || p.factoryId === selectedFactoryId);
+  }, [products, selectedFactoryId]);
+
+  // Unplanned products in the current scope
+  const unplannedProducts = useMemo(() => {
+    return relevantProducts.filter((p) => !plannedProductIds.has(p.id));
+  }, [relevantProducts, plannedProductIds]);
+
   // Lines available for create modal
   const createAvailableLines = useMemo(() => {
     if (!createFactoryId) return lines;
@@ -130,7 +182,7 @@ export function PlanningClient({
     return products.filter((p) => linkedIds.includes(p.id));
   }, [lineProducts, editLineId, products]);
 
-  // Filtered Plans
+  // Filtered Plans for Master View
   const filteredPlans = useMemo(() => {
     return plans.filter((p) => {
       // Factory Filter
@@ -152,6 +204,12 @@ export function PlanningClient({
     });
   }, [plans, selectedFactoryId, searchQuery]);
 
+  // Client-side pagination for smooth plan list rendering
+  const planPagination = usePagination({
+    items: filteredPlans,
+    initialPageSize: 10,
+  });
+
   // KPI calculations
   const totalPlannedUnits = useMemo(() => {
     return filteredPlans.reduce((acc, p) => acc + p.plannedQty, 0);
@@ -165,6 +223,71 @@ export function PlanningClient({
     if (totalPlannedUnits === 0) return 0;
     return Math.min(100, Math.round((totalProducedUnits / totalPlannedUnits) * 100));
   }, [totalPlannedUnits, totalProducedUnits]);
+
+  // Product Schedule Matrix (mapping all products to Daily, Weekly, and Monthly actuals & targets)
+  const productScheduleRows = useMemo(() => {
+    const d = new Date(dailyDate);
+    const sevenDaysAgo = new Date(d);
+    sevenDaysAgo.setDate(d.getDate() - 6);
+    const startWeeklyIso = sevenDaysAgo.toISOString().slice(0, 10);
+    const currentMonthIso = dailyDate.slice(0, 7);
+
+    return relevantProducts
+      .filter((prod) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        const matchName = prod.name.toLowerCase().includes(q);
+        const matchSku = prod.sku?.toLowerCase().includes(q);
+        return matchName || matchSku;
+      })
+      .map((prod) => {
+        const plan = plans.find((p) => p.productId === prod.id);
+        const plant = factories.find((f) => f.id === prod.factoryId) || (plan ? { name: plan.factoryName } : undefined);
+
+        // Calculate Daily Metrics
+        // Daily target based on standard 26-day manufacturing cycle
+        const dailyTarget = plan ? Math.max(1, Math.round(plan.plannedQty / 26)) : null;
+        const dailyActual = entries
+          .filter((e) => e.productId === prod.id && e.date === dailyDate)
+          .reduce((sum, e) => sum + e.finishedGood, 0);
+        const dailyVariance = dailyTarget !== null ? dailyActual - dailyTarget : null;
+
+        // Calculate Weekly Metrics (7-day window ending at dailyDate)
+        const weeklyTarget = plan
+          ? (plan.weeklyPlanned || (dailyTarget ? dailyTarget * 6 : Math.round(plan.plannedQty / 4)))
+          : null;
+        const weeklyActual = entries
+          .filter((e) => e.productId === prod.id && e.date >= startWeeklyIso && e.date <= dailyDate)
+          .reduce((sum, e) => sum + e.finishedGood, 0);
+        const weeklyLeft = weeklyTarget !== null ? Math.max(0, weeklyTarget - weeklyActual) : null;
+        const weeklyPct = weeklyTarget && weeklyTarget > 0 ? Math.min(100, Math.round((weeklyActual / weeklyTarget) * 100)) : 0;
+
+        // Calculate Monthly Metrics (current month YYYY-MM)
+        const monthlyTarget = plan ? plan.plannedQty : null;
+        const monthlyActual = entries
+          .filter((e) => e.productId === prod.id && e.date.startsWith(currentMonthIso))
+          .reduce((sum, e) => sum + e.finishedGood, 0);
+        const monthlyLeft = monthlyTarget !== null ? Math.max(0, monthlyTarget - monthlyActual) : null;
+        const monthlyPct = monthlyTarget && monthlyTarget > 0 ? Math.min(100, Math.round((monthlyActual / monthlyTarget) * 100)) : 0;
+
+        return {
+          product: prod,
+          plan,
+          plantName: plant?.name || (plan ? plan.factoryName : "General Plant"),
+          dailyTarget,
+          dailyActual,
+          dailyVariance,
+          weeklyTarget,
+          weeklyActual,
+          weeklyLeft,
+          weeklyPct,
+          monthlyTarget,
+          monthlyActual,
+          monthlyLeft,
+          monthlyPct,
+        };
+      });
+  }, [relevantProducts, plans, entries, dailyDate, searchQuery, factories]);
 
   // Date formatter helper based on Sys Admin selection
   const formatPlanDate = (isoStr: string) => {
@@ -211,6 +334,23 @@ export function PlanningClient({
     const availableProd = candidateProds.find((p) => !plannedProductIds.has(p.id));
     setCreateProductId(availableProd?.id || "");
 
+    setCreateQty(10000);
+    setCreateError(null);
+    setCreateModalOpen(true);
+  };
+
+  // Quick Open Create Modal for a specific unplanned product
+  const handleOpenCreateModalForProduct = (productId: string) => {
+    const prod = products.find((p) => p.id === productId);
+    const fId = prod?.factoryId || (selectedFactoryId !== "all" ? selectedFactoryId : factories[0]?.id || "");
+    setCreateFactoryId(fId);
+
+    const linked = lineProducts.find((lp) => lp.productId === productId);
+    const plantLines = lines.filter((l) => !fId || l.factoryId === fId);
+    const targetLineId = linked ? linked.lineId : plantLines[0]?.id || "";
+
+    setCreateLineId(targetLineId);
+    setCreateProductId(productId);
     setCreateQty(10000);
     setCreateError(null);
     setCreateModalOpen(true);
@@ -326,6 +466,73 @@ export function PlanningClient({
     }
   };
 
+  // Batch Plan Handlers
+  const handleOpenBatchModal = () => {
+    const fId = selectedFactoryId !== "all" ? selectedFactoryId : factories[0]?.id || "";
+    setBatchFactoryId(fId);
+    setBatchDefaultQty(10000);
+    setBatchError(null);
+    setBatchModalOpen(true);
+  };
+
+  const handleSaveBatchPlans = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!batchFactoryId) {
+      setBatchError("Please select an operating plant.");
+      return;
+    }
+    if (batchStartDate > batchEndDate) {
+      setBatchError("End date must be on or after start date.");
+      return;
+    }
+    if (batchDefaultQty <= 0) {
+      setBatchError("Default planned quantity must be greater than zero.");
+      return;
+    }
+
+    try {
+      setBatchSaving(true);
+      setBatchError(null);
+
+      const res = await batchCreatePlansAction({
+        factoryId: batchFactoryId,
+        startDate: batchStartDate,
+        endDate: batchEndDate,
+        defaultPlannedQty: batchDefaultQty,
+      });
+
+      if (!res.success) {
+        setBatchError(res.error || "Failed to batch create plans.");
+        return;
+      }
+
+      toast.success(res.message || `Created ${res.count || 0} production plans successfully.`);
+      setBatchModalOpen(false);
+      router.refresh();
+    } catch (err: any) {
+      setBatchError(err.message || "An unexpected error occurred.");
+    } finally {
+      setBatchSaving(false);
+    }
+  };
+
+  // Date Navigator Handlers
+  const handlePrevDay = () => {
+    const d = new Date(dailyDate);
+    d.setDate(d.getDate() - 1);
+    setDailyDate(d.toISOString().slice(0, 10));
+  };
+
+  const handleNextDay = () => {
+    const d = new Date(dailyDate);
+    d.setDate(d.getDate() + 1);
+    setDailyDate(d.toISOString().slice(0, 10));
+  };
+
+  const handleToday = () => {
+    setDailyDate(new Date().toISOString().slice(0, 10));
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Page Header & Executive Controls */}
@@ -358,21 +565,34 @@ export function PlanningClient({
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Schedule periodic and annual output targets across manufacturing plants, lines, and products.
+            Daily, weekly, and monthly targets across manufacturing plants, lines, and product catalogs.
           </p>
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 flex-wrap">
           {canManagePlans ? (
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="btn btn-sm sm:btn-md bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold gap-2 shadow-xs border-none"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Production Plan</span>
-            </button>
+            <>
+              {unplannedProducts.length > 0 && (
+                <button
+                  type="button"
+                  data-testid="batch-add-plans-button"
+                  onClick={handleOpenBatchModal}
+                  className="btn btn-sm sm:btn-md bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold gap-2 shadow-xs border-none"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Batch Add Plans ({unplannedProducts.length})</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="btn btn-sm sm:btn-md bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold gap-2 shadow-xs border-none"
+              >
+                <Plus className="w-4 h-4" />
+                <span>New Production Plan</span>
+              </button>
+            </>
           ) : (
             <div className="badge badge-lg bg-amber-50 text-amber-800 border-amber-200 gap-1.5 py-3 font-semibold text-xs">
               <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -391,13 +611,66 @@ export function PlanningClient({
               Factory Manager Read-Only View
             </span>
             <span className="text-amber-800/90 mt-0.5 block">
-              Production plans and targets are authorized and scheduled by the <strong>Operation Manager (OM)</strong>. You have read-only access to view planned quantities, weekly targets, and fulfillment progress for your plant&apos;s lines and products.
+              Production plans and targets are scheduled by the <strong>Operation Manager (OM)</strong>. You have read-only visibility to inspect daily targets, weekly pacing, and monthly completion across lines and products.
             </span>
           </div>
         </div>
       )}
 
-      {/* 3. Executive KPI Summary Cards */}
+      {/* 3. High-Visibility Warning Banner for Products With No Plan */}
+      {unplannedProducts.length > 0 && (
+        <div
+          data-testid="unplanned-warning-banner"
+          className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-extrabold text-amber-950">
+                  ⚠️ {unplannedProducts.length} {unplannedProducts.length === 1 ? "Product has" : "Products have"} No Active Production Plan
+                </h3>
+                <span className="badge badge-sm bg-amber-200 text-amber-900 border-none font-bold">
+                  እቅድ አልተዘጋጀም
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-1">
+                Products without plans lack baseline daily, weekly, and monthly targets. You can initialize plans for all unplanned products at once.
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {unplannedProducts.slice(0, 6).map((p) => (
+                  <span
+                    key={p.id}
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white border border-amber-200 text-amber-900 shadow-2xs"
+                  >
+                    {p.name} {p.sku ? `(${p.sku})` : ""}
+                  </span>
+                ))}
+                {unplannedProducts.length > 6 && (
+                  <span className="text-[11px] font-bold text-amber-800 self-center">
+                    +{unplannedProducts.length - 6} more
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {canManagePlans && (
+            <button
+              type="button"
+              onClick={handleOpenBatchModal}
+              className="btn btn-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl gap-2 shadow-xs border-none shrink-0"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Add Plans For All Unplanned Products</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 4. Executive KPI Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-2xs">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
@@ -447,7 +720,7 @@ export function PlanningClient({
         </div>
       </div>
 
-      {/* 4. Filter & Search Controls */}
+      {/* 5. Filter & Search Controls */}
       <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search */}
         <div className="relative flex-1">
@@ -482,155 +755,362 @@ export function PlanningClient({
         )}
       </div>
 
-      {/* 5. Master Plans Table / Cards */}
-      {filteredPlans.length === 0 ? (
-        <div className="text-center py-16 bg-white border border-dashed border-slate-200 rounded-3xl p-6">
-          <CalendarDays className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">No Production Plans Found</h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-            {searchQuery
-              ? `No plans matching "${searchQuery}". Try adjusting your search query or plant filter.`
-              : canManagePlans
-              ? "No periodic production plans have been scheduled yet. Click 'New Production Plan' to set line targets."
-              : "No production plans scheduled for this plant yet."}
-          </p>
-          {canManagePlans && !searchQuery && (
-            <button
-              onClick={handleOpenCreateModal}
-              className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold mt-4 border-none shadow-xs"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Create First Production Plan
-            </button>
-          )}
+      {/* 6. TAB SELECTOR BAR (Daily, Weekly, Monthly, Master Schedule) */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
+        <button
+          type="button"
+          data-testid="tab-daily"
+          onClick={() => setActiveTab("daily")}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === "daily"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          <span>Daily View (የቀን)</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="tab-weekly"
+          onClick={() => setActiveTab("weekly")}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === "weekly"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          <span>Weekly View (የሳምንት)</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="tab-monthly"
+          onClick={() => setActiveTab("monthly")}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === "monthly"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Monthly View (የወር)</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="tab-master"
+          onClick={() => setActiveTab("master")}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shrink-0 ${
+            activeTab === "master"
+              ? "bg-indigo-600 text-white shadow-xs"
+              : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+          }`}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>Master Schedule ({filteredPlans.length})</span>
+        </button>
+      </div>
+
+      {/* ============================================================= */}
+      {/* 7. TAB CONTENT: DAILY VIEW                                    */}
+      {/* ============================================================= */}
+      {activeTab === "daily" && (
+        <div className="space-y-4">
+          {/* Daily Date Switcher */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrevDay}
+                className="btn btn-xs btn-outline rounded-lg"
+                title="Previous Day"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleToday}
+                className="btn btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 rounded-lg font-bold"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={handleNextDay}
+                className="btn btn-xs btn-outline rounded-lg"
+                title="Next Day"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <span className="font-mono font-black text-sm text-slate-900 ml-1">
+                {dailyDate}
+              </span>
+            </div>
+
+            <div className="text-xs font-semibold text-slate-500">
+              {calendarSystem === "ethiopian" ? (
+                <span>🇪🇹 {formatEthDate(gregorianToEth(dailyDate), "full_am")}</span>
+              ) : (
+                <span>🌐 {format(parseISO(dailyDate), "EEEE, MMMM d, yyyy")}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Daily Target & Output Table */}
+          <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xs">
+            <div className="overflow-x-auto">
+              <table className="table table-sm w-full">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                    <th className="py-3 px-4">Product Catalog</th>
+                    <th className="py-3 px-4">Plant</th>
+                    <th className="py-3 px-4 text-right">Daily Target</th>
+                    <th className="py-3 px-4 text-right">Day Output ({dailyDate})</th>
+                    <th className="py-3 px-4 text-right">Daily Variance</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    {canManagePlans && <th className="py-3 px-4 text-center">Action</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {productScheduleRows.map((row) => {
+                    const hasPlan = Boolean(row.plan);
+                    const isMet = row.dailyTarget !== null && row.dailyActual >= row.dailyTarget;
+
+                    return (
+                      <tr key={row.product.id} className="hover:bg-slate-50/60 transition-colors">
+                        {/* Product */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-900 text-xs">
+                              {row.product.name}
+                            </span>
+                            {row.product.sku && (
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                {row.product.sku}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Plant */}
+                        <td className="py-3 px-4 text-xs font-semibold text-slate-600">
+                          {row.plantName}
+                        </td>
+
+                        {/* Daily Target */}
+                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-700 text-xs tabular-nums">
+                          {hasPlan && row.dailyTarget !== null ? (
+                            `${row.dailyTarget.toLocaleString()} pcs`
+                          ) : (
+                            <span className="text-slate-400 font-sans italic text-[11px]">
+                              —
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Day Output */}
+                        <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-xs tabular-nums">
+                          {row.dailyActual.toLocaleString()} pcs
+                        </td>
+
+                        {/* Variance */}
+                        <td className="py-3 px-4 text-right font-mono text-xs tabular-nums">
+                          {hasPlan && row.dailyVariance !== null ? (
+                            <span
+                              className={`font-black ${
+                                row.dailyVariance >= 0 ? "text-emerald-700" : "text-amber-700"
+                              }`}
+                            >
+                              {row.dailyVariance >= 0 ? "+" : ""}
+                              {row.dailyVariance.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                          )}
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-4 text-center">
+                          {!hasPlan ? (
+                            <span className="badge badge-sm bg-amber-100 text-amber-900 border-amber-300 font-bold gap-1">
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              <span>No Plan (እቅድ አልተዘጋጀም)</span>
+                            </span>
+                          ) : isMet ? (
+                            <span className="badge badge-sm bg-emerald-100 text-emerald-900 border-emerald-300 font-bold gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Target Met</span>
+                            </span>
+                          ) : (
+                            <span className="badge badge-sm bg-indigo-50 text-indigo-800 border-indigo-200 font-bold gap-1">
+                              <Clock className="w-3 h-3 text-indigo-500" />
+                              <span>In Progress</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        {canManagePlans && (
+                          <td className="py-3 px-4 text-center">
+                            {hasPlan && row.plan ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(row.plan!)}
+                                className="btn btn-xs btn-ghost text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold gap-1"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                data-testid={`set-plan-${row.product.id}`}
+                                onClick={() => handleOpenCreateModalForProduct(row.product.id)}
+                                className="btn btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-bold border-indigo-200 gap-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Set Plan</span>
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      ) : (
+      )}
+
+      {/* ============================================================= */}
+      {/* 8. TAB CONTENT: WEEKLY VIEW                                   */}
+      {/* ============================================================= */}
+      {activeTab === "weekly" && (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xs">
           <div className="overflow-x-auto">
             <table className="table table-sm w-full">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
-                  <th className="py-3 px-4">Plant & Line</th>
                   <th className="py-3 px-4">Product Catalog</th>
-                  <th className="py-3 px-4">Period Dates ({calendarSystem === "ethiopian" ? "የኢትዮጵያ" : "Gregorian"})</th>
-                  <th className="py-3 px-4 text-right">Baseline Plan</th>
-                  <th className="py-3 px-4 text-right">Edited Target</th>
-                  <th className="py-3 px-4 text-right">Produced / Balance</th>
-                  {canManagePlans && <th className="py-3 px-4 text-center">Actions</th>}
+                  <th className="py-3 px-4">Plant</th>
+                  <th className="py-3 px-4 text-right">Weekly Target</th>
+                  <th className="py-3 px-4 text-right">7-Day Output</th>
+                  <th className="py-3 px-4 text-right">Balance Remaining</th>
+                  <th className="py-3 px-4">Weekly Fulfillment</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  {canManagePlans && <th className="py-3 px-4 text-center">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredPlans.map((plan) => {
-                  const isModified = plan.initialPlannedQty !== plan.plannedQty;
-                  const percentDone =
-                    plan.plannedQty > 0
-                      ? Math.min(100, Math.round((plan.totalProduced / plan.plannedQty) * 100))
-                      : 0;
+                {productScheduleRows.map((row) => {
+                  const hasPlan = Boolean(row.plan);
 
                   return (
-                    <tr key={plan.id} className="hover:bg-slate-50/60 transition-colors">
-                      {/* Plant & Line */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold shrink-0">
-                            <Building2 className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <span className="font-extrabold text-slate-900 text-xs block">
-                              {plan.factoryName}
-                            </span>
-                            <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
-                              <GitBranch className="w-3 h-3 text-slate-400" />
-                              {plan.lineName}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Product */}
+                    <tr key={row.product.id} className="hover:bg-slate-50/60 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-bold text-slate-900 text-xs">
-                            {plan.productName}
+                            {row.product.name}
                           </span>
-                          {plan.productSku && (
+                          {row.product.sku && (
                             <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                              {plan.productSku}
+                              {row.product.sku}
                             </span>
                           )}
                         </div>
                       </td>
 
-                      {/* Period Dates formatted by Sys Admin Calendar Selection */}
-                      <td className="py-3 px-4">
-                        <div className="text-xs font-mono font-bold text-slate-900 flex items-center gap-1">
-                          <span>{formatPlanDate(plan.startDate)}</span>
-                          <span className="text-slate-400 font-sans">→</span>
-                          <span>{formatPlanDate(plan.endDate)}</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
-                          {formatPlanDateSecondary(plan.startDate)} – {formatPlanDateSecondary(plan.endDate)}
-                        </span>
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-600">
+                        {row.plantName}
                       </td>
 
-                      {/* Baseline Initial Plan */}
                       <td className="py-3 px-4 text-right font-mono font-bold text-slate-700 text-xs tabular-nums">
-                        {plan.initialPlannedQty.toLocaleString()}
-                        <span className="text-[10px] text-slate-400 block font-sans font-normal">
-                          Initial Set
-                        </span>
+                        {hasPlan && row.weeklyTarget !== null ? (
+                          `${row.weeklyTarget.toLocaleString()} pcs`
+                        ) : (
+                          <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                        )}
                       </td>
 
-                      {/* Edited Target */}
-                      <td className="py-3 px-4 text-right font-mono font-black text-slate-900 text-xs tabular-nums">
-                        <div className="flex items-center justify-end gap-1">
-                          <span>{plan.plannedQty.toLocaleString()}</span>
-                          {isModified && (
-                            <span
-                              className={`text-[9px] font-bold px-1 py-0.2 rounded ${
-                                plan.plannedQty > plan.initialPlannedQty
-                                  ? "bg-emerald-100 text-emerald-800"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {plan.plannedQty > plan.initialPlannedQty ? "+" : ""}
-                              {plan.plannedQty - plan.initialPlannedQty}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-[10px] text-slate-400 block font-sans font-normal">
-                          {isModified ? "Revised by OM" : "Current Plan"}
-                        </span>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-xs tabular-nums">
+                        {row.weeklyActual.toLocaleString()} pcs
                       </td>
 
-                      {/* Produced / Balance */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="text-xs font-mono font-bold text-emerald-700 tabular-nums">
-                          {plan.totalProduced.toLocaleString()} pcs
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          Left: {plan.leftFromWeeklyPlanned.toLocaleString()} ({percentDone}%)
-                        </div>
-                        <div className="w-20 ml-auto bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
-                          <div
-                            className="bg-emerald-600 h-1 rounded-full"
-                            style={{ width: `${percentDone}%` }}
-                          />
-                        </div>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-600 text-xs tabular-nums">
+                        {hasPlan && row.weeklyLeft !== null ? (
+                          `${row.weeklyLeft.toLocaleString()} pcs`
+                        ) : (
+                          <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                        )}
+                      </td>
+
+                      {/* Progress Bar */}
+                      <td className="py-3 px-4">
+                        {hasPlan ? (
+                          <div className="w-28">
+                            <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-600 mb-0.5">
+                              <span>{row.weeklyPct}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="bg-indigo-600 h-1.5 rounded-full"
+                                style={{ width: `${row.weeklyPct}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3 px-4 text-center">
+                        {!hasPlan ? (
+                          <span className="badge badge-sm bg-amber-100 text-amber-900 border-amber-300 font-bold gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                            <span>No Plan</span>
+                          </span>
+                        ) : row.weeklyPct >= 100 ? (
+                          <span className="badge badge-sm bg-emerald-100 text-emerald-900 border-emerald-300 font-bold gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Weekly Met</span>
+                          </span>
+                        ) : (
+                          <span className="badge badge-sm bg-indigo-50 text-indigo-800 border-indigo-200 font-bold gap-1">
+                            <TrendingUp className="w-3 h-3 text-indigo-600" />
+                            <span>Pacing</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}
                       {canManagePlans && (
                         <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditModal(plan)}
-                            className="btn btn-xs btn-ghost text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold gap-1"
-                            title="Edit Production Plan"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            <span>Edit</span>
-                          </button>
+                          {hasPlan && row.plan ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(row.plan!)}
+                              className="btn btn-xs btn-ghost text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold gap-1"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid={`set-plan-${row.product.id}`}
+                              onClick={() => handleOpenCreateModalForProduct(row.product.id)}
+                              className="btn btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-bold border-indigo-200 gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Set Plan</span>
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -643,7 +1123,518 @@ export function PlanningClient({
       )}
 
       {/* ============================================================= */}
-      {/* 6. CREATE PRODUCTION PLAN MODAL (OM ONLY)                     */}
+      {/* 9. TAB CONTENT: MONTHLY VIEW                                  */}
+      {/* ============================================================= */}
+      {activeTab === "monthly" && (
+        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xs">
+          <div className="overflow-x-auto">
+            <table className="table table-sm w-full">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                  <th className="py-3 px-4">Product Catalog</th>
+                  <th className="py-3 px-4">Plant</th>
+                  <th className="py-3 px-4 text-right">Monthly Target</th>
+                  <th className="py-3 px-4 text-right">Month-to-Date Output</th>
+                  <th className="py-3 px-4 text-right">Remaining Balance</th>
+                  <th className="py-3 px-4">Monthly Fulfillment</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  {canManagePlans && <th className="py-3 px-4 text-center">Action</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {productScheduleRows.map((row) => {
+                  const hasPlan = Boolean(row.plan);
+
+                  return (
+                    <tr key={row.product.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900 text-xs">
+                            {row.product.name}
+                          </span>
+                          {row.product.sku && (
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                              {row.product.sku}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 text-xs font-semibold text-slate-600">
+                        {row.plantName}
+                      </td>
+
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-700 text-xs tabular-nums">
+                        {hasPlan && row.monthlyTarget !== null ? (
+                          `${row.monthlyTarget.toLocaleString()} pcs`
+                        ) : (
+                          <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700 text-xs tabular-nums">
+                        {row.monthlyActual.toLocaleString()} pcs
+                      </td>
+
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-600 text-xs tabular-nums">
+                        {hasPlan && row.monthlyLeft !== null ? (
+                          `${row.monthlyLeft.toLocaleString()} pcs`
+                        ) : (
+                          <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                        )}
+                      </td>
+
+                      {/* Progress Bar */}
+                      <td className="py-3 px-4">
+                        {hasPlan ? (
+                          <div className="w-28">
+                            <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-600 mb-0.5">
+                              <span>{row.monthlyPct}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                              <div
+                                className="bg-emerald-600 h-1.5 rounded-full"
+                                style={{ width: `${row.monthlyPct}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-sans italic text-[11px]">—</span>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3 px-4 text-center">
+                        {!hasPlan ? (
+                          <span className="badge badge-sm bg-amber-100 text-amber-900 border-amber-300 font-bold gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                            <span>No Plan</span>
+                          </span>
+                        ) : row.monthlyPct >= 100 ? (
+                          <span className="badge badge-sm bg-emerald-100 text-emerald-900 border-emerald-300 font-bold gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Completed</span>
+                          </span>
+                        ) : (
+                          <span className="badge badge-sm bg-indigo-50 text-indigo-800 border-indigo-200 font-bold gap-1">
+                            <Clock className="w-3 h-3 text-indigo-500" />
+                            <span>On Track</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      {canManagePlans && (
+                        <td className="py-3 px-4 text-center">
+                          {hasPlan && row.plan ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(row.plan!)}
+                              className="btn btn-xs btn-ghost text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold gap-1"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid={`set-plan-${row.product.id}`}
+                              onClick={() => handleOpenCreateModalForProduct(row.product.id)}
+                              className="btn btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-bold border-indigo-200 gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Set Plan</span>
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* 10. TAB CONTENT: MASTER SCHEDULE (DETAILED ALL PLANS)          */}
+      {/* ============================================================= */}
+      {activeTab === "master" && (
+        <div className="space-y-6">
+          {filteredPlans.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-dashed border-slate-200 rounded-3xl p-6">
+              <CalendarDays className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-base font-bold text-slate-800">No Production Plans Found</h3>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                {searchQuery
+                  ? `No plans matching "${searchQuery}". Try adjusting your search query or plant filter.`
+                  : canManagePlans
+                  ? "No production plans scheduled yet. Click 'New Production Plan' or 'Batch Add Plans' to schedule."
+                  : "No production plans scheduled for this plant yet."}
+              </p>
+              {canManagePlans && !searchQuery && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  {unplannedProducts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleOpenBatchModal}
+                      className="btn btn-sm bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold border-none shadow-xs"
+                    >
+                      <Sparkles className="w-4 h-4 mr-1" />
+                      Batch Add Plans ({unplannedProducts.length})
+                    </button>
+                  )}
+                  <button
+                    onClick={handleOpenCreateModal}
+                    className="btn btn-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold border-none shadow-xs"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Create First Production Plan
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-2xs">
+              <div className="overflow-x-auto">
+                <table className="table table-sm w-full">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                      <th className="py-3 px-4">Plant & Line</th>
+                      <th className="py-3 px-4">Product Catalog</th>
+                      <th className="py-3 px-4">Period Dates ({calendarSystem === "ethiopian" ? "የኢትዮጵያ" : "Gregorian"})</th>
+                      <th className="py-3 px-4 text-right">Baseline Plan</th>
+                      <th className="py-3 px-4 text-right">Edited Target</th>
+                      <th className="py-3 px-4 text-right">Produced / Balance</th>
+                      {canManagePlans && <th className="py-3 px-4 text-center">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {planPagination.paginatedItems.map((plan) => {
+                      const isModified = plan.initialPlannedQty !== plan.plannedQty;
+                      const percentDone =
+                        plan.plannedQty > 0
+                          ? Math.min(100, Math.round((plan.totalProduced / plan.plannedQty) * 100))
+                          : 0;
+
+                      return (
+                        <tr key={plan.id} className="hover:bg-slate-50/60 transition-colors">
+                          {/* Plant & Line */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold shrink-0">
+                                <Building2 className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <span className="font-extrabold text-slate-900 text-xs block">
+                                  {plan.factoryName}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium flex items-center gap-1 mt-0.5">
+                                  <GitBranch className="w-3 h-3 text-slate-400" />
+                                  {plan.lineName}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Product */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900 text-xs">
+                                {plan.productName}
+                              </span>
+                              {plan.productSku && (
+                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                  {plan.productSku}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Period Dates formatted by Sys Admin Calendar Selection */}
+                          <td className="py-3 px-4">
+                            <div className="text-xs font-mono font-bold text-slate-900 flex items-center gap-1">
+                              <span>{formatPlanDate(plan.startDate)}</span>
+                              <span className="text-slate-400 font-sans">→</span>
+                              <span>{formatPlanDate(plan.endDate)}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                              {formatPlanDateSecondary(plan.startDate)} – {formatPlanDateSecondary(plan.endDate)}
+                            </span>
+                          </td>
+
+                          {/* Baseline Initial Plan */}
+                          <td className="py-3 px-4 text-right font-mono font-bold text-slate-700 text-xs tabular-nums">
+                            {plan.initialPlannedQty.toLocaleString()}
+                            <span className="text-[10px] text-slate-400 block font-sans font-normal">
+                              Initial Set
+                            </span>
+                          </td>
+
+                          {/* Edited Target */}
+                          <td className="py-3 px-4 text-right font-mono font-black text-slate-900 text-xs tabular-nums">
+                            <div className="flex items-center justify-end gap-1">
+                              <span>{plan.plannedQty.toLocaleString()}</span>
+                              {isModified && (
+                                <span
+                                  className={`text-[9px] font-bold px-1 py-0.2 rounded ${
+                                    plan.plannedQty > plan.initialPlannedQty
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  {plan.plannedQty > plan.initialPlannedQty ? "+" : ""}
+                                  {plan.plannedQty - plan.initialPlannedQty}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400 block font-sans font-normal">
+                              {isModified ? "Revised by OM" : "Current Plan"}
+                            </span>
+                          </td>
+
+                          {/* Produced / Balance */}
+                          <td className="py-3 px-4 text-right">
+                            <div className="text-xs font-mono font-bold text-emerald-700 tabular-nums">
+                              {plan.totalProduced.toLocaleString()} pcs
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              Left: {plan.leftFromWeeklyPlanned.toLocaleString()} ({percentDone}%)
+                            </div>
+                            <div className="w-20 ml-auto bg-slate-100 rounded-full h-1 mt-1 overflow-hidden">
+                              <div
+                                className="bg-emerald-600 h-1 rounded-full"
+                                style={{ width: `${percentDone}%` }}
+                              />
+                            </div>
+                          </td>
+
+                          {/* Actions */}
+                          {canManagePlans && (
+                            <td className="py-3 px-4 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditModal(plan)}
+                                className="btn btn-xs btn-ghost text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold gap-1"
+                                title="Edit Production Plan"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <Pagination
+                  {...planPagination}
+                  itemLabel="plans"
+                  className="border-t border-slate-100 px-4"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Unplanned Products Section in Master Tab */}
+          {unplannedProducts.length > 0 && (
+            <div className="bg-white border border-amber-200 rounded-3xl p-5 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black text-slate-900">
+                      Unplanned Products ({unplannedProducts.length}) / እቅድ ያልተዘጋጀላቸው ምርቶች
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      These products belong to this facility but do not yet have a master production schedule.
+                    </p>
+                  </div>
+                </div>
+
+                {canManagePlans && (
+                  <button
+                    type="button"
+                    onClick={handleOpenBatchModal}
+                    className="btn btn-xs sm:btn-sm bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl gap-1 border-none shadow-xs"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Batch Add All</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {unplannedProducts.map((p) => (
+                  <div
+                    key={p.id}
+                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <span className="font-bold text-slate-900 text-xs block">
+                        {p.name}
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {p.sku && (
+                          <span className="text-[10px] font-mono font-bold text-slate-500">
+                            {p.sku}
+                          </span>
+                        )}
+                        <span className="badge badge-2xs bg-amber-100 text-amber-800 border-none font-bold">
+                          No Plan
+                        </span>
+                      </div>
+                    </div>
+
+                    {canManagePlans && (
+                      <button
+                        type="button"
+                        data-testid={`set-plan-${p.id}`}
+                        onClick={() => handleOpenCreateModalForProduct(p.id)}
+                        className="btn btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg font-bold border-indigo-200 shrink-0 gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Set Plan</span>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* 11. BATCH CREATE PRODUCTION PLANS MODAL (OM ONLY)             */}
+      {/* ============================================================= */}
+      {batchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-5 sm:p-6 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-600" />
+                  <span>Batch Add Production Plans</span>
+                </h3>
+                <span className="text-xs text-slate-500">
+                  Initialize baseline production plans for all {unplannedProducts.length} unplanned products at once.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchModalOpen(false)}
+                className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {batchError && (
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-800 font-semibold">
+                {batchError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBatchPlans} className="space-y-4">
+              {/* Plant selection (if multi-plant) */}
+              {factories.length > 1 && (
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Operating Plant
+                  </label>
+                  <select
+                    value={batchFactoryId}
+                    onChange={(e) => setBatchFactoryId(e.target.value)}
+                    className="select select-sm select-bordered w-full rounded-xl text-xs font-bold"
+                  >
+                    {factories.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Target Products preview */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Target Products ({unplannedProducts.length})
+                </label>
+                <div className="max-h-28 overflow-y-auto bg-slate-50 rounded-xl p-2.5 border border-slate-200 space-y-1">
+                  {unplannedProducts.map((p) => (
+                    <div key={p.id} className="text-xs font-medium text-slate-700 flex items-center justify-between">
+                      <span>{p.name}</span>
+                      <span className="font-mono text-[10px] text-slate-500">{p.sku}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date pickers */}
+              <div className="space-y-3 pt-1 border-t border-slate-100">
+                <PlanDatePicker
+                  label="Plan Start Date"
+                  value={batchStartDate}
+                  onChange={setBatchStartDate}
+                  calendarSystem={calendarSystem}
+                />
+
+                <PlanDatePicker
+                  label="Plan End Date"
+                  value={batchEndDate}
+                  onChange={setBatchEndDate}
+                  calendarSystem={calendarSystem}
+                  minDate={batchStartDate}
+                />
+              </div>
+
+              {/* Default Planned Quantity */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Default Target Quantity Per Product (pcs)
+                </label>
+                <input
+                  aria-label="Default Target Quantity Per Product (pcs)"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={batchDefaultQty || ""}
+                  onChange={(e) => setBatchDefaultQty(parseInt(e.target.value, 10) || 0)}
+                  className="input input-sm input-bordered w-full rounded-xl text-xs font-mono font-bold"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Each product will receive an initial baseline target of {batchDefaultQty.toLocaleString()} pcs, which the OM can adjust anytime.
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setBatchModalOpen(false)}
+                  className="btn btn-sm btn-ghost rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={batchSaving}
+                  className="btn btn-sm bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold border-none"
+                >
+                  {batchSaving ? "Initializing Plans..." : `Add Plans For All (${unplannedProducts.length})`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* 12. CREATE PRODUCTION PLAN MODAL (OM ONLY)                    */}
       {/* ============================================================= */}
       {createModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
@@ -819,7 +1810,7 @@ export function PlanningClient({
       )}
 
       {/* ============================================================= */}
-      {/* 7. EDIT PRODUCTION PLAN MODAL (OM ONLY)                       */}
+      {/* 13. EDIT PRODUCTION PLAN MODAL (OM ONLY)                      */}
       {/* ============================================================= */}
       {editModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">

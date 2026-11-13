@@ -930,4 +930,37 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **Middleware Tests:** 5 passed (5 total)
 - **TypeScript Typecheck:** 0 errors (`pnpm typecheck` passed cleanly)
 
+---
+
+## 2026-11-13 — Multi-Period Production Planning (Daily, Weekly, Monthly) & Batch Schedule Initialization
+
+**Goal:** Enable Operation Managers (OM) to schedule and monitor manufacturing across Daily, Weekly, and Monthly views, implement prominent warning indicators for unplanned products with 1-click batch initialization, while providing Factory Managers (FM) with complete read-only visibility.
+
+### Architecture & Business Rules Enforced
+
+1. **One-Plan-Per-Product Strict Constraint:**
+   - DPM guarantees that each manufactured product has at most one active master schedule entry.
+   - Batch creation filters exclusively for `products.filter(p => !plannedSet.has(p.id))` to avoid conflicts.
+2. **Multi-Period Mathematics:**
+   - **Daily View:** Daily Target is derived based on the standard 26-day manufacturing cycle (`Math.round(plan.plannedQty / 26)`). Actual output is queried for the active date (`dailyDate`). Variance ($\pm$) signals ahead/behind pacing.
+   - **Weekly View:** Weekly Target defaults to `plan.weeklyPlanned` or `dailyTarget * 6`. Actual output is aggregated over the trailing 7-day window. Progress % and remaining balance are shown in real-time.
+   - **Monthly View:** Monthly Target represents `plan.plannedQty`. Actual output captures month-to-date output (`YYYY-MM`).
+   - **Master Schedule View:** Full timeline breakdown (startDate, endDate, baseline initial plan, revised target, produced balance).
+3. **Role Lockout (OM vs FM Permissions):**
+   - **Operation Manager (`om` / `sys_admin`):** Full authorization (`canManagePlans === true`). Can create individual plans, edit revised targets, and one-click batch create plans for all unplanned products.
+   - **Factory Manager (`fm`):** Strict read-only view (`canManagePlans === false`). Factory Managers see all 4 tabs (Daily, Weekly, Monthly, Master), all warning banners, targets, and fulfillment rates, but all modification controls (`New Production Plan`, `Batch Add Plans`, `Edit`, `Set Plan`) are hidden/locked out.
+4. **Unplanned Products Warning & Batch Initialization:**
+   - When products lack plans, a high-visibility warning banner surfaces at the top of the planning screen with product chips and an Amharic badge (`እቅድ አልተዘጋጀም`).
+   - Clicking `[Add Plans For All Unplanned Products]` opens the Batch Modal, configuring date boundaries and default planned quantity for all products in one atomic action.
+   - Rows for unplanned products display `⚠️ No Plan` and offer OM a quick `[+ Set Plan]` button pre-filling the line and product.
+
+### Automated Verification Results
+
+- **Planning Unit & Integration Tests:** 13 passed in `src/components/planning/planning-client.test.tsx`
+- **Plan Actions Server Action Tests:** 8 passed in `src/actions/plan-actions.test.ts`
+- **Plan Date Picker Tests:** 4 passed in `src/components/planning/plan-date-picker.test.tsx`
+- **Total Planning Verification:** 25/25 tests passing
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+
 
