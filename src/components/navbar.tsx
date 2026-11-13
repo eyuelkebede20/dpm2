@@ -44,8 +44,14 @@ export function Navbar({ user }: NavbarProps) {
   const [signingOut, setSigningOut] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
   const pwa = usePwaOtaContext();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Clear pending navigation state on pathname change
+  useEffect(() => {
+    setPendingPath(null);
+  }, [pathname]);
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -227,6 +233,13 @@ export function Navbar({ user }: NavbarProps) {
 
   const visibleLinks = getNavLinks();
 
+  // Warm up Next.js client router cache for visible links so navigation is instantaneous
+  useEffect(() => {
+    visibleLinks.forEach((link) => {
+      router.prefetch(link.href);
+    });
+  }, [visibleLinks, router]);
+
   // Define role-specific primary bottom navigation items (Ergonomic thumb zone, max 5 destinations)
   const getBottomNavItems = () => {
     switch (user.role) {
@@ -285,6 +298,14 @@ export function Navbar({ user }: NavbarProps) {
             <div className="flex items-center gap-6 lg:gap-8">
               <Link
                 href="/dashboard"
+                prefetch={true}
+                onMouseEnter={() => router.prefetch("/dashboard")}
+                onTouchStart={() => router.prefetch("/dashboard")}
+                onClick={() => {
+                  if (pathname !== "/dashboard") {
+                    setPendingPath("/dashboard");
+                  }
+                }}
                 className="flex items-center gap-2.5 font-bold text-xl tracking-tight text-slate-900 group focus:outline-hidden"
               >
                 <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-xs group-hover:bg-indigo-700 transition-colors">
@@ -306,25 +327,37 @@ export function Navbar({ user }: NavbarProps) {
                   const isActive = link.exact
                     ? safePathname === link.href
                     : safePathname.startsWith(link.href);
+                  const isPending = pendingPath === link.href;
 
                   return (
                     <Link
                       key={link.href}
                       href={link.href}
-                      prefetch={false}
+                      prefetch={true}
+                      onMouseEnter={() => router.prefetch(link.href)}
+                      onTouchStart={() => router.prefetch(link.href)}
+                      onClick={() => {
+                        if (link.href !== pathname) {
+                          setPendingPath(link.href);
+                        }
+                      }}
                       className={`relative px-3 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-semibold ${
                         isActive
                           ? "bg-indigo-50 text-indigo-700 shadow-2xs"
                           : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
-                      }`}
+                      } ${isPending ? "opacity-80" : ""}`}
                     >
-                      <Icon
-                        className={`w-4 h-4 ${
-                          isActive ? "text-indigo-600" : "text-slate-400"
-                        }`}
-                      />
+                      {isPending ? (
+                        <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
+                      ) : (
+                        <Icon
+                          className={`w-4 h-4 ${
+                            isActive ? "text-indigo-600" : "text-slate-400"
+                          }`}
+                        />
+                      )}
                       <span>{link.label}</span>
-                      {isActive && (
+                      {isActive && !isPending && (
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 absolute right-2 top-2" />
                       )}
                     </Link>
@@ -541,11 +574,20 @@ export function Navbar({ user }: NavbarProps) {
             const isActive = item.exact
               ? safePathname === item.href
               : safePathname.startsWith(item.href);
+            const isPending = pendingPath === item.href;
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
+                onMouseEnter={() => router.prefetch(item.href)}
+                onTouchStart={() => router.prefetch(item.href)}
+                onClick={() => {
+                  if (item.href !== pathname) {
+                    setPendingPath(item.href);
+                  }
+                }}
                 aria-current={isActive ? "page" : undefined}
                 className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl transition-all duration-150 touch-manipulation min-h-[44px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                   isActive
@@ -560,7 +602,11 @@ export function Navbar({ user }: NavbarProps) {
                       : "text-slate-400 group-hover:text-slate-600"
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  {isPending ? (
+                    <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
+                  ) : (
+                    <Icon className="w-5 h-5" />
+                  )}
                 </div>
                 <span className="text-[10px] leading-tight font-bold tracking-tight text-center truncate max-w-full">
                   {item.label}
@@ -668,13 +714,21 @@ export function Navbar({ user }: NavbarProps) {
                 const isActive = link.exact
                   ? safePathname === link.href
                   : safePathname.startsWith(link.href);
+                const isPending = pendingPath === link.href;
 
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
-                    prefetch={false}
-                    onClick={() => setMobileMenuOpen(false)}
+                    prefetch={true}
+                    onMouseEnter={() => router.prefetch(link.href)}
+                    onTouchStart={() => router.prefetch(link.href)}
+                    onClick={() => {
+                      if (link.href !== pathname) {
+                        setPendingPath(link.href);
+                      }
+                      setMobileMenuOpen(false);
+                    }}
                     className={`flex items-center justify-between px-3.5 py-3 rounded-2xl font-bold text-sm transition-all ${
                       isActive
                         ? "bg-indigo-600 text-white shadow-sm"
@@ -682,6 +736,17 @@ export function Navbar({ user }: NavbarProps) {
                     }`}
                   >
                     <div className="flex items-center gap-3">
+                      {isPending ? (
+                        <RefreshCw className="w-5 h-5 animate-spin text-indigo-200 shrink-0" />
+                      ) : (
+                        <Icon
+                          className={`w-5 h-5 ${
+                            isActive ? "text-white" : "text-slate-400"
+                          }`}
+                        />
+                      )}
+                      <span>{link.label}</span>
+                    </div>
                       <Icon
                         className={`w-5 h-5 ${
                           isActive ? "text-white" : "text-slate-400"
