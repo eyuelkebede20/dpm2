@@ -260,6 +260,24 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] User creation actions (`createOmAction`, `createUserAction`, `provisionFactoryUserAction`) default `mustChangePassword` to `false` (`src/actions/admin-actions.test.ts`, `src/actions/om-actions.test.ts`)
 - [x] Admin password reset schema (`adminResetPasswordSchema`) defaults `mustChangePassword` to `false` (`src/actions/admin-actions.test.ts`)
 
+---
+
+## 13. Route Preloaders & Instant Navigation Performance
+
+### Route-Level Loading Skeletons (`loading.tsx`)
+- [x] Instant route switching (0ms) across all application segments (`src/app/dashboard/loading.tsx`, `src/app/om/loading.tsx`, `src/app/entry/loading.tsx`, `src/app/admin/loading.tsx`, `src/app/fm/loading.tsx`, `src/app/calendar/loading.tsx`, `src/app/planning/loading.tsx`, `src/app/qa/loading.tsx`)
+- [x] Eliminates freeze-frame delay while Server Components query PostgreSQL
+- [x] Shimmer skeleton structure adhering to `DESIGN.md` tokens (`src/app/loading.test.tsx`)
+
+### Proactive Route Prefetching & Navbar Tactile Feedback
+- [x] Next.js `prefetch={true}` active on all desktop, bottom bar, and mobile drawer links (`src/components/navbar.test.tsx`)
+- [x] Automatic cache warm-up on Navbar mount: `router.prefetch?.()` pre-fetches all accessible role destinations (`src/components/navbar.test.tsx`)
+- [x] Immediate hover and touch prefetch: `onMouseEnter` and `onTouchStart` trigger `router.prefetch?.()` (`src/components/navbar.test.tsx`)
+- [x] 0ms click feedback: clicked tab renders spinner / pending indicator (`src/components/navbar.test.tsx`)
+- [x] Top glowing indigo progress beam: activates immediately on link click with glow shadow (`src/components/ui/navigation-progress.test.tsx`)
+- [x] Synchronous root layout: removed `useSearchParams()` from `NavigationProgress` to prevent SSR out-of-order Suspense streaming (`src/components/ui/navigation-progress.test.tsx`, `src/components/role-switcher.test.tsx`)
+
+
 
 
 

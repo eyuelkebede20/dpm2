@@ -1184,6 +1184,56 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
 - **Script Syntax:** Validated with `node -c scripts/seed.mjs scripts/show-users.mjs scripts/migrate.mjs`
 
+---
+
+## 2026-11-13 — Hydration Mismatch Resolution & Instant Route Preloader Architecture
+
+**Goal:** Resolve the React Turbopack hydration mismatch on `/om` caused by Suspense streaming collisions with client-only widgets, eliminate perceived navigation lag across the Navbar, and implement instantaneous route preloading.
+
+### Root Cause Analysis (Hydration Mismatch)
+
+1. **Root Suspense Out-of-Order Streaming:**
+   - In Next.js 15, wrapping a Client Component that invokes `useSearchParams()` inside `<Suspense fallback={null}>` in root `layout.tsx` forces Turbopack to stream out-of-order fallback markers: `<div hidden="" id="S:0"><template id="P:1">`.
+   - When the client hydrated, React mismatched the streamed Suspense boundary chunk at the bottom of `<body>` against the un-mounted/mounting `<RoleSwitcher />` floating component (`<div className="fixed bottom-20...">`).
+2. **Missing Nested Route Skeletons:**
+   - Sibling routes (`/om`, `/entry`, `/dashboard`, `/admin`, `/fm`, `/calendar`, `/planning`, `/qa`) lacked route-level `loading.tsx` files.
+   - When navigating between routes, Next.js blocked the viewport transition while server components executed PostgreSQL queries, resulting in freeze-frame UI behavior.
+3. **Explicit `prefetch={false}` on Nav Links:**
+   - Navbar links explicitly set `prefetch={false}`, forcing the client to wait for full server round-trips upon link click.
+
+### Architectural Decisions & Implementation
+
+1. **Clean Root Layout & Hydration Protection:**
+   - Removed `useSearchParams()` from `NavigationProgress` (only `usePathname()` is required for transition detection).
+   - Removed `<Suspense>` wrapper around `NavigationProgress` in `src/app/layout.tsx`.
+   - Added `suppressHydrationWarning` to the outer container of `RoleSwitcher` (`src/components/role-switcher.tsx`).
+2. **Proactive Route Preloader Architecture (`loading.tsx` across all routes):**
+   - Implemented dedicated route-level `loading.tsx` skeletons across all 8 major application segments:
+     - `src/app/dashboard/loading.tsx`
+     - `src/app/om/loading.tsx`
+     - `src/app/entry/loading.tsx`
+     - `src/app/admin/loading.tsx`
+     - `src/app/fm/loading.tsx`
+     - `src/app/calendar/loading.tsx`
+     - `src/app/planning/loading.tsx`
+     - `src/app/qa/loading.tsx`
+   - Next.js now immediately switches the route viewport (0ms) and displays the animated skeleton shimmer while the server component streams database data.
+3. **Aggressive Route Prefetching & Visual Click Feedback:**
+   - Enabled `prefetch={true}` across all desktop, bottom bar, and mobile drawer links in `src/components/navbar.tsx`.
+   - Added cache warm-up on Navbar mount: `router.prefetch?.(link.href)` pre-fetches all visible links in the background.
+   - Added hover (`onMouseEnter`) and touch (`onTouchStart`) prefetching triggers.
+   - Added instantaneous click feedback: clicked tabs immediately display a `RefreshCw` spinner and transition to pending state (`setPendingPath`), while `NavigationProgress` renders a 3px glowing indigo beam (`shadow-[0_0_12px_2px_rgba(99,102,241,0.7)]`).
+
+### Automated Verification Results
+
+- **Navbar Tests:** 18/18 passed (`src/components/navbar.test.tsx`)
+- **Navigation Progress Tests:** 3/3 passed (`src/components/ui/navigation-progress.test.tsx`)
+- **Role Switcher Tests:** 9/9 passed (`src/components/role-switcher.test.tsx`)
+- **Root Loading Tests:** 2/2 passed (`src/app/loading.test.tsx`)
+- **Login Client Tests:** 5/5 passed (`src/app/login/login-client.test.tsx`)
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+
 
 
 
