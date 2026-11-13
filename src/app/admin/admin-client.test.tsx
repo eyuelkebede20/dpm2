@@ -40,19 +40,6 @@ vi.mock("@/actions/server-endpoint-actions", () => ({
   updateServerEndpointAction: vi.fn().mockResolvedValue({ success: true }),
   deleteServerEndpointAction: vi.fn().mockResolvedValue({ success: true }),
   toggleServerEndpointActiveAction: vi.fn().mockResolvedValue({ success: true }),
-  FALLBACK_SERVER_ENDPOINTS: [
-    {
-      id: "srv_fallback",
-      name: "Fallback Factory LAN",
-      url: "http://192.168.1.100:3000",
-      description: "Fallback desc",
-      environment: "lan",
-      isDefault: true,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ],
 }));
 
 vi.mock("@/lib/backend-config", () => ({

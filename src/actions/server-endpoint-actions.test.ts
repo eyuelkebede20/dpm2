@@ -6,9 +6,8 @@ import {
   updateServerEndpointAction,
   toggleServerEndpointActiveAction,
   deleteServerEndpointAction,
-  FALLBACK_SERVER_ENDPOINTS,
 } from "./server-endpoint-actions";
-import { cleanServerUrl } from "@/lib/backend-config";
+import { cleanServerUrl, FALLBACK_SERVER_ENDPOINTS } from "@/lib/backend-config";
 import * as authz from "@/lib/authz";
 import { db } from "@/db";
 

@@ -6,18 +6,6 @@ import * as serverActions from "@/actions/server-endpoint-actions";
 vi.mock("@/actions/server-endpoint-actions", () => ({
   getServerEndpointsAction: vi.fn(),
   createServerEndpointAction: vi.fn(),
-  FALLBACK_SERVER_ENDPOINTS: [
-    {
-      id: "srv_fallback_1",
-      name: "Fallback LAN",
-      url: "http://192.168.1.100:3000",
-      environment: "lan",
-      isDefault: true,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ],
 }));
 
 describe("Server Endpoints API Route - /api/server-endpoints", () => {

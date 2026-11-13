@@ -36,14 +36,14 @@ import {
 } from "lucide-react";
 import { SystemUpdater } from "@/components/admin/system-updater";
 import {
-  type ServerEndpointItem,
   createServerEndpointAction,
   updateServerEndpointAction,
   deleteServerEndpointAction,
   toggleServerEndpointActiveAction,
-  FALLBACK_SERVER_ENDPOINTS,
 } from "@/actions/server-endpoint-actions";
 import {
+  type ServerEndpointItem,
+  FALLBACK_SERVER_ENDPOINTS,
   testServerConnection,
   validateServerUrl,
 } from "@/lib/backend-config";
