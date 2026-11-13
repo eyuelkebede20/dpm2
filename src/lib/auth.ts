@@ -12,14 +12,11 @@ export const auth = betterAuth({
     process.env.NEXT_PUBLIC_APP_URL ||
     "http://localhost:3000",
   trustedOrigins: (request) => {
-    const isDev = process.env.NODE_ENV !== "production";
     const allowed = new Set<string>();
 
-    // Standard local dev origins (allowed in non-production)
-    if (isDev) {
-      allowed.add("http://localhost:3000");
-      allowed.add("http://127.0.0.1:3000");
-    }
+    // Standard local origins (always allowed)
+    allowed.add("http://localhost:3000");
+    allowed.add("http://127.0.0.1:3000");
 
     // Configured production origins
     const addIfValid = (urlStr?: string) => {
@@ -41,10 +38,11 @@ export const auth = betterAuth({
         .forEach(addIfValid);
     }
 
-    // In local development only, allow private RFC1918 LAN addresses for PWA testing
+    // Always allow private RFC1918 LAN addresses and localhost for on-premises factory hosting,
+    // mobile tablets, and PWA clients (in both development AND production Docker deployments)
     const originHeader =
       request?.headers?.get("origin") || request?.headers?.get("referer");
-    if (originHeader && isDev) {
+    if (originHeader) {
       try {
         const u = new URL(originHeader);
         const hostname = u.hostname;
@@ -53,7 +51,8 @@ export const auth = betterAuth({
           hostname === "127.0.0.1" ||
           /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
           /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
-          /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+          /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname) ||
+          hostname.endsWith(".local");
         if (isLocalOrLan) {
           allowed.add(u.origin);
         }

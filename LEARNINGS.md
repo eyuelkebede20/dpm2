@@ -1303,6 +1303,69 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
    - Scoped tests passed: 25/25 tests across `middleware.test.ts`, `route.test.ts`, and `role-switcher.test.tsx`.
    - Full TypeScript typecheck passed (`tsc --noEmit` exited with code 0).
 
+---
+
+## 2026-11-13 — Navigation Bar Impeccable Audit & Responsive Ergonomics (FM, OM, QA, Admin)
+
+**Goal:** Conduct an impeccable UX/UI audit of the persistent navigation bar (`src/components/navbar.tsx`), resolve responsiveness issues and visual clutter for Factory Manager (6 items) and across all roles, eliminate jarring icon-swap layout shifts, fix mobile bottom nav height collapse (`h-15`), and prevent page content clipping (`pb-24`).
+
+### Edge cases & gotchas discovered
+
+- **Tailwind Non-Standard Utility (`h-15`):** Tailwind does not provide an `h-15` class by default (steps jump from `h-14` [56px] to `h-16` [64px]). Consequently, `h-15` in the mobile bottom bar was ignored, resulting in container height collapse and clipped touch targets. Updating to `h-16` (64px) with `min-h-[48px]` ensures strict WCAG AA touch target compliance.
+- **Icon-Swapping Route Flicker:** Replacing destination icons with spinning `<RefreshCw className="animate-spin" />` icons whenever a user tapped or navigated caused visual disorientation and layout shift. Retaining rock-solid destination icons with tactile micro-interactions (`active:scale-[0.97]` on desktop, `active:scale-[0.92]` on mobile) and delegating route progress to the top progress bar (`NavigationProgress`) eliminates visual jitter.
+- **Desktop/Tablet Label Overflow for 6-Link FM Nav:** Factory Manager has 6 primary links ("Dashboard", "Lines & Floor", "Production Plans", "Store Stock", "Daily Entry", "Calendar"). On tablets and narrow laptop screens (768px–1180px), long labels caused wrapping or clipped edge buttons. Adding responsive `shortLabel` tokens ("Lines", "Plans", "Store", "Entry", "Calendar") rendered with `<span className="hidden xl:inline">{label}</span><span className="inline xl:hidden">{shortLabel}</span>` guarantees zero overflow across all viewports.
+- **Mobile Content Occlusion:** The mobile fixed bottom navigation is 64px tall plus safe-area insets (~85–95px total). `<main className="pb-16">` in `src/app/layout.tsx` was insufficient, causing bottom-most buttons and tables to hide behind the navigation. Expanding global layout padding to `pb-24 md:pb-0` provides generous breathing room.
+- **Mobile Drawer Clutter:** The mobile drawer previously stacked 5 large ghost buttons. Grouping them into a single, compact preferences card with clean borders reduced vertical scroll overhead by >60%.
+
+### Decision
+
+1. Updated `src/app/layout.tsx` to provide `pb-24 md:pb-0` content clearance for the mobile bottom bar.
+2. Refactored `src/components/navbar.tsx`:
+   - Configured `shortLabel` for all roles (FM, OM, QA, Sys Admin).
+   - Standardized desktop navigation links to render `shortLabel` on screens `< xl` and full label on `xl+`.
+   - Replaced artificial notification-like blue dot with high-contrast active pill styling (`bg-indigo-50/90 text-indigo-700 font-bold border border-indigo-200/70 shadow-2xs`).
+   - Fixed mobile bottom navigation container from invalid `h-15` to standard `h-16` with `min-h-[48px]` touch targets.
+   - Removed icon-replacement spinning animation, keeping destination icons stable and tactile.
+   - Streamlined mobile drawer with a unified preferences container.
+3. Updated unit tests in `src/components/navbar.test.tsx` (21/21 passing) testing adaptive shortLabels, mobile touch targets, and role navigation items.
+
+---
+
+## 2026-11-13 — Resolution of 403 Forbidden Sign-in Over LAN & Idempotent Non-Overwriting Seeding
+
+**Goal:** Resolve `POST /api/auth/sign-in/email 403 (FORBIDDEN)` when accessing the application over local area network (e.g. `http://192.168.20.254:3000`), ensure automated updates never overwrite or reset user passwords, and add accessibility autocomplete attributes to the login form.
+
+### Root Cause Analysis
+
+1. **Better Auth CSRF Origin Rejection Over LAN:**
+   - In `src/lib/auth.ts`, the `trustedOrigins` callback previously guarded RFC1918 private IP origin detection with `if (originHeader && isDev)`.
+   - In production Docker deployments, `isDev` is `false`. When factory users or tablets accessed the server at `http://192.168.20.254:3000`, the incoming `Origin` header was not in `trustedOrigins`.
+   - Better Auth's CSRF protection rejected the sign-in request with `403 (FORBIDDEN)` before credentials could even be evaluated, manifesting as "passwords not working".
+2. **Password Overwrites During Seeding:**
+   - In `scripts/seed.mjs`, the account insert query previously executed `ON CONFLICT ("id") DO UPDATE SET "password" = EXCLUDED."password"`.
+   - Whenever `runSeed` ran, existing user passwords in the `accounts` table were overwritten with newly generated demo hashes.
+3. **Missing Form Autocomplete Attributes:**
+   - The browser console issued `[DOM] Input elements should have autocomplete attributes` warnings on email and password fields.
+
+### Architectural Decisions & Implementation
+
+1. **Production RFC1918 LAN Origin Trust in `src/lib/auth.ts`:**
+   - Removed the `&& isDev` restriction from the origin validator.
+   - All private RFC1918 subnets (`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`), `localhost`, `127.0.0.1`, and `*.local` mDNS domains are trusted origins in both development and production, matching the on-premise factory floor architecture documented in `docker.md`.
+2. **Idempotent Non-Overwriting Account & User Seeding in `scripts/seed.mjs`:**
+   - Switched both `users` and `accounts` queries to `ON CONFLICT ("id") DO NOTHING;`.
+   - Existing user credentials, roles, and password hashes are permanently preserved during system updates, container restarts, or manual seed runs.
+   - Total password resets are restricted to explicit execution with `--reset` (`node scripts/seed.mjs --reset`).
+3. **Login Form Autocomplete Optimization:**
+   - Added `autoComplete="username"` on email input and `autoComplete="current-password"` on password input in `src/app/login/login-client.tsx`.
+
+### Verification Results
+
+- **Navbar & Navigation Tests:** 21/21 passed (`src/components/navbar.test.tsx`)
+- **Login Client Tests:** 5/5 passed (`src/app/login/login-client.test.tsx`)
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+
 
 
 

@@ -150,18 +150,13 @@ export async function runSeed(clientOrPool, options = { reset: false }) {
       await client.query(`
         INSERT INTO "users" ("id", "name", "email", "email_verified", "role", "active", "must_change_password")
         VALUES ($1, $2, $3, true, $4, true, false)
-        ON CONFLICT ("id") DO UPDATE SET
-          "name" = EXCLUDED."name",
-          "email" = EXCLUDED."email",
-          "role" = EXCLUDED."role",
-          "active" = true;
+        ON CONFLICT ("id") DO NOTHING;
       `, [u.id, u.name, u.email, u.role]);
 
       await client.query(`
         INSERT INTO "accounts" ("id", "account_id", "provider_id", "user_id", "password")
         VALUES ($1, $2, 'credential', $3, $4)
-        ON CONFLICT ("id") DO UPDATE SET
-          "password" = EXCLUDED."password";
+        ON CONFLICT ("id") DO NOTHING;
       `, [`acc_${u.id}`, u.id, u.id, u.password]);
     }
 

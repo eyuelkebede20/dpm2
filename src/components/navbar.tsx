@@ -131,27 +131,32 @@ export function Navbar({ user }: NavbarProps) {
         return [
           {
             label: "Dashboard",
+            shortLabel: "Dashboard",
             href: "/dashboard",
             icon: LayoutDashboard,
             exact: true,
           },
           {
             label: "Operations Hub",
+            shortLabel: "Plants",
             href: "/om",
             icon: Building2,
           },
           {
             label: "Production Plans",
+            shortLabel: "Plans",
             href: "/planning",
             icon: CalendarDays,
           },
           {
             label: "Daily Reports",
+            shortLabel: "Reports",
             href: "/entry",
             icon: ClipboardCheck,
           },
           {
             label: "Calendar",
+            shortLabel: "Calendar",
             href: "/calendar",
             icon: Calendar,
           },
@@ -160,33 +165,39 @@ export function Navbar({ user }: NavbarProps) {
         return [
           {
             label: "Dashboard",
+            shortLabel: "Dashboard",
             href: "/dashboard",
             icon: LayoutDashboard,
             exact: true,
           },
           {
             label: "Lines & Floor",
+            shortLabel: "Lines",
             href: "/fm",
             icon: Building2,
             exact: true,
           },
           {
             label: "Production Plans",
+            shortLabel: "Plans",
             href: "/planning",
             icon: CalendarDays,
           },
           {
             label: "Store Stock",
+            shortLabel: "Store",
             href: "/fm/store",
             icon: Warehouse,
           },
           {
             label: "Daily Entry",
+            shortLabel: "Entry",
             href: "/entry",
             icon: PenTool,
           },
           {
             label: "Calendar",
+            shortLabel: "Calendar",
             href: "/calendar",
             icon: Calendar,
           },
@@ -195,12 +206,14 @@ export function Navbar({ user }: NavbarProps) {
         return [
           {
             label: "Dashboard",
+            shortLabel: "Dashboard",
             href: "/dashboard",
             icon: LayoutDashboard,
             exact: true,
           },
           {
             label: "QA Approvals",
+            shortLabel: "Approvals",
             href: "/qa",
             icon: ClipboardCheck,
           },
@@ -209,12 +222,14 @@ export function Navbar({ user }: NavbarProps) {
         return [
           {
             label: "Dashboard",
+            shortLabel: "Dashboard",
             href: "/dashboard",
             icon: LayoutDashboard,
             exact: true,
           },
           {
             label: "Admin Portal",
+            shortLabel: "Admin",
             href: "/admin",
             icon: Shield,
           },
@@ -223,6 +238,7 @@ export function Navbar({ user }: NavbarProps) {
         return [
           {
             label: "Dashboard",
+            shortLabel: "Dashboard",
             href: "/dashboard",
             icon: LayoutDashboard,
             exact: true,
@@ -320,7 +336,7 @@ export function Navbar({ user }: NavbarProps) {
               </Link>
 
               {/* Desktop Nav Links */}
-              <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
+              <nav className="hidden md:flex items-center gap-1 xl:gap-1.5 text-sm font-medium">
                 {visibleLinks.map((link) => {
                   const Icon = link.icon;
                   const safePathname = pathname || "";
@@ -341,25 +357,19 @@ export function Navbar({ user }: NavbarProps) {
                           setPendingPath(link.href);
                         }
                       }}
-                      className={`relative px-3 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-semibold ${
+                      className={`relative px-2.5 xl:px-3 py-1.5 xl:py-2 rounded-xl transition-all duration-150 flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm font-semibold cursor-pointer select-none active:scale-[0.97] whitespace-nowrap ${
                         isActive
-                          ? "bg-indigo-50 text-indigo-700 shadow-2xs"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70"
+                          ? "bg-indigo-50/90 text-indigo-700 font-bold border border-indigo-200/70 shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 border border-transparent"
                       } ${isPending ? "opacity-80" : ""}`}
                     >
-                      {isPending ? (
-                        <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin shrink-0" />
-                      ) : (
-                        <Icon
-                          className={`w-4 h-4 ${
-                            isActive ? "text-indigo-600" : "text-slate-400"
-                          }`}
-                        />
-                      )}
-                      <span>{link.label}</span>
-                      {isActive && !isPending && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 absolute right-2 top-2" />
-                      )}
+                      <Icon
+                        className={`w-4 h-4 shrink-0 transition-colors duration-150 ${
+                          isActive ? "text-indigo-600" : "text-slate-400"
+                        }`}
+                      />
+                      <span className="hidden xl:inline">{link.label}</span>
+                      <span className="inline xl:hidden">{link.shortLabel || link.label}</span>
                     </Link>
                   );
                 })}
@@ -375,7 +385,7 @@ export function Navbar({ user }: NavbarProps) {
                 <button
                   type="button"
                   onClick={() => setProfileOpen((prev) => !prev)}
-                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-full hover:bg-slate-100 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-full hover:bg-slate-100 transition-colors focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                   aria-label="User profile menu"
                   aria-expanded={profileOpen}
                   aria-haspopup="true"
@@ -383,7 +393,7 @@ export function Navbar({ user }: NavbarProps) {
                   <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0 ring-2 ring-indigo-100">
                     {userInitial}
                   </div>
-                  <div className="hidden lg:flex flex-col items-start text-left leading-tight">
+                  <div className="hidden xl:flex flex-col items-start text-left leading-tight">
                     <span className="text-xs font-bold text-slate-800 truncate max-w-[120px]">
                       {user.name}
                     </span>
@@ -566,7 +576,7 @@ export function Navbar({ user }: NavbarProps) {
               : bottomNavItems.length === 3
               ? "grid-cols-4"
               : "grid-cols-5"
-          } h-15 items-center px-1.5`}
+          } h-16 items-center px-1.5 sm:px-3`}
         >
           {bottomNavItems.map((item) => {
             const Icon = item.icon;
@@ -589,23 +599,22 @@ export function Navbar({ user }: NavbarProps) {
                   }
                 }}
                 aria-current={isActive ? "page" : undefined}
-                className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl transition-all duration-150 touch-manipulation min-h-[44px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-2xl transition-all duration-150 touch-manipulation min-h-[48px] select-none cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-[0.92] ${
                   isActive
                     ? "text-indigo-600 font-extrabold"
-                    : "text-slate-500 hover:text-slate-900 active:scale-95"
-                }`}
+                    : "text-slate-500 hover:text-slate-900 active:text-indigo-600"
+                } ${isPending ? "opacity-80" : ""}`}
               >
                 <div
-                  className={`p-1 rounded-full transition-all duration-150 ${
+                  className={`relative p-1.5 rounded-xl transition-all duration-150 ${
                     isActive
                       ? "bg-indigo-50 text-indigo-600 scale-105 shadow-2xs"
                       : "text-slate-400 group-hover:text-slate-600"
                   }`}
                 >
-                  {isPending ? (
-                    <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
-                  ) : (
-                    <Icon className="w-5 h-5" />
+                  <Icon className="w-5 h-5 shrink-0 transition-transform duration-150" />
+                  {isActive && (
+                    <span className="absolute -top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-indigo-600 ring-2 ring-white" />
                   )}
                 </div>
                 <span className="text-[10px] leading-tight font-bold tracking-tight text-center truncate max-w-full">
@@ -621,22 +630,22 @@ export function Navbar({ user }: NavbarProps) {
             onClick={() => setMobileMenuOpen((prev) => !prev)}
             aria-label="More navigation options"
             aria-expanded={mobileMenuOpen}
-            className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl transition-all duration-150 touch-manipulation min-h-[44px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`group flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-2xl transition-all duration-150 touch-manipulation min-h-[48px] select-none cursor-pointer focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 active:scale-[0.92] ${
               isMoreActive || mobileMenuOpen
                 ? "text-indigo-600 font-extrabold"
-                : "text-slate-500 hover:text-slate-900 active:scale-95"
+                : "text-slate-500 hover:text-slate-900 active:text-indigo-600"
             }`}
           >
             <div
-              className={`relative p-1 rounded-full transition-all duration-150 ${
+              className={`relative p-1.5 rounded-xl transition-all duration-150 ${
                 isMoreActive || mobileMenuOpen
                   ? "bg-indigo-50 text-indigo-600 scale-105 shadow-2xs"
                   : "text-slate-400 group-hover:text-slate-600"
               }`}
             >
-              <MoreHorizontal className="w-5 h-5" />
+              <MoreHorizontal className="w-5 h-5 shrink-0 transition-transform duration-150" />
               {isMoreActive && (
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-indigo-600 ring-2 ring-white" />
+                <span className="absolute -top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-indigo-600 ring-2 ring-white" />
               )}
             </div>
             <span className="text-[10px] leading-tight font-bold tracking-tight text-center truncate max-w-full">
@@ -656,24 +665,24 @@ export function Navbar({ user }: NavbarProps) {
         >
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200 cursor-pointer"
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden="true"
           />
 
           {/* Drawer Body */}
-          <div className="relative bg-white rounded-t-3xl shadow-2xl p-6 z-10 max-h-[85vh] overflow-y-auto border-t border-slate-200 space-y-6 animate-in slide-in-from-bottom duration-200 ease-out">
+          <div className="relative bg-white rounded-t-3xl shadow-2xl p-5 sm:p-6 z-10 max-h-[85vh] overflow-y-auto border-t border-slate-200 space-y-4 animate-in slide-in-from-bottom duration-200 ease-out">
             {/* Top Grab Bar Handle */}
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto -mt-2 mb-3" />
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto -mt-1 mb-2" />
 
             {/* Drawer Header & User Pill */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-black shadow-xs shrink-0 ring-2 ring-indigo-100">
                   {userInitial}
                 </div>
                 <div className="min-w-0">
-                  <div className="font-bold text-slate-900 text-base leading-tight truncate">
+                  <div className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate">
                     {user.name}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -696,7 +705,7 @@ export function Navbar({ user }: NavbarProps) {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700 shrink-0"
+                className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
                 aria-label="Close navigation menu"
               >
                 <X className="w-5 h-5" />
@@ -704,130 +713,155 @@ export function Navbar({ user }: NavbarProps) {
             </div>
 
             {/* Mobile Nav Links */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-3 block mb-1">
                 Navigation
               </span>
-              {visibleLinks.map((link) => {
-                const Icon = link.icon;
-                const safePathname = pathname || "";
-                const isActive = link.exact
-                  ? safePathname === link.href
-                  : safePathname.startsWith(link.href);
-                const isPending = pendingPath === link.href;
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {visibleLinks.map((link) => {
+                  const Icon = link.icon;
+                  const safePathname = pathname || "";
+                  const isActive = link.exact
+                    ? safePathname === link.href
+                    : safePathname.startsWith(link.href);
 
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    prefetch={true}
-                    onMouseEnter={() => router.prefetch?.(link.href)}
-                    onTouchStart={() => router.prefetch?.(link.href)}
-                    onClick={() => {
-                      if (link.href !== pathname) {
-                        setPendingPath(link.href);
-                      }
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex items-center justify-between px-3.5 py-3 rounded-2xl font-bold text-sm transition-all ${
-                      isActive
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {isPending ? (
-                        <RefreshCw className="w-5 h-5 animate-spin text-indigo-200 shrink-0" />
-                      ) : (
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      prefetch={true}
+                      onMouseEnter={() => router.prefetch?.(link.href)}
+                      onTouchStart={() => router.prefetch?.(link.href)}
+                      onClick={() => {
+                        if (link.href !== pathname) {
+                          setPendingPath(link.href);
+                        }
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all duration-150 cursor-pointer active:scale-[0.98] ${
+                        isActive
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-700 bg-slate-50/80 hover:bg-slate-100 border border-slate-200/70"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
                         <Icon
-                          className={`w-5 h-5 ${
+                          className={`w-4 h-4 shrink-0 ${
                             isActive ? "text-white" : "text-slate-400"
                           }`}
                         />
-                      )}
-                      <span>{link.label}</span>
-                    </div>
-                    <ChevronRight
-                      className={`w-4 h-4 ${
-                        isActive ? "text-indigo-200" : "text-slate-300"
-                      }`}
-                    />
-                  </Link>
-                );
-              })}
+                        <span>{link.label}</span>
+                      </div>
+                      <ChevronRight
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isActive ? "text-indigo-200" : "text-slate-400"
+                        }`}
+                      />
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Sign Out Action in Mobile Drawer */}
-            <div className="pt-2 border-t border-slate-100 space-y-2">
-              <Link
-                href="/change-password"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
-              >
-                <Key className="w-4 h-4 text-slate-400" />
-                <span>Change Password</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setServerSettingsOpen(true);
-                }}
-                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
-              >
-                <Server className="w-4 h-4 text-slate-400" />
-                <span>Server Settings (LAN / Cloud)</span>
-              </button>
-              <button
-                type="button"
-                data-testid="mobile-download-pwa-button"
-                onClick={async () => {
-                  setMobileMenuOpen(false);
-                  if (pwa.isInstallable) {
-                    await pwa.promptInstall();
-                  } else {
+            {/* Account & Preferences in Mobile Drawer */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-3 block">
+                Preferences & System
+              </span>
+              <div className="bg-slate-50 rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden">
+                <Link
+                  href="/change-password"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Key className="w-4 h-4 text-slate-400" />
+                    <span>Change Password</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
                     setServerSettingsOpen(true);
-                  }
-                }}
-                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
-              >
-                <Download className="w-4 h-4 text-emerald-600" />
-                <span>Download App (PWA) / አፕሊኬሽኑን ጫን</span>
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  setMobileMenuOpen(false);
-                  setCheckingUpdate(true);
-                  try {
-                    const updateFound = await pwa.checkForUpdate();
-                    if (!updateFound) {
-                      toast.info(`DPM is up to date (v${pwa.currentVersion})`);
+                  }}
+                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Server className="w-4 h-4 text-slate-400" />
+                    <span>Server Settings (LAN / Cloud)</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
+                    Network
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="mobile-download-pwa-button"
+                  onClick={async () => {
+                    setMobileMenuOpen(false);
+                    if (pwa.isInstallable) {
+                      await pwa.promptInstall();
+                    } else {
+                      setServerSettingsOpen(true);
                     }
-                  } finally {
-                    setCheckingUpdate(false);
-                  }
-                }}
-                disabled={checkingUpdate || pwa.isChecking}
-                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 text-slate-400 ${
-                    checkingUpdate || pwa.isChecking ? "animate-spin" : ""
-                  }`}
-                />
-                <span>Check for Updates (v{pwa.currentVersion})</span>
-              </button>
+                  }}
+                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Download className="w-4 h-4 text-emerald-600" />
+                    <span>Download App (PWA) / አፕሊኬሽኑን ጫን</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {pwa.isInstallable ? "Install" : "Guide"}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setMobileMenuOpen(false);
+                    setCheckingUpdate(true);
+                    try {
+                      const updateFound = await pwa.checkForUpdate();
+                      if (!updateFound) {
+                        toast.info(`DPM is up to date (v${pwa.currentVersion})`);
+                      }
+                    } finally {
+                      setCheckingUpdate(false);
+                    }
+                  }}
+                  disabled={checkingUpdate || pwa.isChecking}
+                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <RefreshCw
+                      className={`w-4 h-4 text-slate-400 ${
+                        checkingUpdate || pwa.isChecking ? "animate-spin" : ""
+                      }`}
+                    />
+                    <span>Check for Updates (v{pwa.currentVersion})</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-600 font-bold">
+                    v{pwa.currentVersion}
+                  </span>
+                </button>
+              </div>
+
+              {/* Sign Out Action Button */}
               <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={signingOut}
-                className="w-full btn btn-outline btn-error rounded-2xl flex items-center justify-center gap-2 font-bold py-3"
+                className="w-full mt-2 rounded-xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer"
               >
                 {signingOut ? (
-                  <span className="loading loading-spinner loading-sm" />
+                  <span className="loading loading-spinner loading-xs text-rose-600" />
                 ) : (
-                  <LogOut className="w-4 h-4" />
+                  <LogOut className="w-4 h-4 text-rose-600" />
                 )}
                 <span>Sign Out</span>
               </button>

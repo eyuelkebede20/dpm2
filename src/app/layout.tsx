@@ -51,7 +51,7 @@ export default async function RootLayout({
             />
           )}
           {user && <Navbar user={user} />}
-          <main className="flex-1 pb-16 md:pb-0">{children}</main>
+          <main className="flex-1 pb-24 md:pb-0">{children}</main>
           {user && (user.role === "sys_admin" || canSwitchRole) && (
             <RoleSwitcher
               currentRole={user.role}

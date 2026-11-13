@@ -338,5 +338,62 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       fireEvent.click(mobilePwaBtn);
       expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
     });
+
+    it("renders adaptive short labels and full labels for Factory Manager (fm) to prevent tablet overflow", () => {
+      const fmUser = {
+        ...sampleUser,
+        id: "usr_fm_1",
+        name: "Abebe FM",
+        role: "fm" as const,
+      };
+      render(<Navbar user={fmUser} />);
+
+      // Verify adaptive short and full labels are rendered
+      expect(screen.getAllByText("Lines").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Lines & Floor").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Plans").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Production Plans").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Store").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Store Stock").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Entry").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Daily Entry").length).toBeGreaterThan(0);
+    });
+
+    it("renders adaptive short labels for Operation Manager (om) and QA (qa)", () => {
+      const omUser = {
+        ...sampleUser,
+        id: "usr_om_1",
+        name: "Solomon OM",
+        role: "om" as const,
+      };
+      const { unmount } = render(<Navbar user={omUser} />);
+      expect(screen.getAllByText("Plants").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Operations Hub").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Reports").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Daily Reports").length).toBeGreaterThan(0);
+      unmount();
+
+      const qaUser = {
+        ...sampleUser,
+        id: "usr_qa_1",
+        name: "Tigist QA",
+        role: "qa" as const,
+      };
+      render(<Navbar user={qaUser} />);
+      expect(screen.getAllByText("Approvals").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("QA Approvals").length).toBeGreaterThan(0);
+    });
+
+    it("verifies mobile navigation bar has h-16 height and min-h-[48px] touch targets", () => {
+      render(<Navbar user={sampleUser} />);
+      const mobileNav = screen.getByRole("navigation", { name: /mobile navigation/i });
+      const gridContainer = mobileNav.querySelector(".grid");
+      expect(gridContainer?.className).toContain("h-16");
+
+      const links = mobileNav.querySelectorAll("a, button");
+      links.forEach((link) => {
+        expect(link.className).toContain("min-h-[48px]");
+      });
+    });
   });
 });

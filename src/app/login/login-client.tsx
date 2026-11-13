@@ -127,6 +127,7 @@ export function LoginClient() {
                 </div>
                 <input
                   type="email"
+                  autoComplete="username"
                   required
                   autoFocus
                   disabled={loading || lockoutTimer > 0}
@@ -148,6 +149,7 @@ export function LoginClient() {
                 </div>
                 <input
                   type="password"
+                  autoComplete="current-password"
                   required
                   disabled={loading || lockoutTimer > 0}
                   value={password}
