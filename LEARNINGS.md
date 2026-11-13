@@ -4,6 +4,29 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 
 ---
 
+## 2026-11-13 — Daily Entry Layout Hierarchy & Controls Accessibility (Search, Sorting, Top KPI Cards)
+
+**Goal:** Position unreviewed reminders and KPI summary cards at the top of the page and introduce a dedicated, accessible controls toolbar (search, sorting, product filter, grouping, view mode) directly above the daily entry grid.
+
+### Edge cases & gotchas discovered
+- Placing multiple interactive filters and toggles (product filter, group toggle, view switcher, date selector) inside the top page header caused excessive vertical crowding and pushed control elements far away from the data tables they dictate.
+- On mobile and tablet views, users had to scroll back to the very top to change table display modes or filter by product.
+- Sorting entries in flat mode requires re-calculating targets and variances dynamically without desynchronizing the global row indexes required for saving entries.
+
+### Decision
+1. **Top Section**: Clean header with date navigation only. Immediately followed by unreviewed report reminder banner and status banners (holiday, month-locked, OM review mode, FM submitted).
+2. **Top KPI Cards**: 4 responsive summary metric cards (Finished Goods, Target & Variance, Quality Fallout, WIP & Downtime) and the Product Performance pill strip placed right under the banners.
+3. **Dedicated Controls Toolbar**: Positioned directly below the KPI cards and above the data grid, containing:
+   - Live text search input (line name, product, SKU) with clear `X` button.
+   - Sort dropdown (Line A-Z/Z-A, Product A-Z/Z-A, Finished Goods, Target, Variance ahead/behind).
+   - Product filter dropdown synced with the top product pills.
+   - Group Mode toggle ("By Product" vs "By Line").
+   - View Mode switcher ("Table" vs "Cards").
+   - Match count counter and 1-click "Reset Filters" action.
+4. **Automated Verification**: Added 4 new integration tests in `daily-entry-client.test.tsx` verifying DOM hierarchy order, live search filtering, multi-criteria sorting, and empty state recovery.
+
+---
+
 ## 2026-11-08 — Core Design Tokens & Error Foundation (Item 01)
 
 **Goal:** Establish systematic design tokens in `DESIGN.md`, create accessible `<Button />` with double-click and loading locks, build typed `AppError` model, and `<ErrorBoundary />` with retry capability.

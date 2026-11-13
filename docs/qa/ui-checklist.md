@@ -67,6 +67,16 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Drawer "Edit Daily Production Numbers" button: deep-links to `/entry?date=...` (`src/components/calendar/calendar-client.test.tsx`)
 - [x] Responsive Ethiopian Date Picker Modal: mobile-native bottom sheet (`rounded-t-3xl`, drag handle, `pb-safe`) and desktop centered dialog with 7-column weekday headers (`ETH_PICKER_WEEKDAYS`), leading blank offset, and live dual-date preview chips (`src/components/entry-grid/daily-entry-client.test.tsx`)
 
+### `/entry` (Daily Entry & Production Tracking)
+- [x] Top Section Hierarchy: reminder banners (Unreviewed warning, month-locked, holiday, OM mode) and smaller KPI cards rendered at the top of the page before controls (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Dedicated Controls Toolbar: positioned directly after KPI cards and above grid for maximum accessibility (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Search input: filters production lines by line name, product name, or SKU with clear button (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Sorting selector: sorts by line name (A-Z/Z-A), product name, finished good, daily target, and variance (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Product filter dropdown & Product performance strip: synchronized filtering across both controls (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Group Mode Toggle: seamlessly switches between "By Product" and "By Line" views (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] View Mode Switcher: switches between Table View and mobile-optimized Card View (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Empty state handling: clear feedback when search query has 0 matches with 1-click "Clear Search" button (`src/components/entry-grid/daily-entry-client.test.tsx`)
+
 ---
 
 ## 4. Role Administration & Management Portals
