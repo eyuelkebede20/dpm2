@@ -74,13 +74,16 @@ describe("Security Middleware - Rate Limiting, Headers & Request Filtering", () 
     expect(resBlocked.status).toBe(429);
   });
 
-  it("locks out dev and seeding routes with 404 in production", () => {
+  it("locks out unauthorized dev and seeding routes with 404 in production, while permitting switch-role", () => {
     const originalEnv = process.env.NODE_ENV;
     try {
       (process.env as any).NODE_ENV = "production";
 
-      const devReq = new NextRequest("http://localhost:3000/api/dev/switch-role");
+      const devReq = new NextRequest("http://localhost:3000/api/dev/internal-test");
       expect(middleware(devReq).status).toBe(404);
+
+      const switchRoleReq = new NextRequest("http://localhost:3000/api/dev/switch-role");
+      expect(middleware(switchRoleReq).status).toBe(200);
 
       const seedReq = new NextRequest("http://localhost:3000/api/seed-db");
       expect(middleware(seedReq).status).toBe(404);

@@ -122,9 +122,12 @@ export function RoleSwitcher({ currentRole, currentEmail, canSwitchRole }: RoleS
   useEffect(() => {
     if (isOpen && !usersLoaded && hasAdminPrivilege && isDeveloperMode) {
       fetch("/api/dev/switch-role")
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) return null;
+          return res.json().catch(() => null);
+        })
         .then((data) => {
-          if (data.users && Array.isArray(data.users)) {
+          if (data?.users && Array.isArray(data.users)) {
             setAllUsers(data.users);
             setUsersLoaded(true);
           }
@@ -187,9 +190,16 @@ export function RoleSwitcher({ currentRole, currentEmail, canSwitchRole }: RoleS
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to switch role");
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        const text = typeof res.text === "function" ? await res.text().catch(() => "") : "";
+        throw new Error(text || `Request failed with status ${res.status}`);
+      }
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to switch role");
       }
 
       setIsOpen(false);

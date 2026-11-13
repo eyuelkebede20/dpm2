@@ -21,13 +21,6 @@ const DEFAULT_ROUTES: Record<string, string> = {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { enabled: false, error: "Dev role switcher is strictly disabled in production" },
-      { status: 403 }
-    );
-  }
-
   try {
     const cookieStore = await cookies();
     const devToken = cookieStore.get(SYSADMIN_DEV_TOKEN_COOKIE)?.value;
@@ -93,13 +86,6 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "Dev role switcher is strictly disabled in production" },
-      { status: 403 }
-    );
-  }
-
   try {
     const cookieStore = await cookies();
     const devToken = cookieStore.get(SYSADMIN_DEV_TOKEN_COOKIE)?.value;
@@ -229,12 +215,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "Dev role switcher is strictly disabled in production" },
-      { status: 403 }
-    );
-  }
   try {
     const cookieStore = await cookies();
     cookieStore.delete("dpm.session_token");

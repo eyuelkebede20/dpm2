@@ -20,9 +20,10 @@ export function middleware(req: NextRequest) {
   const realIp = req.headers.get("x-real-ip")?.trim();
   const ip = cfIp || forwardedFor || realIp || "127.0.0.1";
 
-  // 1. Hard lockout of developer test & database seeding routes in production
+  // 1. Hard lockout of database seeding and unauthorized dev test routes in production
+  // Note: /api/dev/switch-role enforces strict cryptographic SysAdmin HMAC token & session RBAC
   const isDevOrSeedRoute =
-    pathname.startsWith("/api/dev") ||
+    (pathname.startsWith("/api/dev") && !pathname.startsWith("/api/dev/switch-role")) ||
     pathname.startsWith("/api/seed") ||
     pathname.startsWith("/api/seed-db");
 
@@ -33,7 +34,7 @@ export function middleware(req: NextRequest) {
       endpoint: pathname,
       details: { reason: "Attempted to access dev/seeding routes in production" },
     });
-    return new NextResponse("Not Found", { status: 404 });
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
   }
 
   // 2. Path Traversal & Malicious Query Parameter Inspection (OWASP A03)

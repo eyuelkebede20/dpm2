@@ -77,12 +77,17 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
   });
 
   describe("GET /api/dev/switch-role", () => {
-    it("returns 403 when dev mode and impersonation are disabled in production", async () => {
+    it("returns 403 when session user is not sys_admin and no dev token present, even in production", async () => {
       (process.env as any).NODE_ENV = "production";
-      process.env.ENABLE_DEV_IMPERSONATION = "false";
+      (auth.api.getSession as any).mockResolvedValue({
+        user: { id: "om-1", email: "om@dpm.local", role: "om" },
+      });
+      mockCookieStore.get.mockReturnValue(undefined);
 
       const res = await GET();
       expect(res.status).toBe(403);
+      const data = await res.json();
+      expect(data.error).toContain("Forbidden");
     });
 
     it("returns 403 when session user is not sys_admin and no dev token present", async () => {
@@ -130,9 +135,11 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
   });
 
   describe("POST /api/dev/switch-role", () => {
-    it("returns 403 when disabled in production", async () => {
+    it("allows authenticated sys_admin to switch roles in production", async () => {
       (process.env as any).NODE_ENV = "production";
-      process.env.ENABLE_DEV_IMPERSONATION = "false";
+      mockUsersInDb = [
+        { id: "usr_om", name: "OM User", email: "om@dpm.local", role: "om", active: true },
+      ];
 
       const req = new NextRequest("http://localhost:3000/api/dev/switch-role", {
         method: "POST",
@@ -140,7 +147,10 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
       });
 
       const res = await POST(req);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.user.role).toBe("om");
     });
 
     it("returns 403 when caller is not sys_admin and no dev token present", async () => {

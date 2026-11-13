@@ -1271,6 +1271,38 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **Daily Entry Client Tests:** 33/33 passed (`src/components/entry-grid/daily-entry-client.test.tsx`)
 - **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
 
+---
+
+## 2026-11-13 — Resolution of "Role switch error: SyntaxError: Unexpected token 'N', 'Not Found' is not valid JSON"
+
+**Goal:** Resolve the Role Switcher failure in production/Docker environments where switching roles threw `SyntaxError: Unexpected token 'N', "Not Found" is not valid JSON`.
+
+### Root Cause Analysis
+
+1. **Edge Middleware Blanket Route Interception:**
+   - In `src/middleware.ts`, `pathname.startsWith("/api/dev")` was intercepted in `NODE_ENV=production` and returned `new NextResponse("Not Found", { status: 404 })` as plain text.
+2. **Duplicate Production Check in Route Handler:**
+   - In `src/app/api/dev/switch-role/route.ts`, `GET`, `POST`, and `DELETE` unconditionally returned `{ status: 403, error: "Dev role switcher is strictly disabled in production" }`.
+   - However, the Developer Mode Role Switcher is a SysAdmin utility protected cryptographically by active `sys_admin` session verification and HMAC-SHA256 signed `dpm_dev_sysadmin_token`. An authenticated SysAdmin using Docker or production staging needs this capability to inspect role workspaces without logging out.
+3. **Unprotected `res.json()` Call in Client:**
+   - In `src/components/role-switcher.tsx`, `handleSwitch` invoked `const data = await res.json()`. When the server returned a 404 plain-text response, the parser threw a client-side `SyntaxError: Unexpected token 'N'` instead of surfacing the error message.
+
+### Architectural Decisions & Implementation
+
+1. **Permit `/api/dev/switch-role` Through Middleware:**
+   - Modified `src/middleware.ts` so that `pathname.startsWith("/api/dev/switch-role")` bypasses the blanket dev lockout and is delegated to its route handler.
+   - Updated any production-blocked responses to return JSON (`NextResponse.json({ error: "Not Found" }, { status: 404 })`) instead of raw text, avoiding JSON parse crashes on the client.
+2. **Cryptographic RBAC in `switch-role/route.ts`:**
+   - Removed blanket `NODE_ENV === "production"` guards from `route.ts`.
+   - Access remains strictly gated: the caller must have `session.user.role === "sys_admin"` or possess a valid, tamper-proof `dpm_dev_sysadmin_token` signed with `BETTER_AUTH_SECRET`. Any unauthorized caller receives `403 Forbidden`.
+3. **Resilient Response Parsing in `RoleSwitcher`:**
+   - Updated `src/components/role-switcher.tsx` with fallback parsing: if `res.json()` fails, it reads `res.text()` and raises an informative error rather than throwing an unhandled `SyntaxError`.
+4. **Automated Verification:**
+   - Updated `src/middleware.test.ts` to assert that `/api/dev/switch-role` passes through with status 200 while unauthorized dev routes and seeding endpoints return 404.
+   - Updated `src/app/api/dev/switch-role/route.test.ts` to verify that authenticated SysAdmins can switch roles in production, while unauthorized callers receive 403.
+   - Scoped tests passed: 25/25 tests across `middleware.test.ts`, `route.test.ts`, and `role-switcher.test.tsx`.
+   - Full TypeScript typecheck passed (`tsc --noEmit` exited with code 0).
+
 
 
 
