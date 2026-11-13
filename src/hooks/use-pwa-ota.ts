@@ -49,13 +49,24 @@ export function usePwaOta(): PwaOtaState {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Capture PWA Install Prompt
+    // Capture PWA Install Prompt (from early inline script or window event)
+    const syncCapturedPrompt = () => {
+      const earlyPrompt = (window as any).__pwaInstallPrompt;
+      if (earlyPrompt) {
+        deferredPromptRef.current = earlyPrompt;
+        setIsInstallable(true);
+      }
+    };
+    syncCapturedPrompt();
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       deferredPromptRef.current = e;
+      (window as any).__pwaInstallPrompt = e;
       setIsInstallable(true);
     };
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("pwa-prompt-captured", syncCapturedPrompt);
 
     // Check Service Worker Support
     if ("serviceWorker" in navigator) {
@@ -122,6 +133,7 @@ export function usePwaOta(): PwaOtaState {
           "beforeinstallprompt",
           handleBeforeInstallPrompt
         );
+        window.removeEventListener("pwa-prompt-captured", syncCapturedPrompt);
         navigator.serviceWorker.removeEventListener(
           "controllerchange",
           handleControllerChange
@@ -137,6 +149,7 @@ export function usePwaOta(): PwaOtaState {
         "beforeinstallprompt",
         handleBeforeInstallPrompt
       );
+      window.removeEventListener("pwa-prompt-captured", syncCapturedPrompt);
     };
   }, []);
 
@@ -215,14 +228,21 @@ export function usePwaOta(): PwaOtaState {
 
   // 4. Prompt PWA Installation
   const promptInstall = useCallback(async (): Promise<boolean> => {
-    if (!deferredPromptRef.current) return false;
+    const prompt =
+      deferredPromptRef.current ||
+      (typeof window !== "undefined" ? (window as any).__pwaInstallPrompt : null);
+    if (!prompt) return false;
     try {
-      deferredPromptRef.current.prompt();
-      const choiceResult = await deferredPromptRef.current.userChoice;
+      prompt.prompt();
+      const choiceResult = await prompt.userChoice;
       deferredPromptRef.current = null;
+      if (typeof window !== "undefined") {
+        (window as any).__pwaInstallPrompt = null;
+      }
       setIsInstallable(false);
-      return choiceResult.outcome === "accepted";
-    } catch {
+      return choiceResult?.outcome === "accepted";
+    } catch (err) {
+      console.warn("[PWA] promptInstall execution error:", err);
       return false;
     }
   }, []);

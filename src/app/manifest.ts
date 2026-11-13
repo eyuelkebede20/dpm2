@@ -5,11 +5,14 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Homicho Ammunition Engineering Industry - DPM",
     short_name: "HAEI DPM",
     description: "Daily Production Manager & Munitions Operations Platform",
+    id: "/",
     start_url: "/",
+    scope: "/",
     display: "standalone",
     orientation: "portrait-primary",
     background_color: "#0f172a",
     theme_color: "#1e293b",
+    prefer_related_applications: false,
     categories: ["business", "productivity", "utilities"],
     icons: [
       {

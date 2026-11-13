@@ -315,7 +315,7 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
     });
 
-    it("renders 'Download App (PWA)' button in profile dropdown and opens settings guide when not directly installable", () => {
+    it("renders 'Download App (PWA)' button in profile dropdown and opens dedicated install dialog", () => {
       render(<Navbar user={sampleUser} />);
       const profileBtn = screen.getByRole("button", { name: /user profile menu/i });
       fireEvent.click(profileBtn);
@@ -324,10 +324,10 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(downloadPwaBtn).toBeDefined();
 
       fireEvent.click(downloadPwaBtn);
-      expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+      expect(screen.getByRole("dialog", { name: /download & install dpm app/i })).toBeDefined();
     });
 
-    it("renders 'Download App (PWA)' button in mobile drawer and opens settings guide", () => {
+    it("renders 'Download App (PWA)' button in mobile drawer and opens dedicated install dialog", () => {
       render(<Navbar user={sampleUser} />);
       const hamburgerBtn = screen.getByRole("button", { name: /toggle navigation menu/i });
       fireEvent.click(hamburgerBtn);
@@ -336,7 +336,7 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(mobilePwaBtn).toBeDefined();
 
       fireEvent.click(mobilePwaBtn);
-      expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+      expect(screen.getByRole("dialog", { name: /download & install dpm app/i })).toBeDefined();
     });
 
     it("renders adaptive short labels and full labels for Factory Manager (fm) to prevent tablet overflow", () => {

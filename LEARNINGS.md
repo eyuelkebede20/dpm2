@@ -1365,6 +1365,64 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **Login Client Tests:** 5/5 passed (`src/app/login/login-client.test.tsx`)
 - **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
 
+---
+
+## 2026-11-13 — PWA Native Installation, Desktop Shortcut (.url) Download & Early Prompt Capture
+
+**Goal:** Resolve "pwa download isn't working for some reason" by establishing reliable PWA prompt capture, eliminating confusing redirects to backend network settings, providing a dedicated 1-click install modal, generating native desktop shortcut files (`.url`), and offering device-specific installation guides for Android, iOS Safari, and Desktop Chrome/Edge.
+
+### Root Cause Analysis
+
+1. **Confusing Modal Redirect on Non-Installable Browsers:**
+   - In `src/components/navbar.tsx`, clicking "Download App (PWA)" checked:
+     ```ts
+     if (pwa.isInstallable) await pwa.promptInstall();
+     else setServerSettingsOpen(true);
+     ```
+   - When users browsed on desktop Chrome over HTTP without an active install prompt, on Safari/Firefox, or before `beforeinstallprompt` fired, the app redirected them to `BackendServerSettingsModal` ("Backend Server & Network Settings"). Users were faced with IP configs, port numbers, and ping tests instead of app download options.
+2. **Missing Download Action Inside Settings Modal:**
+   - Inside `backend-server-settings-modal.tsx`, clicking "Download App" simply toggled an informational text accordion without triggering any actual download or native install prompt.
+3. **Missed `beforeinstallprompt` Event in Turbopack SSR:**
+   - In Chromium-based browsers, the `beforeinstallprompt` event can fire before client-side React components mount and register window event listeners.
+   - Without an early capture script in `<head>`, the event was lost for the entire browser session, leaving `isInstallable` as `false`.
+4. **Manifest Configuration Gaps:**
+   - `src/app/manifest.ts` lacked standard PWA installation attributes (`id: "/"`, `scope: "/"`, `prefer_related_applications: false`, `lang: "en"`, `dir: "ltr"`), which can prevent Chromium from triggering install eligibility on local subnets.
+
+### Architectural Decisions & Implementation
+
+1. **Early `beforeinstallprompt` Capture Script in `<head>` (`src/app/layout.tsx`):**
+   - Added an inline script that executes before any client hydration:
+     ```html
+     <script dangerouslySetInnerHTML={{ __html: `window.__pwaInstallPrompt = null; window.addEventListener('beforeinstallprompt', function(e) { e.preventDefault(); window.__pwaInstallPrompt = e; });` }} />
+     ```
+   - In `src/hooks/use-pwa-ota.ts`, initialized `deferredPrompt` from `window.__pwaInstallPrompt` if available, ensuring early browser events are never dropped.
+2. **Dedicated PWA Installation Modal (`src/components/pwa/pwa-install-modal.tsx`):**
+   - Created a purpose-built `<PwaInstallModal />` with:
+     - **1-Click Native Install:** Triggers `promptInstall()` when `isInstallable` is true or cached prompt is available.
+     - **Direct Desktop Shortcut Download:** Generates a real Windows Internet Shortcut (`.url`) file (`DPM-Homicho.url`) on demand:
+       ```ini
+       [InternetShortcut]
+       URL=http://.../
+       IconFile=http://.../icons/icon-192.png
+       IconIndex=0
+       ```
+       Users can double-click this file directly from their desktop or downloads folder to launch the app.
+     - **Device-Specific Walkthroughs:** Tabbed guides for **Desktop PC / Mac** (address bar install icon), **Android Chrome** (Menu ⋮ -> "Install app"), and **iOS Safari** (Share ⎋ -> "Add to Home Screen").
+3. **Seamless Integration in Navbar & Settings:**
+   - Updated `src/components/navbar.tsx` (Desktop Profile Dropdown & Mobile Drawer) to open `PwaInstallModal` directly instead of redirecting to server settings.
+   - Updated `src/components/settings/backend-server-settings-modal.tsx` so clicking "Download App" attempts native install, triggers desktop `.url` download fallback, and reveals device instructions.
+4. **Complete Manifest Standards (`src/app/manifest.ts`):**
+   - Added `id: "/"`, `scope: "/"`, `prefer_related_applications: false`, `lang: "en"`, `dir: "ltr"`.
+
+### Verification Results
+
+- **PWA Install Modal Tests:** 6/6 passed (`src/components/pwa/pwa-install-modal.test.tsx`)
+- **Backend Server Settings Modal Tests:** 11/11 passed (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- **Navbar Tests:** 21/21 passed (`src/components/navbar.test.tsx`)
+- **Total Scoped Tests:** 38/38 passed
+- **TypeScript Typecheck:** 0 errors (`tsc --noEmit` exited with code 0)
+
+
 
 
 

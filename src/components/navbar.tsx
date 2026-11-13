@@ -31,6 +31,7 @@ import { SessionUser } from "@/lib/authz";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { usePwaOtaContext } from "@/components/pwa/pwa-ota-manager";
 import { BackendServerSettingsModal } from "@/components/settings/backend-server-settings-modal";
+import { PwaInstallModal } from "@/components/pwa/pwa-install-modal";
 
 interface NavbarProps {
   user: SessionUser;
@@ -44,6 +45,7 @@ export function Navbar({ user }: NavbarProps) {
   const [signingOut, setSigningOut] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
+  const [pwaInstallOpen, setPwaInstallOpen] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const pwa = usePwaOtaContext();
   const profileDropdownRef = useRef<HTMLDivElement>(null);
@@ -473,13 +475,9 @@ export function Navbar({ user }: NavbarProps) {
                       <button
                         type="button"
                         data-testid="navbar-download-pwa-button"
-                        onClick={async () => {
+                        onClick={() => {
                           setProfileOpen(false);
-                          if (pwa.isInstallable) {
-                            await pwa.promptInstall();
-                          } else {
-                            setServerSettingsOpen(true);
-                          }
+                          setPwaInstallOpen(true);
                         }}
                         className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors text-left"
                       >
@@ -488,7 +486,7 @@ export function Navbar({ user }: NavbarProps) {
                           <span>Download App (PWA)</span>
                         </div>
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {pwa.isInstallable ? "Install" : "Guide"}
+                          {pwa.isInstallable ? "Install" : "Download"}
                         </span>
                       </button>
                       <button
@@ -801,13 +799,9 @@ export function Navbar({ user }: NavbarProps) {
                 <button
                   type="button"
                   data-testid="mobile-download-pwa-button"
-                  onClick={async () => {
+                  onClick={() => {
                     setMobileMenuOpen(false);
-                    if (pwa.isInstallable) {
-                      await pwa.promptInstall();
-                    } else {
-                      setServerSettingsOpen(true);
-                    }
+                    setPwaInstallOpen(true);
                   }}
                   className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-700 hover:bg-slate-100/80 transition-colors text-left cursor-pointer"
                 >
@@ -816,7 +810,7 @@ export function Navbar({ user }: NavbarProps) {
                     <span>Download App (PWA) / አፕሊኬሽኑን ጫን</span>
                   </div>
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {pwa.isInstallable ? "Install" : "Guide"}
+                    {pwa.isInstallable ? "Install" : "Download"}
                   </span>
                 </button>
 
@@ -876,6 +870,14 @@ export function Navbar({ user }: NavbarProps) {
           isOpen={serverSettingsOpen}
           onClose={() => setServerSettingsOpen(false)}
           isAdmin={user.role === "sys_admin"}
+        />
+      )}
+
+      {/* Dedicated PWA Application Download & Install Modal */}
+      {pwaInstallOpen && (
+        <PwaInstallModal
+          isOpen={pwaInstallOpen}
+          onClose={() => setPwaInstallOpen(false)}
         />
       )}
     </>

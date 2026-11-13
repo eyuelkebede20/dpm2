@@ -38,6 +38,13 @@ export default async function RootLayout({
 
   return (
     <html lang="en" data-theme="light">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__pwaInstallPrompt=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallPrompt=e;window.dispatchEvent(new CustomEvent('pwa-prompt-captured'));});`,
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col">
         <NavigationProgress />
         <PwaOtaManager>

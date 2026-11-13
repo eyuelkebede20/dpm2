@@ -131,6 +131,13 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Cache-Control headers configured in `next.config.ts` (`no-cache, no-store, must-revalidate` for `/sw.js` and `/api/version`)
 
 ### Over-The-Air (OTA) Updates & Install Flow
+- [x] Dedicated `<PwaInstallModal />` with 1-click native install, desktop shortcut download, and device walkthroughs (`src/components/pwa/pwa-install-modal.test.tsx`)
+- [x] Direct desktop shortcut download (`DPM-Homicho.url`) generation for Windows desktop launch (`src/components/pwa/pwa-install-modal.test.tsx`)
+- [x] Early `beforeinstallprompt` capture script in `src/app/layout.tsx` ensuring install eligibility is never missed
+- [x] Desktop profile dropdown "Download App (PWA)" button opens `<PwaInstallModal />` (`src/components/navbar.test.tsx`)
+- [x] Mobile drawer "Download App (PWA)" button opens `<PwaInstallModal />` (`src/components/navbar.test.tsx`)
+- [x] Device-specific step-by-step guides (Android Chrome, iOS Safari, Desktop Chrome/Edge) (`src/components/pwa/pwa-install-modal.test.tsx`)
+- [x] Backend server settings modal download button triggers shortcut download fallback (`src/components/settings/backend-server-settings-modal.test.tsx`)
 - [x] Manual "Check for Updates" button in desktop navbar profile menu (`src/components/navbar.test.tsx`)
 - [x] Manual "Check for Updates" button in mobile drawer (`src/components/navbar.test.tsx`)
 - [x] Live version check endpoint with GitHub commit tracking (`src/app/api/version/route.test.ts`)

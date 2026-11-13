@@ -87,11 +87,28 @@ export function BackendServerSettingsModal({
       const outcome = await pwa.promptInstall();
       if (outcome) {
         toast.success("DPM installation accepted!");
+        return;
       }
-    } else {
-      setShowInstallGuide((prev) => !prev);
-      toast.info("Follow the instructions below to install DPM on your device.");
     }
+
+    // Direct desktop launcher download fallback
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      const shortcutContent = `[InternetShortcut]\r\nURL=${origin}/\r\nIconFile=${origin}/icons/icon-192.png\r\nIconIndex=0\r\nHotKey=0\r\nIDList=\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,0\r\n`;
+      const blob = new Blob([shortcutContent], { type: "application/internet-shortcut" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "DPM-Homicho.url";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("Desktop app shortcut downloaded! (የዴስክቶፕ አቋራጭ ዳውንሎድ ተደርጓል)");
+    } catch {}
+
+    setShowInstallGuide(true);
+    toast.info("Follow the instructions below to install DPM on your device.");
   };
 
   // Admin inline add preset state
