@@ -1858,24 +1858,201 @@ export function DailyEntryClient({
     );
   };
 
+  const renderControlsToolbar = () => (
+    <div className="p-2.5 sm:p-3 bg-slate-50/95 border-b border-slate-200 space-y-2">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2">
+        {/* Search Input & Sort Selector */}
+        <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search line name, product, or SKU..."
+              aria-label="Search lines or products"
+              className="w-full pl-9 pr-8 py-1.5 bg-white hover:bg-slate-50 focus:bg-white text-xs sm:text-sm font-medium text-slate-900 rounded-xl border border-slate-200 focus:border-indigo-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-slate-400"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Sort Selector */}
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1 shrink-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6 cursor-pointer"
+              aria-label="Sort production entries"
+            >
+              <option value="line-asc">Line Name (A–Z)</option>
+              <option value="line-desc">Line Name (Z–A)</option>
+              <option value="product-asc">Product Name (A–Z)</option>
+              <option value="product-desc">Product Name (Z–A)</option>
+              <option value="fg-desc">Finished Good (High to Low)</option>
+              <option value="fg-asc">Finished Good (Low to High)</option>
+              <option value="target-desc">Daily Target (High to Low)</option>
+              <option value="variance-desc">Variance (Ahead first)</option>
+              <option value="variance-asc">Variance (Behind first)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Product Filter & Group Toggle & View Mode Switcher */}
+        <div className="flex flex-wrap items-center gap-2">
+          {availableProducts.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1">
+              <Boxes className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <select
+                value={selectedProductFilter}
+                onChange={(e) => setSelectedProductFilter(e.target.value)}
+                className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6 cursor-pointer"
+                aria-label="Filter by Product"
+              >
+                <option value="all">All Products ({availableProducts.length})</option>
+                {availableProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.sku})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Group Mode Toggle: By Product vs By Line */}
+          <div className="join bg-white p-0.5 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setGroupMode("product")}
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[30px] px-2.5 touch-manipulation ${
+                groupMode === "product"
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                  : "btn-ghost text-slate-500"
+              }`}
+              title="Display Based on Product"
+            >
+              <Boxes className="w-3 h-3" />
+              <span>By Product</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setGroupMode("line")}
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[30px] px-2.5 touch-manipulation ${
+                groupMode === "line"
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                  : "btn-ghost text-slate-500"
+              }`}
+              title="Flat Line View"
+            >
+              <span>By Line</span>
+            </button>
+          </div>
+
+          {/* View Mode Switcher (Table View vs Cards View) */}
+          <div className="join bg-white p-0.5 rounded-xl border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[30px] px-2.5 touch-manipulation ${
+                viewMode === "table"
+                  ? "bg-slate-900 text-white shadow-2xs"
+                  : "btn-ghost text-slate-500"
+              }`}
+              title="Table View"
+              aria-label="Table View"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[30px] px-2.5 touch-manipulation ${
+                viewMode === "cards"
+                  ? "bg-slate-900 text-white shadow-2xs"
+                  : "btn-ghost text-slate-500"
+              }`}
+              title="Card View (Mobile Optimized)"
+              aria-label="Card View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Cards</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Sub-bar: Group Info, Active Filter Info & Modified Badge */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-200/70 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-800">
+            {groupMode === "product"
+              ? `Grouped By Product (${productGroups.length} ${productGroups.length === 1 ? "group" : "groups"})`
+              : `Active Production Lines (${displayedRows.length})`}
+          </span>
+          <span className="text-[11px] text-slate-400 hidden sm:inline">
+            • Frozen line column • Tab/Enter jumps field • Ctrl+S to save
+          </span>
+          {(searchQuery.trim() !== "" || selectedProductFilter !== "all") && (
+            <span className="text-slate-500 font-medium">
+              (Showing <b className="text-slate-900 font-mono">{displayedRows.length}</b> of {rows.length})
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {(searchQuery.trim() !== "" || selectedProductFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedProductFilter("all");
+              }}
+              className="btn btn-xs btn-ghost text-indigo-600 hover:text-indigo-800 font-bold gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Filters</span>
+            </button>
+          )}
+
+          {isDirty && (
+            <span className="badge badge-warning text-xs font-bold gap-1 shadow-2xs">
+              ● {modifiedRowCount} {modifiedRowCount === 1 ? "line" : "lines"} modified
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="max-w-7xl 2xl:max-w-8xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-16 py-6 pb-36">
+    <div className="max-w-7xl 2xl:max-w-8xl mx-auto px-3 sm:px-6 md:px-8 py-3.5 pb-32">
       {/* Top Header & Date Navigation */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-slate-200 mb-2.5">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+          <div className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
             <span>{factoryName}</span>
             <span>•</span>
             <span className="text-indigo-600 font-extrabold">
               Fast Production Grid
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5">
             Production Entry & Tracking
           </h1>
           {isEth && ethDate ? (
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="badge badge-neutral text-xs font-bold px-2.5 py-1 rounded-lg leading-relaxed font-sans">
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span className="badge badge-neutral text-xs font-bold px-2.5 py-0.5 rounded-lg leading-relaxed font-sans">
                 🇪🇹 {formatEthDate(ethDate, "full_am")}
               </span>
               <span className="text-xs text-slate-600 font-semibold leading-relaxed">
@@ -1895,333 +2072,336 @@ export function DailyEntryClient({
 
         {/* Date Selector Bar */}
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
-            {isEth && ethDate && (
+          {isEth && ethDate && (
+            <button
+              type="button"
+              onClick={() => setShowEthPicker(true)}
+              className="btn btn-xs sm:btn-sm min-h-[30px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-lg font-bold gap-1 px-2.5 mr-0.5 leading-relaxed touch-manipulation"
+              title="ቀን ምረጥ / Select Ethiopian Date"
+            >
+              <span>🇪🇹</span>
+              <span className="leading-relaxed">
+                {ethDate.day} {ETH_MONTH_NAMES_AM[ethDate.month]} {ethDate.year}
+              </span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              handleDateChange(
+                format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
+              )
+            }
+            className="btn btn-sm btn-ghost min-h-[30px] min-w-[30px] px-2 text-slate-600 hover:text-slate-900 touch-manipulation"
+            title="Previous Day"
+            aria-label="Previous Day"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          <div
+            className={`flex items-center gap-1.5 px-2 ${
+              isEth ? "cursor-pointer hover:bg-slate-50 rounded-lg py-0.5 transition-colors" : ""
+            }`}
+            onClick={() => isEth && setShowEthPicker(true)}
+            title={isEth ? "ቀን ምረጥ / Select Ethiopian Date" : undefined}
+          >
+            <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
+            <input
+              type="date"
+              value={selectedDate}
+              max={todayStr}
+              onChange={(e) => handleDateChange(e.target.value)}
+              className="text-xs sm:text-sm font-bold font-mono text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+              aria-label="Select Gregorian Date"
+            />
+          </div>
+
+          <button
+            type="button"
+            disabled={isNextDayDisabled}
+            onClick={() =>
+              !isNextDayDisabled &&
+              handleDateChange(
+                format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
+              )
+            }
+            className={`btn btn-sm btn-ghost min-h-[30px] min-w-[30px] px-2 touch-manipulation ${
+              isNextDayDisabled
+                ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+            title={isNextDayDisabled ? "Cannot navigate to future dates" : "Next Day"}
+            aria-label="Next Day"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              handleDateChange(
+                format(subDays(new Date(), 1), "yyyy-MM-dd")
+              )
+            }
+            className="btn btn-xs btn-ghost text-slate-600 rounded-lg text-[11px] font-bold min-h-[30px] px-2 touch-manipulation"
+          >
+            Yest
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleDateChange(format(new Date(), "yyyy-MM-dd"))}
+            className="btn btn-xs btn-outline btn-neutral rounded-lg text-[11px] font-bold min-h-[30px] px-2 touch-manipulation"
+          >
+            Today
+          </button>
+        </div>
+      </div>
+
+      {/* Notifications & Warning Alerts Strip at the Top */}
+      <div className="space-y-2 mb-2.5">
+        {/* Special Off-Day Holiday Banner */}
+        {specialDay && !specialDay.isWorkingDay && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-2xl flex items-center justify-between text-xs sm:text-sm shadow-xs">
+            <div className="flex items-center gap-2 font-semibold flex-wrap">
+              <span className="text-base">🎉</span>
+              <span className="leading-relaxed">
+                Special Off-Day: {specialDay.nameEn} {specialDay.nameAm ? `(${specialDay.nameAm})` : ""}
+              </span>
+              <span className="badge badge-xs sm:badge-sm badge-outline border-emerald-500 text-emerald-700 uppercase font-mono">
+                {specialDay.type}
+              </span>
+            </div>
+            <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
+              Daily Target: 0
+            </span>
+          </div>
+        )}
+
+        {/* Unreviewed Daily Report Warning Banner */}
+        {!currentReview?.isReviewed && (
+          <div className="p-2.5 sm:p-3 rounded-2xl border bg-amber-500/10 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-800">
+                <AlertTriangle className="w-4 h-4 text-amber-700" />
+              </div>
+              <div>
+                <div className="font-extrabold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                  <span>Unreviewed Daily Report (ክለሳ ያልተደረገለት ዕለታዊ ሪፖርት)</span>
+                  <span className="badge badge-warning badge-xs sm:badge-sm font-bold">Review Pending</span>
+                </div>
+                <p className="text-[11px] text-amber-800/90 mt-0.5 leading-tight">
+                  This factory report has not received Operation Manager review and sign-off. Daily figures require OM verification.
+                </p>
+              </div>
+            </div>
+            {canReviewItems && (
               <button
                 type="button"
-                onClick={() => setShowEthPicker(true)}
-                className="btn btn-xs sm:btn-sm min-h-[32px] bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-lg font-bold gap-1 px-2.5 mr-0.5 leading-relaxed touch-manipulation"
-                title="ቀን ምረጥ / Select Ethiopian Date"
+                onClick={handleSendFMReminder}
+                disabled={isSendingReminder}
+                className="btn btn-xs sm:btn-sm rounded-xl font-bold gap-1 bg-amber-600 hover:bg-amber-700 text-white border-none shadow-xs shrink-0 self-start sm:self-auto touch-manipulation min-h-[30px]"
               >
-                <span>🇪🇹</span>
-                <span className="leading-relaxed">
-                  {ethDate.day} {ETH_MONTH_NAMES_AM[ethDate.month]} {ethDate.year}
-                </span>
+                {isSendingReminder ? (
+                  <>
+                    <span className="loading loading-spinner loading-xs" />
+                    <span>Notifying...</span>
+                  </>
+                ) : (
+                  <>
+                    <Bell className="w-3.5 h-3.5 text-white" />
+                    <span>Notify Factory Managers (አስታውስ)</span>
+                  </>
+                )}
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={() =>
-                handleDateChange(
-                  format(subDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
-                )
-              }
-              className="btn btn-sm btn-ghost min-h-[32px] min-w-[32px] px-2 text-slate-600 hover:text-slate-900 touch-manipulation"
-              title="Previous Day"
-              aria-label="Previous Day"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <div
-              className={`flex items-center gap-1.5 px-2 ${
-                isEth ? "cursor-pointer hover:bg-slate-50 rounded-lg py-0.5 transition-colors" : ""
-              }`}
-              onClick={() => isEth && setShowEthPicker(true)}
-              title={isEth ? "ቀን ምረጥ / Select Ethiopian Date" : undefined}
-            >
-              <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
-              <input
-                type="date"
-                value={selectedDate}
-                max={todayStr}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="text-xs sm:text-sm font-bold font-mono text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
-                aria-label="Select Gregorian Date"
-              />
-            </div>
-
-            <button
-              type="button"
-              disabled={isNextDayDisabled}
-              onClick={() =>
-                !isNextDayDisabled &&
-                handleDateChange(
-                  format(addDays(parseISO(selectedDate), 1), "yyyy-MM-dd")
-                )
-              }
-              className={`btn btn-sm btn-ghost min-h-[32px] min-w-[32px] px-2 touch-manipulation ${
-                isNextDayDisabled
-                  ? "opacity-30 cursor-not-allowed pointer-events-none text-slate-300"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-              title={isNextDayDisabled ? "Cannot navigate to future dates" : "Next Day"}
-              aria-label="Next Day"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                handleDateChange(
-                  format(subDays(new Date(), 1), "yyyy-MM-dd")
-                )
-              }
-              className="btn btn-xs btn-ghost text-slate-600 rounded-lg text-[11px] font-bold min-h-[32px] px-2 touch-manipulation"
-            >
-              Yest
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleDateChange(format(new Date(), "yyyy-MM-dd"))}
-              className="btn btn-xs btn-outline btn-neutral rounded-lg text-[11px] font-bold min-h-[32px] px-2 touch-manipulation"
-            >
-              Today
-            </button>
           </div>
-        </div>
+        )}
 
-      {/* Special Off-Day Holiday Banner */}
-      {specialDay && !specialDay.isWorkingDay && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-2.5 rounded-xl flex items-center justify-between text-sm shadow-xs mb-4">
-          <div className="flex items-center gap-2 font-semibold flex-wrap">
-            <span className="text-lg">🎉</span>
-            <span className="leading-relaxed">
-              Special Off-Day: {specialDay.nameEn} {specialDay.nameAm ? `(${specialDay.nameAm})` : ""}
-            </span>
-            <span className="badge badge-sm badge-outline border-emerald-500 text-emerald-700 uppercase font-mono">
-              {specialDay.type}
-            </span>
-          </div>
-          <span className="text-xs bg-emerald-200/60 text-emerald-900 px-2.5 py-1 rounded-full font-mono font-bold shrink-0">
-            Daily Target: 0
-          </span>
-        </div>
-      )}
-
-      {/* Unreviewed Daily Report Warning Banner */}
-      {!currentReview?.isReviewed && (
-        <div className="mb-6 p-4 rounded-2xl border bg-amber-500/10 border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-800">
-              <AlertTriangle className="w-5 h-5 text-amber-700" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
-                <span>Unreviewed Daily Report (ክለሳ ያልተደረገለት ዕለታዊ ሪፖርት)</span>
-                <span className="badge badge-warning badge-sm font-bold">Review Pending</span>
+        {/* FM Month-Passed Lockout Banner */}
+        {isMonthLocked && (
+          <div className="p-2.5 sm:p-3 rounded-2xl border bg-amber-500/15 border-amber-400 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-200/70 border border-amber-400 flex items-center justify-center shrink-0 text-amber-900">
+                <Lock className="w-4 h-4 text-amber-900" />
               </div>
-              <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
-                This factory report has not received Operation Manager review and sign-off. Daily figures require OM verification.
-              </p>
-            </div>
-          </div>
-          {canReviewItems && (
-            <button
-              type="button"
-              onClick={handleSendFMReminder}
-              disabled={isSendingReminder}
-              className="btn btn-sm rounded-xl font-bold gap-1.5 bg-amber-600 hover:bg-amber-700 text-white border-none shadow-xs shrink-0 self-start sm:self-auto touch-manipulation"
-            >
-              {isSendingReminder ? (
-                <>
-                  <span className="loading loading-spinner loading-xs" />
-                  <span>Notifying...</span>
-                </>
-              ) : (
-                <>
-                  <Bell className="w-4 h-4 text-white" />
-                  <span>Notify Factory Managers (አስታውስ)</span>
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* FM Month-Passed Lockout Banner */}
-      {isMonthLocked && (
-        <div className="mb-6 p-4 rounded-2xl border bg-amber-500/15 border-amber-400 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-200/70 border border-amber-400 flex items-center justify-center shrink-0 text-amber-900">
-              <Lock className="w-5 h-5 text-amber-900" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
-                <span>Reporting Period Closed (የወሩ ሪፖርት ጊዜ አልፏል)</span>
-                <span className="badge badge-warning badge-sm font-bold">Month Passed • Locked</span>
+              <div>
+                <div className="font-extrabold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                  <span>Reporting Period Closed (የወሩ ሪፖርት ጊዜ አልፏል)</span>
+                  <span className="badge badge-warning badge-xs sm:badge-sm font-bold">Month Passed • Locked</span>
+                </div>
+                <p className="text-[11px] text-amber-900/90 mt-0.5 leading-tight">
+                  Factory Managers can only alter reports of the active month. This past month has closed and is locked against modifications.
+                </p>
               </div>
-              <p className="text-xs text-amber-900/90 mt-0.5 leading-relaxed">
-                Factory Managers can only alter reports of the active month. This past month has closed and is locked against modifications.
-              </p>
+            </div>
+            <div className="flex items-center gap-1.5 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-xl font-bold text-xs shrink-0 self-start sm:self-auto">
+              <Lock className="w-3.5 h-3.5 text-amber-800" />
+              <span>Read-Only Period</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 self-start sm:self-auto">
-            <Lock className="w-4 h-4 text-amber-800" />
-            <span>Read-Only Period</span>
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* Operation Manager Review Mode Banner */}
-      {isOM && (
-        <div className="mb-6 p-4 rounded-2xl border bg-amber-50/90 border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-800">
-              <Shield className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2">
-                <span>Operation Manager Review Mode</span>
-                <span className="badge badge-warning badge-sm font-bold">Read-Only</span>
+        {/* Operation Manager Review Mode Banner */}
+        {isOM && (
+          <div className="p-2.5 sm:p-3 rounded-2xl border bg-amber-50/90 border-amber-200 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0 text-amber-800">
+                <Shield className="w-4 h-4" />
               </div>
-              <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
-                You have read-only audit access for factory daily numbers. Steppers and inputs cannot be modified. Review QA inspection status and line metrics below, then mark this report as reviewed.
-              </p>
-            </div>
-          </div>
-          {currentReview?.isReviewed ? (
-            <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>Reviewed by {currentReview.reviewerName || "OM"}</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0">
-              <AlertCircle className="w-4 h-4 text-amber-700" />
-              <span>Pending Your Review</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* FM 1 Data Entry Per Day Completed Banner */}
-      {!isOM && userRole === "fm" && daySubmitted && (
-        <div className="mb-6 p-4 rounded-2xl border bg-emerald-50/90 border-emerald-200 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-800">
-              <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
-                <span>Daily Data Entry Completed (የዕለቱ መረጃ ተመዝግቧል)</span>
-                <span className="badge badge-success badge-sm font-bold text-white">1 Entry Per Day Locked</span>
+              <div>
+                <div className="font-extrabold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                  <span>Operation Manager Review Mode</span>
+                  <span className="badge badge-warning badge-xs sm:badge-sm font-bold">Read-Only</span>
+                </div>
+                <p className="text-[11px] text-amber-800/90 mt-0.5 leading-tight">
+                  You have read-only audit access for factory daily numbers. Steppers and inputs cannot be modified. Review QA inspection status and line metrics below, then mark this report as reviewed.
+                </p>
               </div>
-              <p className="text-xs text-emerald-800/90 mt-0.5 leading-relaxed">
-                Only one data entry is permitted per day. Today&apos;s daily numbers have been recorded and submitted. All fields are locked for factory modifications and pending Operation Manager review.
-              </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2 bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 self-start sm:self-auto">
-            <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-            <span>Entry Recorded & Locked</span>
-          </div>
-        </div>
-      )}
-
-      {/* Sys Admin Override Banner */}
-      {!isOM && userRole === "sys_admin" && daySubmitted && (
-        <div className="mb-6 p-4 rounded-2xl border bg-indigo-50/90 border-indigo-200 text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-100 border border-indigo-300 flex items-center justify-center shrink-0 text-indigo-800">
-              <Shield className="w-5 h-5 text-indigo-700" />
-            </div>
-            <div>
-              <div className="font-extrabold text-sm sm:text-base flex items-center gap-2 flex-wrap">
-                <span>Admin Override Mode</span>
-                <span className="badge badge-info badge-sm font-bold text-white">Sys Admin Access</span>
+            {currentReview?.isReviewed ? (
+              <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-xl font-bold text-xs shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Reviewed by {currentReview.reviewerName || "OM"}</span>
               </div>
-              <p className="text-xs text-indigo-800/90 mt-0.5 leading-relaxed">
-                Daily numbers have been submitted. As System Administrator, you retain emergency administrative override to correct values if needed.
-              </p>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-xl font-bold text-xs shrink-0">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                <span>Pending Your Review</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* FM 1 Data Entry Per Day Completed Banner */}
+        {!isOM && userRole === "fm" && daySubmitted && (
+          <div className="p-2.5 sm:p-3 rounded-2xl border bg-emerald-50/90 border-emerald-200 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center shrink-0 text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+              </div>
+              <div>
+                <div className="font-extrabold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                  <span>Daily Data Entry Completed (የዕለቱ መረጃ ተመዝግቧል)</span>
+                  <span className="badge badge-success badge-xs sm:badge-sm font-bold text-white">1 Entry Per Day Locked</span>
+                </div>
+                <p className="text-[11px] text-emerald-800/90 mt-0.5 leading-tight">
+                  Only one data entry is permitted per day. Today&apos;s daily numbers have been recorded and submitted. All fields are locked for factory modifications and pending Operation Manager review.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-1 rounded-xl font-bold text-xs shrink-0 self-start sm:self-auto">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Entry Recorded & Locked</span>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 my-6">
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-4 rounded-2xl">
-          <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+        {/* Sys Admin Override Banner */}
+        {!isOM && userRole === "sys_admin" && daySubmitted && (
+          <div className="p-2.5 sm:p-3 rounded-2xl border bg-indigo-50/90 border-indigo-200 text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-100 border border-indigo-300 flex items-center justify-center shrink-0 text-indigo-800">
+                <Shield className="w-4 h-4 text-indigo-700" />
+              </div>
+              <div>
+                <div className="font-extrabold text-xs sm:text-sm flex items-center gap-2 flex-wrap">
+                  <span>Admin Override Mode</span>
+                  <span className="badge badge-info badge-xs sm:badge-sm font-bold text-white">Sys Admin Access</span>
+                </div>
+                <p className="text-[11px] text-indigo-800/90 mt-0.5 leading-tight">
+                  Daily numbers have been submitted. As System Administrator, you retain emergency administrative override to correct values if needed.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Summary KPI Cards at the Top */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5 mb-2.5">
+        <div className="card bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-2xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
             Total Finished Good
           </span>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tabular-nums">
+          <div className="flex items-baseline gap-1.5 mt-0.5">
+            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono tabular-nums">
               {totalFG.toLocaleString()}
             </span>
-            <span className="text-xs font-bold text-slate-400">pcs</span>
+            <span className="text-[10px] font-bold text-slate-400">pcs</span>
           </div>
-          <div className="text-[11px] text-slate-500 font-medium mt-1">
+          <div className="text-[10px] text-slate-500 font-medium mt-0.5">
             Net Good: <b className="font-mono text-slate-700 tabular-nums">{netGoodOutput}</b> ({yieldPct}%)
           </div>
         </div>
 
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-4 rounded-2xl">
-          <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+        <div className="card bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-2xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
             Target & Variance
           </span>
-          <div className="flex items-baseline gap-2 mt-1 flex-wrap">
-            <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tabular-nums">
+          <div className="flex items-baseline gap-1.5 mt-0.5 flex-wrap">
+            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono tabular-nums">
               {hasAnyTarget
                 ? Math.round(totalTarget).toLocaleString()
                 : "No Target"}
             </span>
             {hasAnyTarget && (
               <span
-                className={`text-xs font-black font-mono tabular-nums px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                className={`text-[10px] font-black font-mono tabular-nums px-1.5 py-0.2 rounded-full flex items-center gap-0.5 ${
                   netVariance >= 0
                     ? "bg-emerald-100 text-emerald-800"
                     : "bg-rose-100 text-rose-800"
                 }`}
               >
                 {netVariance >= 0 ? (
-                  <TrendingUp className="w-3 h-3" />
+                  <TrendingUp className="w-2.5 h-2.5" />
                 ) : (
-                  <TrendingDown className="w-3 h-3" />
+                  <TrendingDown className="w-2.5 h-2.5" />
                 )}
                 {netVarianceFormatted}
               </span>
             )}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[10px] text-slate-400 mt-0.5">
             {hasAnyTarget
               ? `${Math.round((totalFG / (totalTarget || 1)) * 100)}% of daily target`
               : "No active plans today"}
           </div>
         </div>
 
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-4 rounded-2xl">
-          <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+        <div className="card bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-2xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
             Quality Fallout
           </span>
-          <div className="flex items-baseline gap-2 mt-1 text-slate-700 flex-wrap">
-            <span className="text-xs sm:text-sm font-semibold">
+          <div className="flex items-baseline gap-1.5 mt-0.5 text-slate-700 flex-wrap">
+            <span className="text-xs font-semibold">
               Rew: <b className="font-mono text-slate-900 tabular-nums">{totalRework}</b>
             </span>
             <span className="text-slate-300">•</span>
-            <span className="text-xs sm:text-sm font-semibold">
+            <span className="text-xs font-semibold">
               Rej: <b className="font-mono text-rose-600 tabular-nums">{totalReject}</b>
             </span>
             <span className="text-slate-300">•</span>
-            <span className="text-xs sm:text-sm font-semibold">
+            <span className="text-xs font-semibold">
               Scrap: <b className="font-mono text-amber-600 tabular-nums">{totalScrap}</b>
             </span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[10px] text-slate-400 mt-0.5">
             Total non-conforming: <b className="font-mono tabular-nums">{totalRework + totalFallout}</b>
           </div>
         </div>
 
-        <div className="card bg-white border border-slate-200/90 shadow-2xs p-4 rounded-2xl">
-          <span className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">
+        <div className="card bg-white border border-slate-200/90 shadow-2xs p-2.5 sm:p-3 rounded-2xl">
+          <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
             WIP & Downtime
           </span>
-          <div className="flex items-baseline gap-3 mt-1 flex-wrap">
-            <span className="text-xs sm:text-sm font-semibold text-slate-700">
+          <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
+            <span className="text-xs font-semibold text-slate-700">
               WIP: <b className="font-mono text-slate-900 tabular-nums">{totalWIP}</b>
             </span>
-            <span className="text-xs sm:text-sm font-semibold text-slate-700">
+            <span className="text-xs font-semibold text-slate-700">
               Down:{" "}
               <b
                 className={`font-mono tabular-nums ${
@@ -2232,7 +2412,7 @@ export function DailyEntryClient({
               </b>
             </span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">
+          <div className="text-[10px] text-slate-400 mt-0.5">
             {totalDowntime > 0
               ? `${(totalDowntime / 60).toFixed(1)} hrs lost`
               : "Zero line stoppages"}
@@ -2240,40 +2420,40 @@ export function DailyEntryClient({
         </div>
       </div>
 
-      {/* Product Performance Strip */}
+      {/* Product Performance Strip at the Top */}
       {productSummaries.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs mb-6">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+        <div className="bg-white border border-slate-200 rounded-2xl p-2 sm:p-2.5 shadow-2xs mb-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
               <Boxes className="w-3.5 h-3.5 text-indigo-600" />
               <span>Product Performance Overview</span>
             </span>
-            <span className="text-[11px] text-slate-400 font-medium">
+            <span className="text-[10px] text-slate-400 font-medium">
               Click pill to filter views
             </span>
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
             {/* All Products Pill */}
             <button
               type="button"
               onClick={() => setSelectedProductFilter("all")}
-              className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all touch-manipulation ${
+              className={`px-2.5 py-1.5 rounded-xl border text-left shrink-0 transition-all touch-manipulation ${
                 selectedProductFilter === "all"
                   ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs"
                   : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
               }`}
             >
-              <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+              <div className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
                 All Products
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="font-mono font-black text-sm text-slate-900 tabular-nums">
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="font-mono font-black text-xs text-slate-900 tabular-nums">
                   {rows.reduce((sum, r) => sum + (r.entry.finishedGood || 0), 0).toLocaleString()}
                 </span>
-                <span className="text-[10px] text-slate-400">pcs</span>
+                <span className="text-[9px] text-slate-400">pcs</span>
               </div>
-              <div className="text-[10px] text-slate-500 mt-0.5 font-medium">
+              <div className="text-[9px] text-slate-500 mt-0.5 font-medium">
                 {productSummaries.length} active {productSummaries.length === 1 ? "product" : "products"}
               </div>
             </button>
@@ -2288,32 +2468,32 @@ export function DailyEntryClient({
                   onClick={() =>
                     setSelectedProductFilter(isSelected ? "all" : prod.productId)
                   }
-                  className={`px-3 py-2 rounded-xl border text-left shrink-0 transition-all touch-manipulation ${
+                  className={`px-2.5 py-1.5 rounded-xl border text-left shrink-0 transition-all touch-manipulation ${
                     isSelected
                       ? "bg-indigo-50 border-indigo-400 ring-2 ring-indigo-500/20 shadow-2xs"
                       : "bg-slate-50/70 hover:bg-slate-100 border-slate-200 text-slate-700"
                   }`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900 truncate max-w-[140px] leading-relaxed">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-bold text-slate-900 truncate max-w-[130px] leading-snug">
                       {prod.productName}
                     </span>
-                    <span className="text-[9px] font-mono font-bold bg-white px-1.5 py-0.2 rounded text-slate-600 border border-slate-200">
+                    <span className="text-[8px] font-mono font-bold bg-white px-1 py-0.2 rounded text-slate-600 border border-slate-200">
                       {prod.sku}
                     </span>
                   </div>
 
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <div className="flex items-baseline gap-1">
-                      <span className="font-mono font-black text-sm text-slate-900 tabular-nums">
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <div className="flex items-baseline gap-0.5">
+                      <span className="font-mono font-black text-xs text-slate-900 tabular-nums">
                         {prod.totalFG.toLocaleString()}
                       </span>
-                      <span className="text-[10px] text-slate-400">pcs</span>
+                      <span className="text-[9px] text-slate-400">pcs</span>
                     </div>
 
                     {prod.hasTarget ? (
                       <span
-                        className={`text-[10px] font-mono font-black tabular-nums px-1.5 py-0.2 rounded-md ${
+                        className={`text-[9px] font-mono font-black tabular-nums px-1 py-0.2 rounded-md ${
                           prod.netVariance >= 0
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-rose-100 text-rose-800"
@@ -2322,11 +2502,11 @@ export function DailyEntryClient({
                         {prod.netVariance >= 0 ? `+${prod.netVariance}` : `${prod.netVariance}`}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-slate-400 italic">No target</span>
+                      <span className="text-[9px] text-slate-400 italic">No target</span>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 gap-2 font-mono tabular-nums">
+                  <div className="flex items-center justify-between text-[9px] text-slate-500 mt-0.5 gap-1.5 font-mono tabular-nums">
                     <span>
                       {prod.hasTarget
                         ? `Target: ${Math.round(prod.totalTarget).toLocaleString()}`
@@ -2343,190 +2523,10 @@ export function DailyEntryClient({
         </div>
       )}
 
-      {/* Interactive Controls & Filters Toolbar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs mb-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Search Input & Sort Selector */}
-          <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search line name, product, or SKU..."
-                aria-label="Search lines or products"
-                className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-xs sm:text-sm font-medium text-slate-900 rounded-xl border border-slate-200 focus:border-indigo-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-slate-400"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
-                  aria-label="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Sort Selector */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
-              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6 cursor-pointer"
-                aria-label="Sort production entries"
-              >
-                <option value="line-asc">Line Name (A–Z)</option>
-                <option value="line-desc">Line Name (Z–A)</option>
-                <option value="product-asc">Product Name (A–Z)</option>
-                <option value="product-desc">Product Name (Z–A)</option>
-                <option value="fg-desc">Finished Good (High to Low)</option>
-                <option value="fg-asc">Finished Good (Low to High)</option>
-                <option value="target-desc">Daily Target (High to Low)</option>
-                <option value="variance-desc">Variance (Ahead first)</option>
-                <option value="variance-asc">Variance (Behind first)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Product Filter & Group Toggle & View Mode Switcher */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Product Filter Dropdown */}
-            {availableProducts.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-                <Boxes className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <select
-                  value={selectedProductFilter}
-                  onChange={(e) => setSelectedProductFilter(e.target.value)}
-                  className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6 cursor-pointer"
-                  aria-label="Filter by Product"
-                >
-                  <option value="all">All Products ({availableProducts.length})</option>
-                  {availableProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Group Mode Toggle: By Product vs By Line */}
-            <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setGroupMode("product")}
-                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                  groupMode === "product"
-                    ? "bg-white text-indigo-700 shadow-2xs"
-                    : "btn-ghost text-slate-500"
-                }`}
-                title="Display Based on Product"
-              >
-                <Boxes className="w-3 h-3" />
-                <span>By Product</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setGroupMode("line")}
-                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                  groupMode === "line"
-                    ? "bg-white text-indigo-700 shadow-2xs"
-                    : "btn-ghost text-slate-500"
-                }`}
-                title="Flat Line View"
-              >
-                <span>By Line</span>
-              </button>
-            </div>
-
-            {/* View Mode Switcher (Table View vs Cards View) */}
-            <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setViewMode("table")}
-                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                  viewMode === "table"
-                    ? "bg-white text-slate-900 shadow-2xs"
-                    : "btn-ghost text-slate-500"
-                }`}
-                title="Table View"
-                aria-label="Table View"
-              >
-                <TableIcon className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden xs:inline">Table</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("cards")}
-                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                  viewMode === "cards"
-                    ? "bg-white text-slate-900 shadow-2xs"
-                    : "btn-ghost text-slate-500"
-                }`}
-                title="Card View (Mobile Optimized)"
-                aria-label="Card View"
-              >
-                <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden xs:inline">Cards</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Filter & Match Counter Strip */}
-        {(searchQuery.trim() !== "" || selectedProductFilter !== "all") && (
-          <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 text-slate-600">
-              <span className="font-semibold">
-                Showing <b className="text-slate-900 font-mono">{displayedRows.length}</b> of{" "}
-                <b className="text-slate-900 font-mono">{rows.length}</b> production lines
-              </span>
-              {searchQuery.trim() && (
-                <span className="badge badge-sm badge-neutral font-mono">
-                  matching &quot;{searchQuery.trim()}&quot;
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedProductFilter("all");
-              }}
-              className="btn btn-xs btn-ghost text-indigo-600 hover:text-indigo-800 font-bold gap-1"
-            >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset Filters</span>
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Entry Grid - Table View */}
       {viewMode === "table" ? (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-slate-800">
-                {groupMode === "product"
-                  ? `Grouped By Product (${productGroups.length} ${productGroups.length === 1 ? "group" : "groups"})`
-                  : `Active Production Lines (${displayedRows.length})`}
-              </span>
-              <span className="text-xs text-slate-400 hidden sm:inline">
-                • Frozen line column • Tab/Enter jumps field • Ctrl+S to save
-              </span>
-            </div>
-            {isDirty && (
-              <span className="badge badge-warning text-xs font-bold gap-1 shadow-2xs">
-                ● {modifiedRowCount} {modifiedRowCount === 1 ? "line" : "lines"} modified
-              </span>
-            )}
-          </div>
+          {renderControlsToolbar()}
 
           <div className="overflow-x-auto">
             <table className="table table-sm w-full">
@@ -2668,7 +2668,10 @@ export function DailyEntryClient({
         </div>
       ) : (
         /* Mobile Card View Mode */
-        <div className="space-y-4">
+        <div className="space-y-3">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
+            {renderControlsToolbar()}
+          </div>
           {rows.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
               <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
