@@ -1142,6 +1142,48 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **Total Scoped Tests:** 98/98 passed across 7 test files
 - **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
 
+---
+
+## 2026-11-13 — Standalone Docker Seeding, User Inspection & Signin Demo Bar Removal
+
+**Goal:** Fix Docker container database seeding by replacing devDependencies (`tsx`) with standalone production ESM scripts (`scripts/seed.mjs`, `scripts/show-users.mjs`), integrate automated initial seeding into container startup (`scripts/migrate.mjs`), and remove quick demo credential buttons from the login card.
+
+### Root Cause Analysis (Docker Seeding Failure)
+
+1. **Missing `tsx` and Source Files in Production Container:**
+   - In `Dockerfile`, the multi-stage build only copies `.next/standalone`, `drizzle`, `scripts`, `public`, and production `node_modules` into the runtime container.
+   - `package.json` had `"db:seed": "tsx src/db/seed.ts"`. Because `tsx` and `src/` are omitted in production, executing `docker compose exec app pnpm db:seed` threw command/file not found errors.
+2. **Production Route Lockouts:**
+   - `src/middleware.ts` intentionally returns 404 for `/api/seed` and `/api/seed-db` when `NODE_ENV=production`.
+3. **Empty Initial Container Startup:**
+   - `scripts/migrate.mjs` previously only applied Drizzle schema migrations. On fresh Docker deployments or clean volumes, `users` table remained empty (`0` rows).
+
+### Architectural Decisions & Implementation
+
+1. **Standalone Production Seeder (`scripts/seed.mjs`):**
+   - Built an idempotent seeder strictly utilizing production packages (`pg` and `better-auth/crypto`).
+   - Seeds Homicho Defense Complex factories, lines, products, plans, downtime reasons (DOW-01..DOW-09), Ethiopian holidays, and default users.
+   - Accepts `--reset` flag for complete wipe and re-seed.
+2. **Automated First-Boot Seeding (`scripts/migrate.mjs`):**
+   - Added post-migration user count query (`SELECT COUNT(*) FROM users;`).
+   - If count is `0` or `process.env.AUTO_SEED === "true"`, invokes `runSeed(pool)` automatically.
+3. **Docker User Inspection CLI (`scripts/show-users.mjs`):**
+   - Formatted ASCII table querying all registered users, roles, active flags, and assigned factories.
+   - Runnable via: `docker compose exec app node scripts/show-users.mjs`
+   - Also documented direct PostgreSQL inspection: `docker compose exec db psql -U postgres -d dpm -c "SELECT id, name, email, role, active FROM users;"`
+4. **Login Card Clean-up (`src/app/login/login-client.tsx`):**
+   - Removed "Quick demo credentials" block (Sys Admin, Operation Mgr, Factory Mgr, QA Inspector pills).
+   - Updated `src/app/login/login-client.test.tsx` to assert that demo buttons are not rendered, and tested manual email/password input.
+5. **Root Layout Navigation Optimization:**
+   - Removed `useSearchParams()` from `NavigationProgress` to prevent Next.js root layout dynamic de-optimization and eliminate client-side page transition delays.
+
+### Automated Verification Results
+
+- **Login Client Tests:** 5/5 passed (`src/app/login/login-client.test.tsx`)
+- **Full Test Suite:** 71/71 test files passed, 684/684 tests passed
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+- **Script Syntax:** Validated with `node -c scripts/seed.mjs scripts/show-users.mjs scripts/migrate.mjs`
+
 
 
 
