@@ -1859,7 +1859,7 @@ export function DailyEntryClient({
   };
 
   const renderControlsToolbar = () => (
-    <div className="p-2.5 sm:p-3 bg-slate-50/95 border-b border-slate-200 space-y-2">
+    <div className="p-2.5 sm:p-3 bg-slate-50/95 space-y-2">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2">
         {/* Search Input & Sort Selector */}
         <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -2523,11 +2523,14 @@ export function DailyEntryClient({
         </div>
       )}
 
+      {/* Interactive Controls & Filters Toolbar directly with the Grouped Data */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden mb-2.5">
+        {renderControlsToolbar()}
+      </div>
+
       {/* Entry Grid - Table View */}
       {viewMode === "table" ? (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-          {renderControlsToolbar()}
-
           <div className="overflow-x-auto">
             <table className="table table-sm w-full">
               <thead>
@@ -2669,9 +2672,6 @@ export function DailyEntryClient({
       ) : (
         /* Mobile Card View Mode */
         <div className="space-y-3">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
-            {renderControlsToolbar()}
-          </div>
           {rows.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
               <Info className="w-8 h-8 mx-auto mb-2 text-slate-300" />
