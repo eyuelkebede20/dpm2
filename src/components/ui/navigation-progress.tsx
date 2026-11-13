@@ -72,11 +72,8 @@ export function NavigationProgress() {
       // Ignore different origin
       if (destination.origin !== window.location.origin) return;
 
-      // If navigating to the exact current pathname and query, skip
-      if (
-        destination.pathname === window.location.pathname &&
-        destination.search === window.location.search
-      ) {
+      // If navigating to the exact current pathname, skip
+      if (destination.pathname === pathname) {
         return;
       }
 
