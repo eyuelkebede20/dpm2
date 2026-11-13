@@ -1346,34 +1346,68 @@ export function DailyEntryClient({
 
             {canReviewItems && (
               <div className="flex items-center gap-1 pt-0.5">
-                <button
-                  type="button"
-                  onClick={() => handleReviewItem(row, "approved")}
-                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
-                  className={`btn btn-xs rounded-lg px-2 font-bold gap-1 min-h-[26px] ${
-                    row.itemReview?.status === "approved"
-                      ? "bg-emerald-700 text-white border-emerald-800"
-                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border-emerald-200"
-                  }`}
-                  title="Approve Daily Numbers"
-                >
-                  <Check className="w-3 h-3" />
-                  <span>Approve</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleReviewItem(row, "denied")}
-                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
-                  className={`btn btn-xs rounded-lg px-2 font-bold gap-1 min-h-[26px] ${
-                    row.itemReview?.status === "denied"
-                      ? "bg-rose-700 text-white border-rose-800"
-                      : "bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-200"
-                  }`}
-                  title="Deny Daily Numbers"
-                >
-                  <X className="w-3 h-3" />
-                  <span>Deny</span>
-                </button>
+                {row.itemReview?.status === "approved" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleReviewItem(row, "denied")}
+                    disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                    className="btn btn-xs btn-ghost text-rose-600 hover:bg-rose-50 rounded-lg px-2 font-bold gap-1 min-h-[26px] cursor-pointer"
+                    title="Change to Denied"
+                  >
+                    {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <X className="w-3 h-3" />
+                    )}
+                    <span>Change to Denied</span>
+                  </button>
+                ) : row.itemReview?.status === "denied" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleReviewItem(row, "approved")}
+                    disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                    className="btn btn-xs btn-ghost text-emerald-700 hover:bg-emerald-50 rounded-lg px-2 font-bold gap-1 min-h-[26px] cursor-pointer"
+                    title="Change to Approved"
+                  >
+                    {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <Check className="w-3 h-3" />
+                    )}
+                    <span>Change to Approved</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleReviewItem(row, "approved")}
+                      disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                      className="btn btn-xs rounded-lg px-2 font-bold gap-1 min-h-[26px] bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border-emerald-200 cursor-pointer"
+                      title="Approve Daily Numbers"
+                    >
+                      {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : (
+                        <Check className="w-3 h-3" />
+                      )}
+                      <span>Approve</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReviewItem(row, "denied")}
+                      disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                      className="btn btn-xs rounded-lg px-2 font-bold gap-1 min-h-[26px] bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-200 cursor-pointer"
+                      title="Deny Daily Numbers"
+                    >
+                      {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : (
+                        <X className="w-3 h-3" />
+                      )}
+                      <span>Deny</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1824,32 +1858,66 @@ export function DailyEntryClient({
 
             {canReviewItems && (
               <div className="flex items-center gap-2 self-end sm:self-auto">
-                <button
-                  type="button"
-                  onClick={() => handleReviewItem(row, "approved")}
-                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
-                  className={`btn btn-xs rounded-xl px-3 font-bold gap-1 min-h-[32px] ${
-                    row.itemReview?.status === "approved"
-                      ? "bg-emerald-600 text-white border-emerald-700"
-                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border-emerald-300"
-                  }`}
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Approve Item</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleReviewItem(row, "denied")}
-                  disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
-                  className={`btn btn-xs rounded-xl px-3 font-bold gap-1 min-h-[32px] ${
-                    row.itemReview?.status === "denied"
-                      ? "bg-rose-600 text-white border-rose-700"
-                      : "bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-300"
-                  }`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Deny Item</span>
-                </button>
+                {row.itemReview?.status === "approved" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleReviewItem(row, "denied")}
+                    disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                    className="btn btn-xs btn-ghost text-rose-600 hover:bg-rose-50 rounded-xl px-2.5 font-bold gap-1 min-h-[30px] cursor-pointer"
+                    title="Change to Denied"
+                  >
+                    {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <X className="w-3.5 h-3.5" />
+                    )}
+                    <span>Change to Denied</span>
+                  </button>
+                ) : row.itemReview?.status === "denied" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleReviewItem(row, "approved")}
+                    disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                    className="btn btn-xs btn-ghost text-emerald-700 hover:bg-emerald-50 rounded-xl px-2.5 font-bold gap-1 min-h-[30px] cursor-pointer"
+                    title="Change to Approved"
+                  >
+                    {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Change to Approved</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleReviewItem(row, "approved")}
+                      disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                      className="btn btn-xs rounded-xl px-3 font-bold gap-1 min-h-[32px] bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white border-emerald-300 cursor-pointer shadow-2xs"
+                    >
+                      {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Approve Item</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReviewItem(row, "denied")}
+                      disabled={isReviewingItemKey === `${row.lineId}_${row.productId}`}
+                      className="btn btn-xs rounded-xl px-3 font-bold gap-1 min-h-[32px] bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-300 cursor-pointer shadow-2xs"
+                    >
+                      {isReviewingItemKey === `${row.lineId}_${row.productId}` ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : (
+                        <X className="w-3.5 h-3.5" />
+                      )}
+                      <span>Deny Item</span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>

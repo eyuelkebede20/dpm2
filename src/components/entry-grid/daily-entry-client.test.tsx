@@ -35,14 +35,16 @@ vi.mock("@/actions/review-actions", () => ({
     },
   }),
   unmarkDailyReportReviewedAction: vi.fn().mockResolvedValue({ success: true }),
-  reviewItemAction: vi.fn().mockResolvedValue({
-    success: true,
-    itemReview: {
-      status: "approved",
-      reviewedAt: "2026-11-13T15:00:00.000Z",
-      note: null,
-    },
-  }),
+  reviewItemAction: vi.fn().mockImplementation((input: any) =>
+    Promise.resolve({
+      success: true,
+      itemReview: {
+        status: input?.status || "approved",
+        reviewedAt: "2026-11-13T15:00:00.000Z",
+        note: null,
+      },
+    })
+  ),
   updateDailyPlanAction: vi.fn().mockResolvedValue({
     success: true,
     plan: {
@@ -830,7 +832,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   });
 
   describe("Operation Manager Item Reviews & Daily Plan Editing", () => {
-    it("allows OM to review per-item (approve or deny) and calls reviewItemAction", async () => {
+    it("allows OM to review per-item (approve or deny) and causes Approve button to disappear once approved", async () => {
       render(
         <DailyEntryClient
           initialDate="2026-11-13"
@@ -847,7 +849,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
       expect(screen.getByText("Pending OM")).toBeDefined();
 
       // Click Approve button in table
-      const approveBtn = screen.getByRole("button", { name: /Approve/i });
+      const approveBtn = screen.getByRole("button", { name: /^Approve$/i });
       fireEvent.click(approveBtn);
 
       await waitFor(() => {
@@ -860,9 +862,15 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
         });
       });
 
-      // Click Deny button in table
-      const denyBtn = screen.getByRole("button", { name: /Deny/i });
-      fireEvent.click(denyBtn);
+      // Once approved, the Approve button must disappear completely
+      await waitFor(() => {
+        expect(screen.queryByRole("button", { name: /^Approve$/i })).toBeNull();
+        expect(screen.getByText("OM Approved")).toBeDefined();
+      });
+
+      // Instead, a subtle "Change to Denied" button is rendered
+      const changeToDeniedBtn = screen.getByRole("button", { name: /Change to Denied/i });
+      fireEvent.click(changeToDeniedBtn);
 
       await waitFor(() => {
         expect(reviewActions.reviewItemAction).toHaveBeenCalledWith({
@@ -873,6 +881,50 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
           status: "denied",
         });
       });
+
+      // Once denied, "Change to Denied" disappears and "Change to Approved" appears
+      await waitFor(() => {
+        expect(screen.queryByRole("button", { name: /Change to Denied/i })).toBeNull();
+        expect(screen.getByText("OM Denied")).toBeDefined();
+        expect(screen.getByRole("button", { name: /Change to Approved/i })).toBeDefined();
+      });
+    });
+
+    it("ensures Approve Item button disappears in Card view once an item is approved", () => {
+      const approvedRows: GridRowData[] = [
+        {
+          ...sampleRows[0],
+          itemReview: {
+            status: "approved",
+            reviewedAt: "2026-11-13T10:00:00.000Z",
+            note: null,
+          },
+        },
+      ];
+
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={approvedRows}
+          userRole="om"
+        />
+      );
+
+      // Switch to Cards view
+      const cardsBtn = screen.getByTitle(/Card View/i);
+      fireEvent.click(cardsBtn);
+
+      // Verify OM Approved badge is rendered
+      expect(screen.getByText(/OM Approved \(በስራ አስኪያጅ የጸደቀ\)/i)).toBeDefined();
+
+      // Primary "Approve Item" button must NOT be present
+      expect(screen.queryByRole("button", { name: /Approve Item/i })).toBeNull();
+
+      // Only "Change to Denied" is available
+      expect(screen.getByRole("button", { name: /Change to Denied/i })).toBeDefined();
     });
 
     it("displays Initial Set Plan and Edited Plan side by side in table and card view", () => {

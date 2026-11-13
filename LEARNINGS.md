@@ -1233,6 +1233,45 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **Login Client Tests:** 5/5 passed (`src/app/login/login-client.test.tsx`)
 - **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
 
+---
+
+## 2026-11-13 — Operation Manager Daily Report Item Review UX & Reversal State Transition
+
+**Goal:** Eliminate redundant and confusing "Approve" buttons on the Operation Manager's daily report review interface once an item has already been approved, ensuring clear confirmed status badges with accessible reversal actions.
+
+### Root Cause & UX Friction
+
+- In `src/components/entry-grid/daily-entry-client.tsx`, when `canReviewItems` was active (for OM or SysAdmin), both the table view (`renderRow`) and mobile card view (`renderCard`) unconditionally rendered `[Approve]` and `[Deny]` action buttons for every row.
+- When an item was approved (`row.itemReview?.status === "approved"`), the UI displayed the `[✓ OM Approved]` badge alongside an active `[Approve]` button (styled darker green).
+- This caused confusion for Operation Managers, who questioned whether their approval registered or felt prompted to "approve again".
+
+### Architectural Decisions & Implementation
+
+1. **State-Driven Action Rendering:**
+   - **Approved (`row.itemReview?.status === "approved"`):**
+     - Primary `[Approve]` button disappears completely.
+     - Displays `[✓ OM Approved]` confirmation badge.
+     - Provides an accessible `[Change to Denied]` button for correcting decisions if needed.
+   - **Denied (`row.itemReview?.status === "denied"`):**
+     - Primary `[Deny]` button disappears completely.
+     - Displays `[✗ OM Denied]` confirmation badge.
+     - Provides an accessible `[Change to Approved]` button for overturning a denial.
+   - **Pending / Unreviewed:**
+     - Displays `[Pending OM]` badge.
+     - Displays primary `[✓ Approve]` and `[✗ Deny]` action buttons.
+2. **Interactive Feedback & Accessibility:**
+   - Both in Table and Cards views, in-flight item reviews display a loading spinner (`<span className="loading loading-spinner loading-xs" />`) with `disabled` state to block double clicks.
+   - All interactive reversal buttons adhere to `DESIGN.md` tokens (`cursor-pointer`, accessible titles, focus styles).
+3. **Automated Verification:**
+   - Updated `src/components/entry-grid/daily-entry-client.test.tsx` to verify that clicking `Approve` removes the `Approve` button from the DOM, displays `OM Approved`, and switches the action button to `Change to Denied`.
+   - Added test ensuring Card view mirrors this behavior.
+
+### Verification Results
+
+- **Daily Entry Client Tests:** 33/33 passed (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+
 
 
 
