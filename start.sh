@@ -93,7 +93,7 @@ if [ "$CHILD" -eq 0 ] && [ "$NO_UPDATE" -eq 0 ] && [ -d .git ] && command -v git
     git config --global --add safe.directory "$ROOT" 2>/dev/null || true
     OLD_HEAD=$(git rev-parse HEAD 2>/dev/null || echo none)
     git stash --include-untracked >/dev/null 2>&1 || git stash >/dev/null 2>&1 || true
-    if GIT_TERMINAL_PROMPT=0 timeout 30 git pull --ff-only; then
+    if GIT_TERMINAL_PROMPT=0 timeout 30 git pull --ff-only origin main 2>/dev/null || GIT_TERMINAL_PROMPT=0 timeout 30 git pull --ff-only; then
       log "git pull OK"
       NEW_HEAD=$(git rev-parse HEAD 2>/dev/null || echo none)
       if [ "$OLD_HEAD" != "$NEW_HEAD" ]; then UPDATED_ARG="--updated"; else UPDATED_ARG=""; fi
@@ -104,6 +104,7 @@ if [ "$CHILD" -eq 0 ] && [ "$NO_UPDATE" -eq 0 ] && [ -d .git ] && command -v git
         exit 1
       fi
       echo "  ${Y}[!] Could not reach remote repository or pull failed.${Z}"
+      echo "      Run 'git pull origin main' manually if updates are needed."
       echo "      Continuing with the version already installed on this server."
       UPDATED_ARG=""
     fi

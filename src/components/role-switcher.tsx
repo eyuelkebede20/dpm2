@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { useDeveloperMode } from "@/hooks/use-developer-mode";
 import {
   Shield,
   Building2,
@@ -93,6 +94,9 @@ interface RoleSwitcherProps {
 }
 
 export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
+  const isSysAdmin = currentRole === "sys_admin";
+  const { isDeveloperMode, setDeveloperMode } = useDeveloperMode(isSysAdmin);
+
   const pathname = usePathname();
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -109,7 +113,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
 
   // Load all users on popover open
   useEffect(() => {
-    if (isOpen && !usersLoaded) {
+    if (isOpen && !usersLoaded && isSysAdmin && isDeveloperMode) {
       fetch("/api/dev/switch-role")
         .then((res) => res.json())
         .then((data) => {
@@ -120,7 +124,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
         })
         .catch(() => {});
     }
-  }, [isOpen, usersLoaded]);
+  }, [isOpen, usersLoaded, isSysAdmin, isDeveloperMode]);
 
   // Close on Escape or click outside
   useEffect(() => {
@@ -211,6 +215,12 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
       u.role.toLowerCase().includes(q)
     );
   });
+
+  // STRICT ACCESS CONTROL:
+  // Only authenticated System Administrators with Developer Option enabled in Settings can see this icon/button.
+  if (!isSysAdmin || !isDeveloperMode) {
+    return null;
+  }
 
   return (
     <div ref={popoverRef} className="fixed bottom-20 sm:bottom-5 right-3 sm:right-5 z-50 select-none">
@@ -450,15 +460,29 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
 
           {/* Quick Workspace Navigation & Sign Out Footer */}
           <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs shrink-0">
-            <button
-              type="button"
-              disabled={switchingTo !== null}
-              onClick={handleLogout}
-              className="text-slate-500 hover:text-rose-600 font-bold flex items-center gap-1 text-[11px]"
-            >
-              <LogOut className="w-3 h-3" />
-              <span>Sign Out (Guest)</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={switchingTo !== null}
+                onClick={handleLogout}
+                className="text-slate-500 hover:text-rose-600 font-bold flex items-center gap-1 text-[11px]"
+              >
+                <LogOut className="w-3 h-3" />
+                <span>Sign Out</span>
+              </button>
+              <span className="text-slate-300">&bull;</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  setDeveloperMode(false);
+                }}
+                className="text-slate-500 hover:text-amber-600 font-bold text-[11px]"
+                title="Turn off developer option and hide this switcher"
+              >
+                Hide Switcher
+              </button>
+            </div>
 
             <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

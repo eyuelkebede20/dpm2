@@ -45,4 +45,21 @@ describe("Health Check API Route - GET /api/health", () => {
     expect(data.database).toBe("disconnected");
     expect(data.error).toBe("Connection refused");
   });
+
+  it("masks internal database errors in production environment", async () => {
+    const origEnv = process.env.NODE_ENV;
+    try {
+      (process.env as any).NODE_ENV = "production";
+      vi.mocked(pool.connect).mockRejectedValue(
+        new Error("FATAL: password authentication failed for user postgres at 10.0.0.5:5432")
+      );
+
+      const res = await GET();
+      expect(res.status).toBe(503);
+      const data = await res.json();
+      expect(data.error).toBe("Database service unavailable");
+    } finally {
+      (process.env as any).NODE_ENV = origEnv;
+    }
+  });
 });

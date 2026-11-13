@@ -90,6 +90,11 @@ export function PlanningClient({
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Set of product IDs that already have a plan (rule: max 1 plan per product)
+  const plannedProductIds = useMemo(() => {
+    return new Set(plans.map((p) => p.productId));
+  }, [plans]);
+
   // Lines available for create modal
   const createAvailableLines = useMemo(() => {
     if (!createFactoryId) return lines;
@@ -193,7 +198,19 @@ export function PlanningClient({
     const fId = selectedFactoryId !== "all" ? selectedFactoryId : factories[0]?.id || "";
     setCreateFactoryId(fId);
     const available = lines.filter((l) => !fId || l.factoryId === fId);
-    setCreateLineId(available[0]?.id || "");
+    const defaultLineId = available[0]?.id || "";
+    setCreateLineId(defaultLineId);
+
+    // Auto-select first product that does not already have an active plan
+    const linkedIds = lineProducts
+      .filter((lp) => lp.lineId === defaultLineId)
+      .map((lp) => lp.productId);
+    const candidateProds = linkedIds.length > 0
+      ? products.filter((p) => linkedIds.includes(p.id))
+      : products;
+    const availableProd = candidateProds.find((p) => !plannedProductIds.has(p.id));
+    setCreateProductId(availableProd?.id || "");
+
     setCreateQty(10000);
     setCreateError(null);
     setCreateModalOpen(true);
@@ -208,6 +225,10 @@ export function PlanningClient({
     }
     if (!createProductId) {
       setCreateError("Please select a product.");
+      return;
+    }
+    if (plannedProductIds.has(createProductId)) {
+      setCreateError("A production plan already exists for this product. Only one plan per product is allowed.");
       return;
     }
     if (createStartDate > createEndDate) {
@@ -263,6 +284,10 @@ export function PlanningClient({
     e.preventDefault();
     if (!editLineId || !editProductId) {
       setEditError("Line and product are required.");
+      return;
+    }
+    if (plans.some((p) => p.productId === editProductId && p.id !== editPlanId)) {
+      setEditError("Another production plan already exists for this product. Only one plan per product is allowed.");
       return;
     }
     if (editStartDate > editEndDate) {
@@ -680,7 +705,18 @@ export function PlanningClient({
                 <select
                   aria-label="Production Line"
                   value={createLineId}
-                  onChange={(e) => setCreateLineId(e.target.value)}
+                  onChange={(e) => {
+                    const newLineId = e.target.value;
+                    setCreateLineId(newLineId);
+                    const linkedIds = lineProducts
+                      .filter((lp) => lp.lineId === newLineId)
+                      .map((lp) => lp.productId);
+                    const candidateProds = linkedIds.length > 0
+                      ? products.filter((p) => linkedIds.includes(p.id))
+                      : products;
+                    const availableProd = candidateProds.find((p) => !plannedProductIds.has(p.id));
+                    setCreateProductId(availableProd?.id || "");
+                  }}
                   className="select select-sm select-bordered w-full rounded-xl text-xs font-bold"
                 >
                   <option value="">Select Production Line</option>
@@ -694,9 +730,14 @@ export function PlanningClient({
 
               {/* Product selection */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Product
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">
+                    Product
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    (1 plan per product)
+                  </span>
+                </div>
                 <select
                   aria-label="Product"
                   value={createProductId}
@@ -704,12 +745,20 @@ export function PlanningClient({
                   className="select select-sm select-bordered w-full rounded-xl text-xs font-bold"
                 >
                   <option value="">Select Product</option>
-                  {createAvailableProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.sku ? `(${p.sku})` : ""}
-                    </option>
-                  ))}
+                  {createAvailableProducts.map((p) => {
+                    const hasPlan = plannedProductIds.has(p.id);
+                    return (
+                      <option key={p.id} value={p.id} disabled={hasPlan}>
+                        {p.name} {p.sku ? `(${p.sku})` : ""}{hasPlan ? " — [Plan Already Exists]" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
+                {createProductId && plannedProductIds.has(createProductId) && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1">
+                    A plan already exists for this product. Only one plan per product is allowed.
+                  </p>
+                )}
               </div>
 
               {/* Date pickers respecting Sys Admin calendarSystem */}
@@ -821,21 +870,34 @@ export function PlanningClient({
 
               {/* Product selection */}
               <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Product
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-700">
+                    Product
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    (1 plan per product)
+                  </span>
+                </div>
                 <select
                   aria-label="Product"
                   value={editProductId}
                   onChange={(e) => setEditProductId(e.target.value)}
                   className="select select-sm select-bordered w-full rounded-xl text-xs font-bold"
                 >
-                  {editAvailableProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} {p.sku ? `(${p.sku})` : ""}
-                    </option>
-                  ))}
+                  {editAvailableProducts.map((p) => {
+                    const hasOtherPlan = plannedProductIds.has(p.id) && p.id !== editPlanRecord?.productId;
+                    return (
+                      <option key={p.id} value={p.id} disabled={hasOtherPlan}>
+                        {p.name} {p.sku ? `(${p.sku})` : ""}{hasOtherPlan ? " — [Plan Already Exists]" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
+                {editProductId && plannedProductIds.has(editProductId) && editProductId !== editPlanRecord?.productId && (
+                  <p className="text-[11px] text-rose-600 font-semibold mt-1">
+                    Another plan already exists for this product. Only one plan per product is allowed.
+                  </p>
+                )}
               </div>
 
               {/* Date pickers */}

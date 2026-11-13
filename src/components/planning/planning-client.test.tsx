@@ -167,12 +167,12 @@ describe("PlanningClient Unit & Interaction Tests", () => {
 
     expect(screen.getByRole("heading", { name: /create production plan/i })).toBeDefined();
 
-    // Fill line and product
+    // Fill line and product (prod_2: Denim Jeans, which does not have an existing plan)
     const lineSelect = screen.getByRole("combobox", { name: "Production Line" });
-    fireEvent.change(lineSelect, { target: { value: "line_1" } });
+    fireEvent.change(lineSelect, { target: { value: "line_2" } });
 
     const prodSelect = screen.getByRole("combobox", { name: "Product" });
-    fireEvent.change(prodSelect, { target: { value: "prod_1" } });
+    fireEvent.change(prodSelect, { target: { value: "prod_2" } });
 
     // Submit form
     const submitBtn = screen.getByRole("button", { name: /save production plan/i });
@@ -181,12 +181,42 @@ describe("PlanningClient Unit & Interaction Tests", () => {
     await waitFor(() => {
       expect(planActions.createPlanAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          lineId: "line_1",
-          productId: "prod_1",
+          lineId: "line_2",
+          productId: "prod_2",
           plannedQty: 10000,
         })
       );
     });
+  });
+
+  it("enforces rule: disables products that already have a plan and blocks creating duplicate plan for same product", async () => {
+    renderPlanning({ canManagePlans: true, userRole: "om" });
+
+    const newBtn = screen.getByRole("button", { name: /new production plan/i });
+    fireEvent.click(newBtn);
+
+    const lineSelect = screen.getByRole("combobox", { name: "Production Line" });
+    const prodSelect = screen.getByRole("combobox", { name: "Product" }) as HTMLSelectElement;
+
+    // For line_1, prod_1 (Polo T-Shirt) already has plan_1 -> must be marked and disabled
+    const poloOption = Array.from(prodSelect.options).find((o) => o.value === "prod_1");
+    expect(poloOption?.disabled).toBe(true);
+    expect(poloOption?.textContent).toContain("Plan Already Exists");
+
+    // Switch to line_2: prod_2 (Denim Jeans) does not have a plan -> enabled
+    fireEvent.change(lineSelect, { target: { value: "line_2" } });
+    const denimOption = Array.from(prodSelect.options).find((o) => o.value === "prod_2");
+    expect(denimOption?.disabled).toBe(false);
+    expect(denimOption?.textContent).not.toContain("Plan Already Exists");
+
+    // Switch back to line_1: if somehow prod_1 is submitted, client validation blocks it
+    fireEvent.change(lineSelect, { target: { value: "line_1" } });
+    fireEvent.change(prodSelect, { target: { value: "prod_1" } });
+    const submitBtn = screen.getByRole("button", { name: /save production plan/i });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText(/A production plan already exists for this product. Only one plan per product is allowed./i)).toBeDefined();
+    expect(planActions.createPlanAction).not.toHaveBeenCalled();
   });
 
   it("opens, edits, and submits 'Edit Production Plan' modal via Edit button", async () => {

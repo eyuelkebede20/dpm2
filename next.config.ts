@@ -5,7 +5,7 @@ export default function nextConfigFunction(phase: string): NextConfig {
   const isDev = phase === PHASE_DEVELOPMENT_SERVER;
 
   return {
-    output: process.env.NEXT_OUTPUT === "standalone" || process.platform !== "win32" ? "standalone" : undefined,
+    output: "standalone",
     distDir: isDev ? ".next-dev" : ".next",
     poweredByHeader: false,
     serverExternalPackages: ["better-auth", "pg"],

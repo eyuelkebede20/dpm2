@@ -187,6 +187,26 @@ describe("Button Interaction Tests - AdminClient", { timeout: 20000 }, () => {
     });
   });
 
+  it("renders Developer Option switch under Industry Profile Settings and toggles state", () => {
+    renderAdmin();
+
+    const profileTab = screen.getByRole("button", { name: /industry profile settings/i });
+    fireEvent.click(profileTab);
+
+    expect(screen.getByText(/Developer Option: Role Switcher/i)).toBeDefined();
+    const devSwitch = screen.getByRole("switch", { name: /Toggle Developer Option in Admin/i });
+    expect(devSwitch).toBeDefined();
+    expect(devSwitch.getAttribute("aria-checked")).toBe("false");
+
+    // Toggle on
+    fireEvent.click(devSwitch);
+    expect(devSwitch.getAttribute("aria-checked")).toBe("true");
+
+    // Toggle off
+    fireEvent.click(devSwitch);
+    expect(devSwitch.getAttribute("aria-checked")).toBe("false");
+  });
+
   it("does not render impersonation controls in sys admin as role switcher is enabled", () => {
     renderAdmin();
 

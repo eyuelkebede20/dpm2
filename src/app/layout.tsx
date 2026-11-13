@@ -50,10 +50,12 @@ export default async function RootLayout({
           )}
           {user && <Navbar user={user} />}
           <main className="flex-1 pb-16 md:pb-0">{children}</main>
-          <RoleSwitcher
-            currentRole={user?.role || null}
-            currentEmail={user?.email || null}
-          />
+          {user && user.role === "sys_admin" && (
+            <RoleSwitcher
+              currentRole={user.role}
+              currentEmail={user.email}
+            />
+          )}
         </PwaOtaManager>
       </body>
     </html>

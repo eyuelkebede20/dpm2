@@ -69,11 +69,15 @@ export function NotificationsDropdown({ userRole }: NotificationsDropdownProps) 
   };
 
   useEffect(() => {
-    fetchNotifications();
+    // Defer initial notification poll slightly so it does not compete with immediate page transition
+    const timeout = setTimeout(fetchNotifications, 200);
 
     // Poll periodically every 45s for new report submissions
     const interval = setInterval(fetchNotifications, 45000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, []);
 
   // Handle click outside to close dropdown

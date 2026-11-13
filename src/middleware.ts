@@ -13,18 +13,25 @@ import { logSecurityEvent } from "@/lib/security";
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    "127.0.0.1";
 
-  // 1. Hard lockout of developer test routes in production
-  if (pathname.startsWith("/api/dev") && process.env.NODE_ENV === "production") {
+  // Prioritize Cloudflare edge connecting IP (tamper-proof when behind Cloudflare proxy)
+  const cfIp = req.headers.get("cf-connecting-ip")?.trim();
+  const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  const ip = cfIp || forwardedFor || realIp || "127.0.0.1";
+
+  // 1. Hard lockout of developer test & database seeding routes in production
+  const isDevOrSeedRoute =
+    pathname.startsWith("/api/dev") ||
+    pathname.startsWith("/api/seed") ||
+    pathname.startsWith("/api/seed-db");
+
+  if (isDevOrSeedRoute && process.env.NODE_ENV === "production") {
     logSecurityEvent({
       event: "SUSPICIOUS_PAYLOAD_BLOCKED",
       ip,
       endpoint: pathname,
-      details: { reason: "Attempted to access dev routes in production" },
+      details: { reason: "Attempted to access dev/seeding routes in production" },
     });
     return new NextResponse("Not Found", { status: 404 });
   }

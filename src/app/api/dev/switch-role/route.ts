@@ -16,27 +16,15 @@ const DEFAULT_ROUTES: Record<string, string> = {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const isDev = process.env.NODE_ENV !== "production";
-  const enabled = process.env.ENABLE_DEV_IMPERSONATION === "true" || isDev;
-
-  if (!enabled) {
-    return NextResponse.json({ enabled: false }, { status: 403 });
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { enabled: false, error: "Dev role switcher is strictly disabled in production" },
+      { status: 403 }
+    );
   }
 
   try {
-    const allUsers = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-        active: users.active,
-      })
-      .from(users)
-      .where(eq(users.active, true))
-      .orderBy(users.role, users.name);
-
-    // Get current session if available
+    // Strict Access Control: Only authenticated sys_admin can view dev user list
     let currentUser = null;
     try {
       const reqHeaders = await headers();
@@ -51,6 +39,25 @@ export async function GET() {
       }
     } catch {}
 
+    if (!currentUser || currentUser.role !== "sys_admin") {
+      return NextResponse.json(
+        { enabled: false, error: "Forbidden: Only authenticated System Administrators can access developer switch role" },
+        { status: 403 }
+      );
+    }
+
+    const allUsers = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        active: users.active,
+      })
+      .from(users)
+      .where(eq(users.active, true))
+      .orderBy(users.role, users.name);
+
     return NextResponse.json({
       enabled: true,
       currentUser,
@@ -63,17 +70,31 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const isDev = process.env.NODE_ENV !== "production";
-  const enabled = process.env.ENABLE_DEV_IMPERSONATION === "true" || isDev;
-
-  if (!enabled) {
+  if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
-      { error: "Dev role switcher is disabled in this environment" },
+      { error: "Dev role switcher is strictly disabled in production" },
       { status: 403 }
     );
   }
 
   try {
+    // Strict Access Control: Only authenticated sys_admin can switch developer roles
+    let callerRole: string | null = null;
+    try {
+      const reqHeaders = await headers();
+      const session = await auth.api.getSession({ headers: reqHeaders });
+      if (session?.user) {
+        callerRole = (session.user as any).role || null;
+      }
+    } catch {}
+
+    if (callerRole !== "sys_admin") {
+      return NextResponse.json(
+        { error: "Forbidden: Only authenticated System Administrators can switch developer roles" },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { role, userId, targetRoute } = body;
 
@@ -121,9 +142,10 @@ export async function POST(req: NextRequest) {
     });
 
     // Better Auth signs cookies using HMAC SHA-256 with BETTER_AUTH_SECRET
-    const secret =
-      process.env.BETTER_AUTH_SECRET ||
-      "dpm_secret_key_random_at_least_32_characters_long_12345";
+    const secret = process.env.BETTER_AUTH_SECRET;
+    if (!secret) {
+      throw new Error("BETTER_AUTH_SECRET environment variable is missing");
+    }
     const signature = crypto
       .createHmac("sha256", secret)
       .update(token)
@@ -134,7 +156,7 @@ export async function POST(req: NextRequest) {
     const cookieStore = await cookies();
     cookieStore.set("dpm.session_token", signedToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: (process.env.NODE_ENV as string) === "production",
       sameSite: "lax",
       path: "/",
       expires: expiresAt,
@@ -165,6 +187,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { error: "Dev role switcher is strictly disabled in production" },
+      { status: 403 }
+    );
+  }
   try {
     const cookieStore = await cookies();
     cookieStore.delete("dpm.session_token");

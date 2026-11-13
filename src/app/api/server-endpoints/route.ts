@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerEndpointsAction, createServerEndpointAction } from "@/actions/server-endpoint-actions";
+import {
+  getServerEndpointsAction,
+  createServerEndpointAction,
+} from "@/actions/server-endpoint-actions";
+import { requireUser } from "@/lib/authz";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +45,29 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    let user;
+    try {
+      user = await requireUser();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized: Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    if (user.role !== "sys_admin") {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Only Sys Admin can manage server presets" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
     const result = await createServerEndpointAction(body);
 
     if (!result.success) {
-      return NextResponse.json(result, { status: 400 });
+      const status = result.error?.includes("Forbidden") ? 403 : 400;
+      return NextResponse.json(result, { status });
     }
 
     return NextResponse.json(result, { status: 201 });

@@ -33,7 +33,10 @@ import {
   Trash2,
   Edit3,
   DownloadCloud,
+  Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
+import { useDeveloperMode } from "@/hooks/use-developer-mode";
 import { SystemUpdater } from "@/components/admin/system-updater";
 import {
   createServerEndpointAction,
@@ -124,6 +127,7 @@ export function AdminClient({
 }: AdminClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"roles" | "profile" | "servers" | "system">("roles");
+  const { isDeveloperMode, setDeveloperMode } = useDeveloperMode(true);
 
   // Server Endpoints State
   const [serverEndpointsList, setServerEndpointsList] = useState<ServerEndpointItem[]>(
@@ -1045,6 +1049,61 @@ export function AdminClient({
               )}
             </button>
           </form>
+
+          {/* Developer Mode & Tooling Settings Card */}
+          <div className="pt-6 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/60 to-slate-50/50 shadow-2xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm text-slate-900">
+                      Developer Option: Role Switcher (የደቨሎፐር ሚና መቀየሪያ)
+                    </span>
+                    <span
+                      className={`badge badge-xs font-bold uppercase text-[9px] ${
+                        isDeveloperMode
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                          : "bg-slate-200 text-slate-600 border-slate-300"
+                      }`}
+                    >
+                      {isDeveloperMode ? "ON" : "OFF"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                    When turned on, displays the floating role-switching icon to test OM, FM, QA, and Sys Admin personas. Strictly hidden from all other users.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isDeveloperMode}
+                aria-label="Toggle Developer Option in Admin"
+                onClick={() => {
+                  const next = !isDeveloperMode;
+                  setDeveloperMode(next);
+                  if (next) {
+                    toast.success("Developer Option turned ON: Role switcher icon is now visible");
+                  } else {
+                    toast.info("Developer Option turned OFF: Role switcher icon is hidden");
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
+                  isDeveloperMode ? "bg-indigo-600" : "bg-slate-300"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    isDeveloperMode ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

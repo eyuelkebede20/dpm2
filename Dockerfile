@@ -17,6 +17,7 @@ COPY . .
 ENV BETTER_AUTH_SECRET="build-dummy-secret-32-chars-long-prod"
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NEXT_OUTPUT="standalone"
 RUN --mount=type=cache,target=/app/.next/cache \
     pnpm exec next build
 

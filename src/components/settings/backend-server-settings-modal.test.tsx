@@ -171,6 +171,54 @@ describe("BackendServerSettingsModal - Interactive & Accessibility Audit", () =>
     expect(screen.getByPlaceholderText(/Workshop 02 LAN/i)).toBeDefined();
   });
 
+  it("does not render Developer Options section when isAdmin is false", () => {
+    render(<BackendServerSettingsModal isOpen={true} onClose={mockClose} isAdmin={false} />);
+    expect(screen.queryByText(/Developer Options/i)).toBeNull();
+    expect(screen.queryByRole("switch", { name: /Toggle Developer Option/i })).toBeNull();
+  });
+
+  it("renders Developer Options switch for sys_admin and toggles developer mode", () => {
+    render(<BackendServerSettingsModal isOpen={true} onClose={mockClose} isAdmin={true} />);
+
+    expect(screen.getByText(/Developer Options/i)).toBeDefined();
+    const devSwitch = screen.getByRole("switch", { name: /Toggle Developer Option/i });
+    expect(devSwitch).toBeDefined();
+    expect(devSwitch.getAttribute("aria-checked")).toBe("false");
+
+    // Toggle on
+    fireEvent.click(devSwitch);
+    expect(devSwitch.getAttribute("aria-checked")).toBe("true");
+
+    // Toggle off
+    fireEvent.click(devSwitch);
+    expect(devSwitch.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("renders PWA download section with action button and toggles device installation instructions", () => {
+    render(<BackendServerSettingsModal isOpen={true} onClose={mockClose} />);
+
+    // Section title
+    expect(screen.getByText(/Download App \(PWA\)/i)).toBeDefined();
+
+    // Download / Install button
+    const downloadBtn = screen.getByTestId("download-pwa-button");
+    expect(downloadBtn).toBeDefined();
+
+    // Toggle device instructions guide
+    const guideToggle = screen.getByRole("button", {
+      name: /How to install on iOS, Android, and Desktop/i,
+    });
+    expect(guideToggle).toBeDefined();
+
+    fireEvent.click(guideToggle);
+    expect(screen.getByText(/iOS \/ iPhone/i)).toBeDefined();
+    expect(screen.getAllByText(/Android/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Desktop PC/i)).toBeDefined();
+
+    // Clicking download button triggers feedback or install
+    fireEvent.click(downloadBtn);
+  });
+
   it("closes on Escape key press", () => {
     render(<BackendServerSettingsModal isOpen={true} onClose={mockClose} />);
 

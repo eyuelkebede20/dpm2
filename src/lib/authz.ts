@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -55,8 +56,9 @@ export interface ResourceContext {
  * Server-side helper to retrieve the authenticated session user.
  * Supports Dev Impersonation for Sys Admin when enabled.
  * Throws or returns null if not authenticated.
+ * Memoized per-request using React cache() to prevent redundant DB calls during page navigation.
  */
-export async function requireUser(): Promise<SessionUser> {
+export const requireUser = cache(async function requireUser(): Promise<SessionUser> {
   const reqHeaders = await headers();
   const session = await auth.api.getSession({
     headers: reqHeaders,
@@ -116,12 +118,13 @@ export async function requireUser(): Promise<SessionUser> {
     active: rawUser.active ?? true,
     mustChangePassword: rawUser.mustChangePassword ?? false,
   };
-}
+});
 
 /**
  * Gets session details including impersonation status if Sys Admin.
+ * Memoized per-request using React cache().
  */
-export async function getSessionContext(): Promise<{
+export const getSessionContext = cache(async function getSessionContext(): Promise<{
   user: SessionUser | null;
   rawAdminUser: SessionUser | null;
   isImpersonating: boolean;
@@ -205,7 +208,7 @@ export async function getSessionContext(): Promise<{
   } catch {
     return { user: null, rawAdminUser: null, isImpersonating: false };
   }
-}
+});
 
 /**
  * Pure authorization check: can(user, action, resource)

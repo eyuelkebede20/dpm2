@@ -16,8 +16,15 @@ import {
   RotateCcw,
   X,
   Radio,
+  Sparkles,
+  Download,
+  Smartphone,
+  Laptop,
+  HelpCircle,
 } from "lucide-react";
+import { useDeveloperMode } from "@/hooks/use-developer-mode";
 import { useBackendServer } from "@/hooks/use-backend-server";
+import { usePwaOtaContext } from "@/components/pwa/pwa-ota-manager";
 import {
   ServerEndpoint,
   validateServerUrl,
@@ -36,6 +43,7 @@ export function BackendServerSettingsModal({
   onClose,
   isAdmin = false,
 }: BackendServerSettingsModalProps) {
+  const { isDeveloperMode, setDeveloperMode } = useDeveloperMode(isAdmin);
   const {
     activeUrl,
     isCustom,
@@ -55,6 +63,36 @@ export function BackendServerSettingsModal({
   const [customInput, setCustomInput] = useState<string>("");
   const [isCustomMode, setIsCustomMode] = useState<boolean>(false);
   const [switching, setSwitching] = useState<boolean>(false);
+
+  // PWA installation & standalone detection
+  const pwa = usePwaOtaContext();
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+  const [showInstallGuide, setShowInstallGuide] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isStandaloneMode =
+        window.matchMedia("(display-mode: standalone)").matches ||
+        Boolean((window.navigator as any).standalone);
+      setIsStandalone(Boolean(isStandaloneMode));
+    }
+  }, []);
+
+  const handleDownloadPwa = async () => {
+    if (isStandalone) {
+      toast.success("DPM is already installed and running as a standalone app! (አፕሊኬሽኑ አስቀድሞ ተጭኗል)");
+      return;
+    }
+    if (pwa.isInstallable) {
+      const outcome = await pwa.promptInstall();
+      if (outcome) {
+        toast.success("DPM installation accepted!");
+      }
+    } else {
+      setShowInstallGuide((prev) => !prev);
+      toast.info("Follow the instructions below to install DPM on your device.");
+    }
+  };
 
   // Admin inline add preset state
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
@@ -244,6 +282,163 @@ export function BackendServerSettingsModal({
                 <RotateCcw className="w-3 h-3" />
                 <span>Reset Host</span>
               </button>
+            )}
+          </div>
+
+          {/* Admin Developer Option Section */}
+          {isAdmin && (
+            <div className="rounded-2xl p-4 border border-indigo-100 bg-gradient-to-r from-indigo-50/70 to-slate-50 border-indigo-200/80 shadow-2xs">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                        Developer Options (የደቨሎፐር ምርጫዎች)
+                      </span>
+                      <span
+                        className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full border ${
+                          isDeveloperMode
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        {isDeveloperMode ? "ON" : "OFF"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                      Enable floating role switcher to simulate Sys Admin, OM, FM, and QA accounts.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isDeveloperMode}
+                  aria-label="Toggle Developer Option"
+                  onClick={() => {
+                    const next = !isDeveloperMode;
+                    setDeveloperMode(next);
+                    if (next) {
+                      toast.success("Developer Option turned ON: Role switcher icon is now visible");
+                    } else {
+                      toast.info("Developer Option turned OFF: Role switcher icon is hidden");
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
+                    isDeveloperMode ? "bg-indigo-600" : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      isDeveloperMode ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Section: Download / Install App (PWA) */}
+          <div className="rounded-2xl p-4 border border-emerald-100 bg-gradient-to-r from-emerald-50/70 to-teal-50/40 border-emerald-200/80 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                      Download App (PWA) / አፕሊኬሽኑን ጫን
+                    </span>
+                    {isStandalone ? (
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full border bg-emerald-100 text-emerald-800 border-emerald-300 flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        Installed
+                      </span>
+                    ) : pwa.isInstallable ? (
+                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
+                        Ready to Install
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
+                    {isStandalone
+                      ? "DPM is currently running as a standalone installed application on this device."
+                      : "Install DPM to your home screen or desktop for fast offline performance."}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                data-testid="download-pwa-button"
+                onClick={handleDownloadPwa}
+                className={`btn btn-sm rounded-xl font-extrabold text-xs shrink-0 flex items-center gap-1.5 shadow-xs transition-all ${
+                  isStandalone
+                    ? "btn-outline border-emerald-300 text-emerald-800 bg-white/80 hover:bg-white"
+                    : "text-white bg-emerald-600 hover:bg-emerald-700 border-emerald-600"
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{isStandalone ? "Installed" : "Download App"}</span>
+              </button>
+            </div>
+
+            {/* Expandable Device Installation Guide */}
+            {(showInstallGuide || !isStandalone) && (
+              <div className="pt-2 border-t border-emerald-100/80">
+                <button
+                  type="button"
+                  onClick={() => setShowInstallGuide((prev) => !prev)}
+                  className="w-full flex items-center justify-between text-left text-[11px] font-bold text-emerald-900 hover:text-emerald-950 transition-colors py-1"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>How to install on iOS, Android, and Desktop (የመጫኛ መመሪያ)</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-700 font-mono">
+                    {showInstallGuide ? "Hide Guide ▲" : "Show Guide ▼"}
+                  </span>
+                </button>
+
+                {showInstallGuide && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-2 pt-1 animate-in fade-in duration-150">
+                    <div className="bg-white/95 rounded-xl p-3 border border-emerald-100 shadow-2xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>iOS / iPhone</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        Open in Safari, tap <strong>Share</strong> (⎋), then choose <strong>&quot;Add to Home Screen&quot;</strong> (+).
+                      </p>
+                    </div>
+
+                    <div className="bg-white/95 rounded-xl p-3 border border-emerald-100 shadow-2xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                        <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Android</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        Open in Chrome, tap <strong>Menu (⋮)</strong>, and select <strong>&quot;Install app&quot;</strong> or <strong>&quot;Add to Home&quot;</strong>.
+                      </p>
+                    </div>
+
+                    <div className="bg-white/95 rounded-xl p-3 border border-emerald-100 shadow-2xs space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
+                        <Laptop className="w-3.5 h-3.5 text-slate-700" />
+                        <span>Desktop PC</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-snug">
+                        In Chrome or Edge, click the <strong>Install (⊕)</strong> icon inside the URL address bar or browser menu.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

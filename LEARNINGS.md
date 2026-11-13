@@ -778,6 +778,112 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
    - Component tests for `<SystemUpdater />` with mock timers/intervals verifying confirmation modal, trigger execution, terminal log streaming, health polling, and failure recovery (`src/components/admin/system-updater.test.tsx`).
    - Integration test for SysAdmin navigation tab (`src/app/admin/admin-client.test.tsx`).
 
+---
+
+## 2026-11-13 — Developer Option Toggle & Strict Role Switcher Lockout for System Administrator
+
+**Goal:** Ensure the floating role-switching tool (`RoleSwitcher`) is strictly restricted to authenticated System Administrators (`sys_admin`) who have explicitly enabled the "Developer Option" in Settings, hiding the button/icon completely from all other users, unauthenticated guests, and when disabled.
+
+### Architecture & Access Control Decisions
+
+1. **Triple-Gate Defense-in-Depth:**
+   - **Gate 1 (Server & Layout `src/app/layout.tsx`):** `RoleSwitcher` is only rendered when `user && user.role === "sys_admin"`. Unauthenticated guests and non-sysadmin roles (OM, FM, QA) never have the component mounted into HTML/DOM.
+   - **Gate 2 (Client & Hook `src/components/role-switcher.tsx` & `src/hooks/use-developer-mode.ts`):** Client-side check validates both `isSysAdmin` and `isDeveloperMode`. If either is false, `RoleSwitcher` immediately returns `null`.
+   - **Gate 3 (Backend API `src/app/api/dev/switch-role/route.ts`):** Both `GET` and `POST` verify the active session belongs to an authenticated user with `role === "sys_admin"`. Unauthorized requests are rejected with HTTP 403 Forbidden.
+
+2. **Settings Section Integration:**
+   - **Global Settings Modal (`BackendServerSettingsModal`):** Added a dedicated "Developer Options (የደቨሎፐር ምርጫዎች)" card visible strictly when `isAdmin={true}`. Features an accessible toggle switch (`role="switch"`, `aria-checked`), badge indicator, and toast notifications.
+   - **Admin Portal Settings (`src/app/admin/admin-client.tsx`):** Added the Developer Option switch in the "Industry Profile Settings" tab for seamless configuration from within the Admin Portal.
+   - **In-Switcher Quick Dismiss:** Added a "Hide Switcher" button in the `RoleSwitcher` drawer footer to allow quick one-click deactivation.
+
+3. **Persistence & Synchronization:**
+   - Shared preference store in `src/lib/developer-mode.ts` using `localStorage` (`dpm_developer_mode_enabled`) and cookie fallback (`dpm_developer_mode`).
+   - Cross-tab and in-page event dispatching (`dpm:developer-mode-changed`) so toggling in settings immediately updates the switcher on the page without requiring a page refresh.
+
+### Edge cases & gotchas discovered
+
+- In JSDOM / headless test environments, assigning `document.cookie = ""` does not delete existing cookies unless an expired date (`expires=Thu, 01 Jan 1970 00:00:00 GMT` / `max-age=0`) is explicitly provided. Updated `setDeveloperModeActive(false)` to always write the expired date header to guarantee clean cookie deletion.
+- Non-sysadmin users opening settings must never see the Developer Options toggle, preventing accidental or unauthorized discovery.
+
+### Verification & Tests Passing
+
+- `src/lib/developer-mode.test.ts` (5 tests): verifies storage persistence, cookie deletion, non-sysadmin lockout, and toggle behavior.
+- `src/components/role-switcher.test.tsx` (7 tests): verifies strict unmount when user is guest, OM, FM, QA, or when dev option is OFF; verifies FAB display when sysadmin has dev mode ON; verifies drawer interactions and role switching.
+- `src/components/settings/backend-server-settings-modal.test.tsx` (10 tests): verifies developer option toggle is hidden from non-admins, displayed for sysadmin, and toggles preference.
+- `src/app/admin/admin-client.test.tsx` (11 tests): verifies developer option card under Industry Profile Settings.
+- `src/app/api/dev/switch-role/route.test.ts` (9 tests): verifies 403 Forbidden for non-sysadmin users on GET and POST.
+- `src/components/navbar.test.tsx` (16 tests): all passing with zero regressions.
+
+---
+
+## 2026-11-13 — Master Production Planning: Ethiopian/Amharic Calendar Shift & Strict 1 Plan Per Product Rule
+
+**Goal:** Fix Ethiopian calendar month index mapping in `PlanDatePicker` (resolving Hamle/Nehase month mixing and day count clamping) and enforce a strict 1-plan-per-product business constraint across backend actions and frontend planning UI.
+
+### Root Cause Analysis & Calendar Math
+
+1. **1-Indexed Month Array Mapping:**
+   - In `src/lib/ethiopian-calendar.ts`, `ETH_MONTH_NAMES_AM` and `ETH_MONTH_NAMES_EN` are 1-indexed (index 0 is `""`, indices 1..13 are Meskerem through Pagume).
+   - In `src/components/planning/plan-date-picker.tsx`, `ETH_MONTH_NAMES_AM.map((amName, idx) => ...)` mapped `idx = 0..13` with `mNum = idx + 1`. This caused every month name to be shifted by +1:
+     - Hamle (index 11) was mapped with `mNum = 12` (Nehase).
+     - Nehase (index 12) was mapped with `mNum = 13` (Pagume).
+     - When Nehase was selected, the component treated it as Pagume (month 13), which only has 5 or 6 days! This clamped Nehase 30 to Pagume 5/6, corrupting the date range calculations.
+   - **Fix:** Switched to explicit 1-based indexing using `Array.from({ length: 13 }, (_, i) => i + 1)`, correctly mapping month 11 to Hamle (30 days) and month 12 to Nehase (30 days).
+
+2. **Conversion Accuracy Verification:**
+   - Hamle 1, 2018 E.C. correctly converts to Gregorian `2026-07-08`.
+   - Nehase 30, 2018 E.C. correctly converts to Gregorian `2026-09-05`.
+   - The arithmetic in `ethToGregorian` and `gregorianToEth` was verified as 100% correct; the issue was purely UI index alignment in the select options.
+
+### Strict 1 Plan Per Product Architecture
+
+1. **Backend Database & Server Action Guard (`src/actions/plan-actions.ts`):**
+   - In `createPlanAction`: Checks `db.query.plans.findFirst({ where: eq(plans.productId, data.productId) })`. If a plan exists, rejects with an error: `"A production plan already exists for this product. Only one plan per product is allowed."`
+   - In `updatePlanAction`: Validates `and(eq(plans.productId, data.productId), ne(plans.id, data.id))`. Rejects any attempt to reassign a plan to a product that is already planned.
+   - Preserves RBAC enforcement: Factory Managers (`fm`) can only create/update plans for their assigned factory (`factoryId`), while Operation Managers (`om`) and System Administrators (`sys_admin`) have multi-factory jurisdiction.
+
+2. **Frontend UI Enforcement (`src/components/planning/planning-client.tsx`):**
+   - `plannedProductIds`: Memoized `Set<string>` containing all product IDs that currently have a plan.
+   - **Create Modal:**
+     - Disables products in the `<select>` dropdown that already have a plan, appending `— [Plan Already Exists]` to their label.
+     - Auto-selects the first available *unplanned* product when a line/factory is picked.
+     - Form submit validation prevents submission if `plannedProductIds.has(createProductId)`.
+   - **Edit Modal:**
+     - Same visual indicators and validation guards ensuring an existing plan cannot be switched to another planned product.
 
 
+---
+
+## 2026-11-13 — PWA Download Button in Settings & Docker Standalone Build Resolution
+
+**Goal:** Provide an accessible, one-click "Download App (PWA)" installation button and device guidance in the Settings Modal and Navbar, and resolve the Docker container build failure (`COPY --from=build ... /app/.next/standalone: not found`).
+
+### Edge Cases & Gotchas Discovered
+
+- **Next.js Docker Standalone Output Requirements:** When Next.js builds inside a multi-stage Docker container (`Dockerfile`), the runtime stage copies `/app/.next/standalone`. If `next.config.ts` has conditional `output` or if `NEXT_OUTPUT` is not set, Next.js defaults to standard build output without generating the `.next/standalone` directory, causing Docker BuildKit to crash with `failed to calculate checksum of ref ... "/app/.next/standalone": not found`.
+  - **Fix:** Explicitly configured `output: "standalone"` directly in `next.config.ts` and set `ENV NEXT_OUTPUT="standalone"` in `Dockerfile` builder stage.
+- **PWA Installation Behavior Across Platforms:**
+  - On **Android / Chromium Desktop**, the browser fires `beforeinstallprompt`, allowing one-click native installation via `promptInstall()`.
+  - On **iOS Safari**, Apple disables `beforeinstallprompt`, requiring user action via Share (⎋) → "Add to Home Screen" (+).
+  - On **Standalone Mode** (already installed), opening the modal detects `display-mode: standalone` and displays a green badge `✓ Installed` with a confirmation toast.
+  - Adding expandable step-by-step instructions for iOS, Android, and Desktop ensures 100% device coverage.
+
+### Decision
+
+1. **`next.config.ts` & `Dockerfile`:**
+   - Updated `next.config.ts` to output `"standalone"` unconditionally.
+   - Added `ENV NEXT_OUTPUT="standalone"` to `Dockerfile` build stage.
+   - Hardened `start.sh` self-update to pull cleanly from `origin main`.
+2. **`BackendServerSettingsModal` (`src/components/settings/backend-server-settings-modal.tsx`):**
+   - Added dedicated "Download App (PWA) / አፕሊኬሽኑን ጫን" section card.
+   - Added "Download App" button with `data-testid="download-pwa-button"`.
+   - Added standalone mode detection via `window.matchMedia("(display-mode: standalone)")`.
+   - Added expandable guide with tailored instructions for iOS Safari, Android, and Desktop PC.
+3. **`Navbar` (`src/components/navbar.tsx`):**
+   - Added "Download App (PWA)" button in Desktop Profile Dropdown.
+   - Added "Download App (PWA)" button in Mobile Navigation Drawer.
+4. **Automated Verification:**
+   - `src/components/settings/backend-server-settings-modal.test.tsx`: 11/11 tests pass.
+   - `src/components/navbar.test.tsx`: 18/18 tests pass.
+   - `tsc --noEmit`: 0 errors.
 

@@ -1,0 +1,302 @@
+[
+  {
+    "verdict": "confirmed",
+    "fingerprint": "DPM-SEC-001-AUTH-CSRF-ORIGIN-REFLECTION",
+    "title": "Better-Auth Trusted Origins Reflection Allows Arbitrary Cross-Origin Requests (CSRF)",
+    "description": "The trustedOrigins handler in src/lib/auth.ts dynamically appended the client-provided Origin and Host headers directly to the allowed origins list without validation, allowing any attacker website to bypass CSRF defenses on authentication and session endpoints.",
+    "root_cause": "Dynamic reflection of unvalidated request headers into security trust decisions (OWASP A01 / Cloudflare WEB-PROTOCOL-AND-AUTH.md).",
+    "intended_behavior": "Only pre-configured, strictly allowlisted origins (BETTER_AUTH_URL, NEXT_PUBLIC_APP_URL, TRUSTED_ORIGINS) and verified local development origins in non-production environments must be accepted.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/app/api/auth/[...all]/route.ts",
+        "line": 6,
+        "scope": "GET, POST",
+        "description": "Handles authentication requests via Better-Auth handler"
+      },
+      {
+        "kind": "propagation",
+        "file": "src/lib/auth.ts",
+        "line": 14,
+        "scope": "trustedOrigins",
+        "description": "Receives untrusted Origin header from client request"
+      },
+      {
+        "kind": "sink",
+        "file": "src/lib/auth.ts",
+        "line": 25,
+        "scope": "trustedOrigins",
+        "description": "Pushes unverified origin into allowed array"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "src/lib/auth.ts",
+        "line": 25,
+        "description": "origins.push(u.origin) executed on untrusted user header input"
+      }
+    ],
+    "conditions": [
+      "Attacker creates malicious cross-site page that submits requests with credentials to /api/auth endpoints"
+    ],
+    "impact": [
+      "auth_bypass",
+      "account_takeover"
+    ],
+    "overall_severity": "high",
+    "likelihood": "high",
+    "affected_components": [
+      "src/lib/auth.ts",
+      "src/app/api/auth/[...all]/route.ts"
+    ],
+    "minimal_fix": {
+      "summary": "Enforce strict origin allowlist matching against env vars and restrict local network origins to development mode only.",
+      "source_changes": [
+        {
+          "file": "src/lib/auth.ts",
+          "line": 14,
+          "description": "Replaced origin reflection with strict allowlist validation."
+        }
+      ]
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "DPM-SEC-002-SEED-DB-UNAUTHENTICATED-DATA-WIPE",
+    "title": "Missing Authentication on Database Seeding & User Enumeration Endpoints",
+    "description": "The /api/seed-db and /api/seed endpoints allowed unauthenticated callers to dump existing user records and trigger destructive database resets via GET request (?force=true).",
+    "root_cause": "Missing authentication and authorization checks on critical database administrative functions (CWE-306 / OWASP A01).",
+    "intended_behavior": "Seeding endpoints must be hard-locked in production (403), require Sys Admin session authentication or explicit SEED_API_SECRET in development, never leak user emails, and require POST for state changes.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/app/api/seed-db/route.ts",
+        "line": 8,
+        "scope": "GET",
+        "description": "Accepts unauthenticated HTTP GET requests"
+      },
+      {
+        "kind": "propagation",
+        "file": "src/app/api/seed-db/route.ts",
+        "line": 13,
+        "scope": "GET",
+        "description": "Inspects ?force=true query parameter without verifying caller identity"
+      },
+      {
+        "kind": "sink",
+        "file": "src/app/api/seed-db/route.ts",
+        "line": 31,
+        "scope": "GET",
+        "description": "Executes seedDatabase({ reset: true }) destructively clearing tables"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "src/app/api/seed-db/route.ts",
+        "line": 31,
+        "description": "Unauthenticated caller triggers seedDatabase({ reset: true })"
+      }
+    ],
+    "conditions": [
+      "Unauthenticated network actor reaches /api/seed-db or /api/seed"
+    ],
+    "impact": [
+      "full_data_store_access",
+      "dos"
+    ],
+    "overall_severity": "critical",
+    "likelihood": "high",
+    "affected_components": [
+      "src/app/api/seed-db/route.ts",
+      "src/app/api/seed/route.ts"
+    ],
+    "minimal_fix": {
+      "summary": "Block route in production, require sys_admin auth in development, eliminate PII dump, and require POST for reset.",
+      "source_changes": [
+        {
+          "file": "src/app/api/seed-db/route.ts",
+          "line": 10,
+          "description": "Added authorizeSeeding guard enforcing production lockout and sys_admin auth."
+        }
+      ]
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "DPM-SEC-003-PUSH-DB-UNAUTHENTICATED-MIGRATION",
+    "title": "Missing Authentication on Database Schema Migration Endpoints",
+    "description": "The /api/push-db and /api/migrate-db endpoints allowed unauthenticated callers to execute Drizzle SQL migrations and exposed full database table inventories in responses.",
+    "root_cause": "Missing authentication and authorization controls on schema migration endpoints (CWE-306 / OWASP A01).",
+    "intended_behavior": "Database migrations must only be executable by authenticated Sys Admins or via verified MIGRATION_API_SECRET bearer token.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/app/api/push-db/route.ts",
+        "line": 9,
+        "scope": "GET",
+        "description": "Accepts unauthenticated HTTP GET requests"
+      },
+      {
+        "kind": "propagation",
+        "file": "src/app/api/push-db/route.ts",
+        "line": 24,
+        "scope": "GET",
+        "description": "Invokes Drizzle migrate() without checking authorization"
+      },
+      {
+        "kind": "sink",
+        "file": "src/app/api/push-db/route.ts",
+        "line": 38,
+        "scope": "GET",
+        "description": "Returns list of database tables and applied SQL migrations"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "src/app/api/push-db/route.ts",
+        "line": 24,
+        "description": "migrate(db, { migrationsFolder }) called with no credentials"
+      }
+    ],
+    "conditions": [
+      "Unauthenticated network actor reaches /api/push-db or /api/migrate-db"
+    ],
+    "impact": [
+      "limited_boundary_violation"
+    ],
+    "overall_severity": "high",
+    "likelihood": "medium",
+    "affected_components": [
+      "src/app/api/push-db/route.ts",
+      "src/app/api/migrate-db/route.ts"
+    ],
+    "minimal_fix": {
+      "summary": "Enforce sys_admin session check or MIGRATION_API_SECRET token and mask internal errors in production.",
+      "source_changes": [
+        {
+          "file": "src/app/api/push-db/route.ts",
+          "line": 13,
+          "description": "Added sys_admin and bearer token authentication check."
+        }
+      ]
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "DPM-SEC-004-RATE-LIMIT-BYPASS-IP-SPOOFING",
+    "title": "Authentication Rate Limiting Bypass via Client-Controlled X-Forwarded-For Header",
+    "description": "The edge middleware extracted client IP addresses from untrusted client-supplied headers without prioritizing Cloudflare edge-authenticated cf-connecting-ip, allowing rate limiting evasion.",
+    "root_cause": "Trusting client-controlled HTTP headers for identity and rate limiting keys (Cloudflare WEB-PROTOCOL-AND-AUTH.md).",
+    "intended_behavior": "Prioritize Cloudflare cf-connecting-ip header, which cannot be forged by clients when proxied by Cloudflare.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/middleware.ts",
+        "line": 14,
+        "scope": "middleware",
+        "description": "Receives inbound HTTP request"
+      },
+      {
+        "kind": "propagation",
+        "file": "src/middleware.ts",
+        "line": 16,
+        "scope": "middleware",
+        "description": "Extracts client IP address"
+      },
+      {
+        "kind": "sink",
+        "file": "src/middleware.ts",
+        "line": 55,
+        "scope": "middleware",
+        "description": "Supplies spoofable IP string to rate limiting bucket"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "src/middleware.ts",
+        "line": 17,
+        "description": "req.headers.get('x-forwarded-for') trusted before edge proxy headers"
+      }
+    ],
+    "conditions": [
+      "Attacker conducts credential stuffing and rotates X-Forwarded-For header values"
+    ],
+    "impact": [
+      "limited_boundary_violation"
+    ],
+    "overall_severity": "medium",
+    "likelihood": "high",
+    "affected_components": [
+      "src/middleware.ts"
+    ],
+    "minimal_fix": {
+      "summary": "Prioritize cf-connecting-ip before fallback headers and lock out seed routes in production.",
+      "source_changes": [
+        {
+          "file": "src/middleware.ts",
+          "line": 17,
+          "description": "Prioritized cf-connecting-ip header."
+        }
+      ]
+    }
+  },
+  {
+    "verdict": "confirmed",
+    "fingerprint": "DPM-SEC-005-HEALTH-INFO-DISCLOSURE",
+    "title": "Database Connection Error Message Disclosure on Unhealthy Status",
+    "description": "The /api/health endpoint returned raw database driver exception messages to unauthenticated callers upon connection failures, leaking internal connection strings, hostnames, and ports.",
+    "root_cause": "Unfiltered exception reflection in HTTP responses (OWASP A05 / CWE-209).",
+    "intended_behavior": "Mask internal database errors in production environments while logging details server-side.",
+    "trace": [
+      {
+        "kind": "entrypoint",
+        "file": "src/app/api/health/route.ts",
+        "line": 6,
+        "scope": "GET",
+        "description": "Receives health check request"
+      },
+      {
+        "kind": "propagation",
+        "file": "src/app/api/health/route.ts",
+        "line": 24,
+        "scope": "GET",
+        "description": "Database connection throws an exception"
+      },
+      {
+        "kind": "sink",
+        "file": "src/app/api/health/route.ts",
+        "line": 31,
+        "scope": "GET",
+        "description": "Reflects raw error.message in JSON response"
+      }
+    ],
+    "evidence": [
+      {
+        "file": "src/app/api/health/route.ts",
+        "line": 31,
+        "description": "error: error instanceof Error ? error.message returned to caller"
+      }
+    ],
+    "conditions": [
+      "Database connection failure occurs while unauthenticated user requests /api/health"
+    ],
+    "impact": [
+      "credential_disclosure"
+    ],
+    "overall_severity": "low",
+    "likelihood": "medium",
+    "affected_components": [
+      "src/app/api/health/route.ts"
+    ],
+    "minimal_fix": {
+      "summary": "Mask internal errors in production with 'Database service unavailable'.",
+      "source_changes": [
+        {
+          "file": "src/app/api/health/route.ts",
+          "line": 30,
+          "description": "Masked error.message in production."
+        }
+      ]
+    }
+  }
+]

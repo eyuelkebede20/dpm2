@@ -49,4 +49,46 @@ describe("Security Middleware - Rate Limiting, Headers & Request Filtering", () 
     expect(resBlocked.status).toBe(429);
     expect(resBlocked.headers.get("Retry-After")).toBeDefined();
   });
+
+  it("prioritizes cf-connecting-ip header from Cloudflare for rate limiting", () => {
+    // 15 requests under Cloudflare CF-Connecting-IP
+    for (let i = 0; i < 15; i++) {
+      const req = new NextRequest("http://localhost:3000/api/auth/sign-in", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.195",
+          "x-forwarded-for": `1.2.3.${i}`, // Attacker rotating XFF should have no effect
+        },
+      });
+      const res = middleware(req);
+      expect(res.status).toBe(200);
+    }
+
+    // 16th request from same CF IP must be blocked even if XFF changes
+    const reqBlocked = new NextRequest("http://localhost:3000/api/auth/sign-in", {
+      headers: {
+        "cf-connecting-ip": "203.0.113.195",
+        "x-forwarded-for": "9.9.9.9",
+      },
+    });
+    const resBlocked = middleware(reqBlocked);
+    expect(resBlocked.status).toBe(429);
+  });
+
+  it("locks out dev and seeding routes with 404 in production", () => {
+    const originalEnv = process.env.NODE_ENV;
+    try {
+      (process.env as any).NODE_ENV = "production";
+
+      const devReq = new NextRequest("http://localhost:3000/api/dev/switch-role");
+      expect(middleware(devReq).status).toBe(404);
+
+      const seedReq = new NextRequest("http://localhost:3000/api/seed-db");
+      expect(middleware(seedReq).status).toBe(404);
+
+      const seedReq2 = new NextRequest("http://localhost:3000/api/seed");
+      expect(middleware(seedReq2).status).toBe(404);
+    } finally {
+      (process.env as any).NODE_ENV = originalEnv;
+    }
+  });
 });

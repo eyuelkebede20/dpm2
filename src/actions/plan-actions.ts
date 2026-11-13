@@ -12,7 +12,7 @@ import {
   reportEntries,
   industryProfile,
 } from "@/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, ne, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { logSecurityEvent } from "@/lib/security";
 
@@ -213,6 +213,20 @@ export async function createPlanAction(rawInput: unknown) {
   if (!allowed) return { success: false, error: "Forbidden" };
 
   try {
+    // Enforce business rule: only one plan per product allowed
+    const [existingProductPlan] = await db
+      .select({ id: plans.id, lineId: plans.lineId })
+      .from(plans)
+      .where(eq(plans.productId, productId))
+      .limit(1);
+
+    if (existingProductPlan) {
+      return {
+        success: false,
+        error: "A production plan already exists for this product. Only one plan per product is allowed. Please edit or delete the existing plan.",
+      };
+    }
+
     const planId = `plan_${Date.now()}`;
     await db.insert(plans).values({
       id: planId,
@@ -284,6 +298,20 @@ export async function updatePlanAction(rawInput: unknown) {
   if (!allowed) return { success: false, error: "Forbidden" };
 
   try {
+    // Enforce business rule: only one plan per product allowed
+    const [existingProductPlan] = await db
+      .select({ id: plans.id })
+      .from(plans)
+      .where(and(eq(plans.productId, productId), ne(plans.id, id)))
+      .limit(1);
+
+    if (existingProductPlan) {
+      return {
+        success: false,
+        error: "Another production plan already exists for this product. Only one plan per product is allowed.",
+      };
+    }
+
     const [existing] = await db
       .select({
         initialPlannedQty: plans.initialPlannedQty,

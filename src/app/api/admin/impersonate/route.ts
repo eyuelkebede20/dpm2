@@ -72,11 +72,12 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE() {
   try {
+    await requireUser();
     const cookieStore = await cookies();
     cookieStore.delete("dpm_impersonate_user_id");
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error("Exit impersonation failed:", err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Unauthorized or server error" }, { status: 401 });
   }
 }

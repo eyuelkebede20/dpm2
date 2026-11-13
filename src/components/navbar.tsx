@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   Server,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SessionUser } from "@/lib/authz";
@@ -309,6 +310,7 @@ export function Navbar({ user }: NavbarProps) {
                     <Link
                       key={link.href}
                       href={link.href}
+                      prefetch={false}
                       className={`relative px-3 py-2 rounded-xl transition-all flex items-center gap-2 text-sm font-semibold ${
                         isActive
                           ? "bg-indigo-50 text-indigo-700 shadow-2xs"
@@ -422,6 +424,27 @@ export function Navbar({ user }: NavbarProps) {
                         </div>
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200">
                           LAN / Cloud
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="navbar-download-pwa-button"
+                        onClick={async () => {
+                          setProfileOpen(false);
+                          if (pwa.isInstallable) {
+                            await pwa.promptInstall();
+                          } else {
+                            setServerSettingsOpen(true);
+                          }
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Download className="w-4 h-4 text-slate-400" />
+                          <span>Download App (PWA)</span>
+                        </div>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {pwa.isInstallable ? "Install" : "Guide"}
                         </span>
                       </button>
                       <button
@@ -649,6 +672,7 @@ export function Navbar({ user }: NavbarProps) {
                   <Link
                     key={link.href}
                     href={link.href}
+                    prefetch={false}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center justify-between px-3.5 py-3 rounded-2xl font-bold text-sm transition-all ${
                       isActive
@@ -697,6 +721,22 @@ export function Navbar({ user }: NavbarProps) {
               </button>
               <button
                 type="button"
+                data-testid="mobile-download-pwa-button"
+                onClick={async () => {
+                  setMobileMenuOpen(false);
+                  if (pwa.isInstallable) {
+                    await pwa.promptInstall();
+                  } else {
+                    setServerSettingsOpen(true);
+                  }
+                }}
+                className="w-full btn btn-ghost text-slate-700 rounded-2xl flex items-center justify-center gap-2 font-bold py-2.5 text-xs"
+              >
+                <Download className="w-4 h-4 text-emerald-600" />
+                <span>Download App (PWA) / አፕሊኬሽኑን ጫን</span>
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
                   setMobileMenuOpen(false);
                   setCheckingUpdate(true);
@@ -737,12 +777,14 @@ export function Navbar({ user }: NavbarProps) {
         </div>
       )}
 
-      {/* Backend Server & Network Settings Modal */}
-      <BackendServerSettingsModal
-        isOpen={serverSettingsOpen}
-        onClose={() => setServerSettingsOpen(false)}
-        isAdmin={user.role === "sys_admin"}
-      />
+      {/* Backend Server & Network Settings Modal - Lazy loaded on open */}
+      {serverSettingsOpen && (
+        <BackendServerSettingsModal
+          isOpen={serverSettingsOpen}
+          onClose={() => setServerSettingsOpen(false)}
+          isAdmin={user.role === "sys_admin"}
+        />
+      )}
     </>
   );
 }

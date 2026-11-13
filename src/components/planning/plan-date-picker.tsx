@@ -146,9 +146,9 @@ export function PlanDatePicker({
                 onChange={(e) => handleEthChange("month", parseInt(e.target.value, 10))}
                 className="select select-sm select-bordered w-full rounded-xl text-xs font-bold h-9 min-h-0 truncate"
               >
-                {ETH_MONTH_NAMES_AM.map((amName, idx) => {
-                  const mNum = idx + 1;
-                  const enName = ETH_MONTH_NAMES_EN[idx];
+                {Array.from({ length: 13 }, (_, i) => i + 1).map((mNum) => {
+                  const amName = ETH_MONTH_NAMES_AM[mNum];
+                  const enName = ETH_MONTH_NAMES_EN[mNum];
                   return (
                     <option key={mNum} value={mNum}>
                       {mNum}. {amName} ({enName})

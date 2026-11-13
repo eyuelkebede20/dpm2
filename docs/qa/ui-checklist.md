@@ -161,5 +161,56 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Healthcheck verification polling `/api/health` every 4 seconds during container reboot until HTTP 200 (`src/components/admin/system-updater.test.tsx`)
 - [x] Accessible completion alerts: emerald success banner on recovery or rose alert on failure/rollback (`src/components/admin/system-updater.test.tsx`)
 
+---
+
+## 9. Developer Option & Role Switcher Access Control
+
+### `<RoleSwitcher />` (Floating Role Changing Icon / Button)
+- [x] Complete hidden lockout for unauthenticated guests (`user === null`) (`src/components/role-switcher.test.tsx`)
+- [x] Complete hidden lockout for all non-sysadmin roles (OM, FM, QA) even if dev mode was previously enabled in localStorage (`src/components/role-switcher.test.tsx`)
+- [x] Hidden lockout for `sys_admin` when Developer Option is turned OFF (default state) (`src/components/role-switcher.test.tsx`)
+- [x] Displays floating action pill ONLY when authenticated as `sys_admin` AND Developer Option is turned ON (`src/components/role-switcher.test.tsx`)
+- [x] Open / close popover drawer via floating action button and Close button (`src/components/role-switcher.test.tsx`)
+- [x] Role switching buttons: instant session generation and redirect to destination workspace (`src/components/role-switcher.test.tsx`)
+- [x] "Hide Switcher" footer button: instantly deactivates developer mode and unmounts switcher (`src/components/role-switcher.test.tsx`)
+
+### Settings Developer Option Controls
+- [x] User Settings Modal (`<BackendServerSettingsModal />`): "Developer Options" card hidden for non-admins, visible for `sys_admin` (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] User Settings Modal: accessible switch toggle (`role="switch"`, `aria-checked`) turning role switcher ON/OFF with toast feedback (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Admin Portal Settings (`/admin` -> Industry Profile Settings): Developer Option switch card toggling developer mode (`src/app/admin/admin-client.test.tsx`)
+- [x] Backend API route `/api/dev/switch-role`: GET and POST enforce `sys_admin` authentication check and reject unauthorized requests with 403 Forbidden (`src/app/api/dev/switch-role/route.test.ts`)
+
+---
+
+## 10. Progressive Web App (PWA) & Offline Capabilities
+
+### Download / Install App (PWA) Button & Settings Guide
+- [x] Settings Modal (`<BackendServerSettingsModal />`): Dedicated PWA installation card with responsive badge indicating installation state (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Action button (`data-testid="download-pwa-button"`): Prompts native installation via `promptInstall()` when installable (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Standalone mode detection: Displays emerald badge "✓ Installed (Standalone App)" when running as installed PWA (`src/components/settings/backend-server-settings-modal.tsx`)
+- [x] Device Installation Guide: Expandable instructions for iOS Safari, Android Chrome, and Desktop Chrome/Edge (`src/components/settings/backend-server-settings-modal.test.tsx`)
+- [x] Navbar Desktop Profile Menu: "Download App (PWA)" button (`data-testid="navbar-download-pwa-button"`) triggers install or opens guide (`src/components/navbar.test.tsx`)
+- [x] Navbar Mobile Navigation Drawer: "Download App (PWA)" button (`data-testid="mobile-download-pwa-button"`) triggers install or opens guide (`src/components/navbar.test.tsx`)
+
+---
+
+## 11. Master Production Planning (`/planning`)
+
+### Plan Date Picker (`<PlanDatePicker />`)
+- [x] Correctly renders 13 Ethiopian months without off-by-one shifts (`src/components/planning/plan-date-picker.test.tsx`)
+- [x] Accurately maps Hamle 1, 2018 E.C. to 2026-07-08 Gregorian (`src/components/planning/plan-date-picker.test.tsx`)
+- [x] Accurately maps Nehase 30, 2018 E.C. with full 30 days to 2026-09-05 Gregorian without Pagume clamping (`src/components/planning/plan-date-picker.test.tsx`)
+- [x] Synchronizes Gregorian ISO strings with Ethiopian day/month/year selections (`src/components/planning/plan-date-picker.test.tsx`)
+
+### 1 Plan Per Product Constraint & Planning Modals
+- [x] Backend `createPlanAction` rejects duplicate plan for the same product (`src/actions/plan-actions.test.ts`)
+- [x] Backend `updatePlanAction` rejects reassignment to a product that already has another plan (`src/actions/plan-actions.test.ts`)
+- [x] New Production Plan modal disables already-planned products in `<select>` with "— [Plan Already Exists]" label (`src/components/planning/planning-client.test.tsx`)
+- [x] Auto-selects first unplanned product upon line/factory selection (`src/components/planning/planning-client.test.tsx`)
+- [x] Client-side form submit guard blocks creating duplicate plan for same product (`src/components/planning/planning-client.test.tsx`)
+- [x] Edit modal prevents duplicate product reassignment (`src/components/planning/planning-client.test.tsx`)
+
+
+
 
 

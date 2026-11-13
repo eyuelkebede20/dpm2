@@ -17,7 +17,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href, onClick, className, ...rest }: any) => (
+  default: ({ children, href, onClick, className, prefetch: _prefetch, ...rest }: any) => (
     <a href={href} onClick={onClick} className={className} {...rest}>
       {children}
     </a>
@@ -310,6 +310,30 @@ describe("Button Interaction Tests - Navbar & ImpersonationBanner", () => {
       expect(mobileServerBtn).toBeDefined();
 
       fireEvent.click(mobileServerBtn);
+      expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+    });
+
+    it("renders 'Download App (PWA)' button in profile dropdown and opens settings guide when not directly installable", () => {
+      render(<Navbar user={sampleUser} />);
+      const profileBtn = screen.getByRole("button", { name: /user profile menu/i });
+      fireEvent.click(profileBtn);
+
+      const downloadPwaBtn = screen.getByTestId("navbar-download-pwa-button");
+      expect(downloadPwaBtn).toBeDefined();
+
+      fireEvent.click(downloadPwaBtn);
+      expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
+    });
+
+    it("renders 'Download App (PWA)' button in mobile drawer and opens settings guide", () => {
+      render(<Navbar user={sampleUser} />);
+      const hamburgerBtn = screen.getByRole("button", { name: /toggle navigation menu/i });
+      fireEvent.click(hamburgerBtn);
+
+      const mobilePwaBtn = screen.getByTestId("mobile-download-pwa-button");
+      expect(mobilePwaBtn).toBeDefined();
+
+      fireEvent.click(mobilePwaBtn);
       expect(screen.getByRole("dialog", { name: /backend server & network settings/i })).toBeDefined();
     });
   });

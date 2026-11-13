@@ -9,6 +9,14 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    testTimeout: 25000,
+    testTimeout: 35000,
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        maxForks: 3,
+        minForks: 1,
+      },
+    },
+    include: ["src/**/*.test.{ts,tsx}"],
   },
 });

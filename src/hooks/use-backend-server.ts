@@ -30,10 +30,17 @@ export interface UseBackendServerReturn {
   refreshPresets: () => Promise<void>;
 }
 
+// In-memory preset endpoints cache to prevent redundant HTTP requests across renders/pages
+let memoryCachedPresets: ServerEndpoint[] | null = null;
+let lastPresetsFetch = 0;
+const PRESETS_CACHE_TTL = 60000; // 60 seconds
+
 export function useBackendServer(): UseBackendServerReturn {
   const [activeUrl, setActiveUrl] = useState<string>(() => getActiveBackendUrl());
   const [isCustom, setIsCustom] = useState<boolean>(() => isCustomBackendActive());
-  const [presets, setPresets] = useState<ServerEndpoint[]>(DEFAULT_SERVER_PRESETS);
+  const [presets, setPresets] = useState<ServerEndpoint[]>(
+    () => memoryCachedPresets || DEFAULT_SERVER_PRESETS
+  );
   const [isLoadingPresets, setIsLoadingPresets] = useState<boolean>(false);
   const [testResult, setTestResult] = useState<ServerConnectionResult | null>(null);
   const [isTesting, setIsTesting] = useState<boolean>(false);
@@ -51,8 +58,13 @@ export function useBackendServer(): UseBackendServerReturn {
     return () => window.removeEventListener(BACKEND_EVENT_NAME, handleBackendChange);
   }, []);
 
-  // Fetch preset server endpoints from database/API
-  const fetchPresets = useCallback(async () => {
+  // Fetch preset server endpoints from database/API with in-memory throttling
+  const fetchPresets = useCallback(async (force = false) => {
+    if (!force && memoryCachedPresets && Date.now() - lastPresetsFetch < PRESETS_CACHE_TTL) {
+      setPresets(memoryCachedPresets);
+      return;
+    }
+
     setIsLoadingPresets(true);
     try {
       const res = await fetch("/api/server-endpoints", {
@@ -61,13 +73,15 @@ export function useBackendServer(): UseBackendServerReturn {
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.endpoints) && data.endpoints.length > 0) {
+          memoryCachedPresets = data.endpoints;
+          lastPresetsFetch = Date.now();
           setPresets(data.endpoints);
           return;
         }
       }
-      setPresets(DEFAULT_SERVER_PRESETS);
+      setPresets(memoryCachedPresets || DEFAULT_SERVER_PRESETS);
     } catch {
-      setPresets(DEFAULT_SERVER_PRESETS);
+      setPresets(memoryCachedPresets || DEFAULT_SERVER_PRESETS);
     } finally {
       setIsLoadingPresets(false);
     }
@@ -75,6 +89,11 @@ export function useBackendServer(): UseBackendServerReturn {
 
   useEffect(() => {
     fetchPresets();
+  }, [fetchPresets]);
+
+  // Refresh preset cache explicitly
+  const refreshPresets = useCallback(async () => {
+    await fetchPresets(true);
   }, [fetchPresets]);
 
   // Test connection to a candidate server
