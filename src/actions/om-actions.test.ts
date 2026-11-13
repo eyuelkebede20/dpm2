@@ -239,7 +239,7 @@ describe("OM Workflows - Operation Manager Operations", () => {
       expect(res.error).toContain("already exists");
     });
 
-    it("successfully provisions FM user with mustChangePassword = true, account, and factory link", async () => {
+    it("successfully provisions FM user with mustChangePassword = false, account, and factory link", async () => {
       mockSingleFactory = { id: "fac_1", omId: "usr_om_01" };
 
       // Factory lookup succeeds, user exists lookup returns empty
@@ -269,7 +269,7 @@ describe("OM Workflows - Operation Manager Operations", () => {
       expect(mockTxUsers.length).toBe(1);
       expect(mockTxUsers[0].name).toBe("Dawit FM");
       expect(mockTxUsers[0].role).toBe("fm");
-      expect(mockTxUsers[0].mustChangePassword).toBe(true);
+      expect(mockTxUsers[0].mustChangePassword).toBe(false);
 
       expect(mockTxAccounts.length).toBe(1);
       expect(mockTxAccounts[0].providerId).toBe("credential");

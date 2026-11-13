@@ -101,6 +101,21 @@ const WEEKDAY_HEADERS = [
   { amFull: "እሁድ", amShort: "እሁ", amMini: "እ", enFull: "Sunday", enShort: "Sun", enMini: "S", isWeekend: true },
 ];
 
+const GREG_MONTHS = [
+  { num: 1, name: "January", short: "Jan" },
+  { num: 2, name: "February", short: "Feb" },
+  { num: 3, name: "March", short: "Mar" },
+  { num: 4, name: "April", short: "Apr" },
+  { num: 5, name: "May", short: "May" },
+  { num: 6, name: "June", short: "Jun" },
+  { num: 7, name: "July", short: "Jul" },
+  { num: 8, name: "August", short: "Aug" },
+  { num: 9, name: "September", short: "Sep" },
+  { num: 10, name: "October", short: "Oct" },
+  { num: 11, name: "November", short: "Nov" },
+  { num: 12, name: "December", short: "Dec" },
+];
+
 export function CalendarClient({
   factoryId,
   factoryName,
@@ -143,6 +158,20 @@ export function CalendarClient({
   const todayGC = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
   const currentGregMonthStr = useMemo(() => format(new Date(), "yyyy-MM"), []);
   const todayEC = useMemo(() => gregorianToEth(todayGC), [todayGC]);
+
+  const currentGregYear = useMemo(() => {
+    try {
+      return parseInt(initialGregMonthStr.split("-")[0], 10);
+    } catch {
+      return new Date().getFullYear();
+    }
+  }, [initialGregMonthStr]);
+
+  const [gregJumperYear, setGregJumperYear] = useState<number>(currentGregYear);
+
+  useEffect(() => {
+    setGregJumperYear(currentGregYear);
+  }, [currentGregYear]);
 
   // Disable future months navigation
   const isNextMonthDisabled = useMemo(() => {
@@ -248,6 +277,16 @@ export function CalendarClient({
     setEthMonth(month);
     setShowMonthJumper(false);
     router.push(`/calendar?cal=ethiopian&ey=${year}&em=${month}`);
+  };
+
+  const jumpToGregorianMonth = (year: number, month: number) => {
+    const mStr = String(month).padStart(2, "0");
+    const targetMonthStr = `${year}-${mStr}`;
+    if (targetMonthStr > currentGregMonthStr) {
+      return;
+    }
+    setShowMonthJumper(false);
+    router.push(`/calendar?cal=gregorian&month=${targetMonthStr}`);
   };
 
   // Filter dropdowns
@@ -852,8 +891,9 @@ export function CalendarClient({
 
               <button
                 type="button"
-                onClick={() => calType === "ethiopian" && setShowMonthJumper(true)}
+                onClick={() => setShowMonthJumper(true)}
                 className="join-item px-2.5 sm:px-3 h-8 flex items-center justify-center gap-1 text-xs sm:text-sm font-black text-slate-900 hover:bg-slate-50 transition-colors"
+                title={calType === "ethiopian" ? "Jump to Ethiopian Month" : "Jump to Gregorian Month"}
               >
                 <span className="truncate">{headerTitle}</span>
                 {calType === "ethiopian" ? (
@@ -1029,97 +1069,185 @@ export function CalendarClient({
       </div>
 
       {/* ============================================================= */}
-      {/* 4. 13-MONTH QUICK JUMPER MODAL (MESKEREM - PAGUME)            */}
+      {/* 4. QUICK MONTH JUMPER MODAL (RESPONSIVE BOTTOM-SHEET ON MOBILE)*/}
       {/* ============================================================= */}
       {showMonthJumper && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={calType === "ethiopian" ? "Select Ethiopian Month & Year" : "Select Gregorian Month & Year"}
+            className="bg-white w-full max-h-[92dvh] sm:max-h-[85vh] sm:max-w-lg rounded-t-3xl sm:rounded-3xl border-t sm:border border-slate-200 shadow-2xl p-4 sm:p-6 pb-safe flex flex-col overflow-y-auto animate-in slide-in-from-bottom sm:slide-in-from-top-2 duration-200"
+          >
+            {/* Mobile Drag Handle Indicator */}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-slate-900 leading-relaxed">
-                  {language === "am" ? "የኢትዮጵያ ወር እና ዓመት ይምረጡ" : "Select Ethiopian Month & Year"}
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-relaxed">
+                  {calType === "ethiopian"
+                    ? language === "am"
+                      ? "የኢትዮጵያ ወር እና ዓመት ይምረጡ"
+                      : "Select Ethiopian Month & Year"
+                    : "Select Gregorian Month & Year"}
                 </h3>
                 <span className="text-xs text-slate-500 leading-relaxed">
-                  13 Ethiopian Months (12 × 30 days + Pagume 5/6)
+                  {calType === "ethiopian"
+                    ? "13 Ethiopian Months (12 × 30 days + Pagume 5/6)"
+                    : "12 Gregorian Months"}
                 </span>
               </div>
               <button
+                type="button"
                 onClick={() => setShowMonthJumper(false)}
                 className="btn btn-sm btn-ghost btn-circle text-slate-400 hover:text-slate-700"
+                aria-label="Close month jumper"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Year Selector Strip */}
-            <div className="my-3 sm:my-4">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 leading-relaxed">
-                Year (ዓ.ም)
-              </span>
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-                {[2015, 2016, 2017, 2018, 2019, 2020].map((y) => {
-                  const isFutureYear = y > todayEC.year;
-                  return (
-                    <button
-                      key={y}
-                      type="button"
-                      disabled={isFutureYear}
-                      onClick={() => !isFutureYear && setEthYear(y)}
-                      className={`btn btn-xs sm:btn-sm rounded-xl font-mono font-bold flex-1 min-h-[36px] ${
-                        isFutureYear
-                          ? "opacity-30 cursor-not-allowed bg-slate-100 text-slate-400 border-none"
-                          : ethYear === y
-                          ? "bg-emerald-600 text-white border-none shadow-xs"
-                          : "btn-outline text-slate-600"
-                      }`}
-                      title={isFutureYear ? "Future Year (Disabled)" : undefined}
-                    >
-                      {y}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            {calType === "ethiopian" ? (
+              <>
+                {/* Year Selector Strip */}
+                <div className="my-3 sm:my-4">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 leading-relaxed">
+                    Year (ዓ.ም)
+                  </span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                    {[2015, 2016, 2017, 2018, 2019, 2020].map((y) => {
+                      const isFutureYear = y > todayEC.year;
+                      return (
+                        <button
+                          key={y}
+                          type="button"
+                          disabled={isFutureYear}
+                          onClick={() => !isFutureYear && setEthYear(y)}
+                          className={`btn btn-xs sm:btn-sm rounded-xl font-mono font-bold flex-1 min-h-[38px] touch-manipulation ${
+                            isFutureYear
+                              ? "opacity-30 cursor-not-allowed bg-slate-100 text-slate-400 border-none"
+                              : ethYear === y
+                              ? "bg-emerald-600 text-white border-none shadow-xs"
+                              : "btn-outline text-slate-600 hover:bg-slate-50"
+                          }`}
+                          title={isFutureYear ? "Future Year (Disabled)" : undefined}
+                        >
+                          {y}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            {/* 13 Months Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 my-3">
-              {Array.from({ length: 13 }).map((_, idx) => {
-                const m = idx + 1;
-                const isSelected = ethMonth === m;
-                const isFutureMonth = ethYear > todayEC.year || (ethYear === todayEC.year && m > todayEC.month);
-                const mNameAm = ETH_MONTH_NAMES_AM[m];
-                const mNameEn = ETH_MONTH_NAMES_EN[m];
+                {/* 13 Months Grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 my-2">
+                  {Array.from({ length: 13 }).map((_, idx) => {
+                    const m = idx + 1;
+                    const isSelected = ethMonth === m;
+                    const isFutureMonth = ethYear > todayEC.year || (ethYear === todayEC.year && m > todayEC.month);
+                    const mNameAm = ETH_MONTH_NAMES_AM[m];
+                    const mNameEn = ETH_MONTH_NAMES_EN[m];
 
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    disabled={isFutureMonth}
-                    onClick={() => !isFutureMonth && jumpToEthMonth(ethYear, m)}
-                    className={`p-2.5 sm:p-3 rounded-2xl border text-center transition-all min-h-[64px] flex flex-col items-center justify-center ${
-                      isFutureMonth
-                        ? "border-slate-200 bg-slate-100/70 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none"
-                        : isSelected
-                        ? "border-emerald-600 bg-emerald-50 text-emerald-900 font-extrabold shadow-xs"
-                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold"
-                    }`}
-                    title={isFutureMonth ? `${mNameEn} (Disabled - Future Month)` : mNameEn}
-                  >
-                    <div className="text-sm sm:text-base font-bold leading-relaxed">{mNameAm}</div>
-                    <div className="text-[10px] sm:text-xs text-slate-400 font-mono leading-normal">{mNameEn}</div>
-                    {isFutureMonth ? (
-                      <span className="text-[8px] bg-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
-                        ወደፊት (Disabled)
-                      </span>
-                    ) : m === 13 ? (
-                      <span className="text-[9px] sm:text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
-                        Pagume
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        disabled={isFutureMonth}
+                        onClick={() => !isFutureMonth && jumpToEthMonth(ethYear, m)}
+                        className={`p-2 sm:p-2.5 rounded-2xl border text-center transition-all min-h-[64px] flex flex-col items-center justify-center active:scale-95 touch-manipulation ${
+                          isFutureMonth
+                            ? "border-slate-200 bg-slate-100/70 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none"
+                            : isSelected
+                            ? "border-emerald-600 bg-emerald-50 text-emerald-900 font-extrabold shadow-xs ring-2 ring-emerald-500/30"
+                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold"
+                        }`}
+                        title={isFutureMonth ? `${mNameEn} (Disabled - Future Month)` : mNameEn}
+                      >
+                        <div className="text-sm sm:text-base font-bold leading-tight">{mNameAm}</div>
+                        <div className="text-[10px] sm:text-xs text-slate-400 font-mono leading-normal mt-0.5">{mNameEn}</div>
+                        {isFutureMonth ? (
+                          <span className="text-[8px] bg-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
+                            ወደፊት (Disabled)
+                          </span>
+                        ) : m === 13 ? (
+                          <span className="text-[9px] sm:text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
+                            Pagume
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Gregorian Year Selector Strip */}
+                <div className="my-3 sm:my-4">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 leading-relaxed">
+                    Year
+                  </span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                    {[2023, 2024, 2025, 2026, 2027].map((y) => {
+                      const thisYear = new Date().getFullYear();
+                      const isFutureYear = y > thisYear;
+                      return (
+                        <button
+                          key={y}
+                          type="button"
+                          disabled={isFutureYear}
+                          onClick={() => !isFutureYear && setGregJumperYear(y)}
+                          className={`btn btn-xs sm:btn-sm rounded-xl font-mono font-bold flex-1 min-h-[38px] touch-manipulation ${
+                            isFutureYear
+                              ? "opacity-30 cursor-not-allowed bg-slate-100 text-slate-400 border-none"
+                              : gregJumperYear === y
+                              ? "bg-indigo-600 text-white border-none shadow-xs"
+                              : "btn-outline text-slate-600 hover:bg-slate-50"
+                          }`}
+                          title={isFutureYear ? "Future Year (Disabled)" : undefined}
+                        >
+                          {y}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 12 Gregorian Months Grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 my-2">
+                  {GREG_MONTHS.map((gm) => {
+                    const mStr = String(gm.num).padStart(2, "0");
+                    const targetStr = `${gregJumperYear}-${mStr}`;
+                    const isSelected = initialGregMonthStr === targetStr;
+                    const isFutureMonth = targetStr > currentGregMonthStr;
+
+                    return (
+                      <button
+                        key={gm.num}
+                        type="button"
+                        disabled={isFutureMonth}
+                        onClick={() => !isFutureMonth && jumpToGregorianMonth(gregJumperYear, gm.num)}
+                        className={`p-2 sm:p-2.5 rounded-2xl border text-center transition-all min-h-[64px] flex flex-col items-center justify-center active:scale-95 touch-manipulation ${
+                          isFutureMonth
+                            ? "border-slate-200 bg-slate-100/70 text-slate-400 opacity-40 cursor-not-allowed pointer-events-none"
+                            : isSelected
+                            ? "border-indigo-600 bg-indigo-50 text-indigo-900 font-extrabold shadow-xs ring-2 ring-indigo-500/30"
+                            : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold"
+                        }`}
+                        title={isFutureMonth ? `${gm.name} (Disabled - Future Month)` : gm.name}
+                      >
+                        <div className="text-sm sm:text-base font-bold leading-tight">{gm.name}</div>
+                        <div className="text-[10px] sm:text-xs text-slate-400 font-mono leading-normal mt-0.5">{gm.short}</div>
+                        {isFutureMonth && (
+                          <span className="text-[8px] bg-slate-200 text-slate-500 font-bold px-1.5 py-0.5 rounded-full mt-1 inline-block leading-relaxed">
+                            Future
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1186,28 +1314,28 @@ export function CalendarClient({
                     type="button"
                     data-testid="compact-day-tile"
                     onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                    className={`aspect-square min-h-[40px] min-w-[40px] sm:min-h-[46px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 touch-manipulation ${
+                    className={`aspect-square min-h-[44px] min-w-[44px] sm:min-h-[50px] rounded-xl sm:rounded-2xl flex flex-col items-center justify-center p-1 relative transition-all text-left active:scale-95 touch-manipulation ${
                       isSelected
                         ? "bg-slate-900 text-white font-black shadow-md ring-2 ring-emerald-500"
                         : item.isCurrentToday
-                        ? "border-2 border-emerald-500 bg-white text-slate-900 shadow-xs"
+                        ? "border-2 border-emerald-500 bg-emerald-50/40 text-slate-900 font-black shadow-xs ring-1 ring-emerald-500/30"
                         : item.isFuture
                         ? "bg-slate-50/50 border border-slate-200/50 text-slate-300"
                         : isHoliday
-                        ? "bg-amber-50/80 border border-amber-300 text-amber-900 font-bold"
+                        ? "bg-amber-50/80 border border-amber-300 text-amber-950 font-bold"
                         : item.isWorkDay
                         ? "bg-white border border-slate-200/80 hover:border-emerald-300 text-slate-800"
                         : "bg-slate-100/70 border border-slate-200/50 text-slate-400"
                     }`}
                   >
                     {/* Primary Date Number */}
-                    <span className="text-xs sm:text-sm font-bold font-mono tabular-nums leading-none">
+                    <span className="text-sm sm:text-base font-black font-mono tabular-nums leading-none">
                       {item.primaryNumber}
                     </span>
 
                     {/* Secondary Date Micro-Label (Clear Distinction) */}
                     <span
-                      className={`text-[8px] sm:text-[9px] font-mono leading-relaxed mt-0.5 block truncate max-w-full ${
+                      className={`text-[9px] sm:text-[10px] font-mono leading-tight mt-0.5 block truncate max-w-full font-medium ${
                         isSelected
                           ? "text-slate-300"
                           : isHoliday
@@ -1222,11 +1350,11 @@ export function CalendarClient({
                     {/* Indicator Dot */}
                     <div className="mt-1 flex items-center justify-center gap-0.5">
                       {isHoliday && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                        <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-amber-500 ring-1 ring-white/80 inline-block" />
                       )}
                       {hasEntries && (
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
+                          className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ring-1 ring-white/80 ${
                             isSelected
                               ? "bg-emerald-400"
                               : hasTarget
@@ -1244,9 +1372,9 @@ export function CalendarClient({
             </div>
           </div>
 
-          {/* Inline Active Day Details Card */}
+          {/* Inline Active Day Details Card (Desktop view in compact mode) */}
           {activeDayDateStr && activeDaySummary ? (
-            <div className="bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 shadow-2xs space-y-4 animate-in fade-in duration-150">
+            <div className="hidden sm:block bg-white rounded-3xl border border-slate-200/90 p-4 sm:p-6 shadow-2xs space-y-4 animate-in fade-in duration-150">
               {/* Header with Title and Green Edit Button */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
                 <div>
@@ -1584,7 +1712,7 @@ export function CalendarClient({
               {Array.from({ length: leadingBlanks }).map((_, idx) => (
                 <div
                   key={`blank_${idx}`}
-                  className="min-h-[48px] sm:min-h-[64px] md:min-h-[74px] lg:min-h-[84px] rounded-xl sm:rounded-2xl bg-slate-50/40 border border-transparent"
+                  className="min-h-[58px] sm:min-h-[74px] md:min-h-[86px] lg:min-h-[96px] rounded-xl sm:rounded-2xl bg-slate-50/40 border border-transparent"
                 />
               ))}
 
@@ -1605,11 +1733,11 @@ export function CalendarClient({
                     type="button"
                     data-testid="calendar-day-tile"
                     onClick={() => setActiveDayDateStr(item.gregorianDateStr)}
-                    className={`w-full min-h-[48px] sm:min-h-[64px] md:min-h-[74px] lg:min-h-[84px] p-1 sm:p-1.5 md:p-2 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer group active:scale-98 touch-manipulation ${
+                    className={`w-full min-h-[58px] sm:min-h-[74px] md:min-h-[86px] lg:min-h-[96px] p-1 sm:p-1.5 md:p-2 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer group active:scale-98 touch-manipulation ${
                       isSelected
                         ? "ring-2 ring-slate-900 border-slate-900 bg-emerald-50/40 shadow-sm"
                         : item.isCurrentToday
-                        ? "border-emerald-500 bg-white shadow-2xs"
+                        ? "border-2 border-emerald-500 bg-white shadow-2xs"
                         : item.isFuture
                         ? "bg-slate-50/60 border-slate-200/60 text-slate-400"
                         : isHoliday
@@ -1624,7 +1752,7 @@ export function CalendarClient({
                       <div className="flex flex-col">
                         <div className="flex items-baseline gap-1">
                           <span
-                            className={`text-xs sm:text-sm md:text-base font-black font-mono tabular-nums inline-block leading-none ${
+                            className={`text-sm sm:text-base md:text-lg font-black font-mono tabular-nums inline-block leading-none ${
                               item.isCurrentToday
                                 ? "text-emerald-700 font-extrabold"
                                 : item.isFuture
@@ -1640,7 +1768,7 @@ export function CalendarClient({
 
                         {/* Distinct Secondary Calendar Date with EC / GC prefix */}
                         <span
-                          className={`text-[8px] sm:text-[9px] md:text-[10px] font-mono leading-relaxed truncate max-w-full block ${
+                          className={`text-[9px] sm:text-[10px] md:text-[11px] font-mono leading-tight truncate max-w-full block font-medium ${
                             isSelected
                               ? "text-emerald-700 font-semibold"
                               : isHoliday
@@ -1659,7 +1787,7 @@ export function CalendarClient({
                       {/* Status Pill on Day Tile */}
                       <div>
                         {item.isFuture ? (
-                          <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-100 px-1 py-0.5 rounded leading-none">
+                          <span className="hidden sm:inline text-[8px] sm:text-[9px] font-bold text-slate-400 bg-slate-100 px-1 py-0.5 rounded leading-none">
                             Future
                           </span>
                         ) : isHoliday ? (
@@ -1683,7 +1811,7 @@ export function CalendarClient({
                     <div className="w-full my-0.5 sm:my-1">
                       {hasEntries ? (
                         <>
-                          <div className="text-[11px] sm:text-xs md:text-sm lg:text-base font-black text-slate-900 font-mono tabular-nums tracking-tight leading-tight">
+                          <div className="text-xs sm:text-sm md:text-base font-black text-slate-900 font-mono tabular-nums tracking-tight leading-tight">
                             {summary.totalFG.toLocaleString()}
                             <span className="hidden sm:inline text-[9px] font-normal text-slate-400 ml-0.5">
                               pcs
@@ -1694,7 +1822,7 @@ export function CalendarClient({
                           {hasTarget ? (
                             <div className="mt-0.5 flex items-center">
                               <span
-                                className={`text-[9px] sm:text-[10px] md:text-[11px] font-black font-mono tabular-nums px-1 sm:px-1.5 py-0.2 rounded ${
+                                className={`text-[9px] sm:text-[10px] md:text-[11px] font-black font-mono tabular-nums px-1 sm:px-1.5 py-0.5 rounded-md ${
                                   isPositive
                                     ? "bg-emerald-100 text-emerald-800"
                                     : "bg-rose-100 text-rose-800"
@@ -1853,10 +1981,10 @@ export function CalendarClient({
       )}
 
       {/* ============================================================= */}
-      {/* 8. SLIDE-OVER DRAWER / BOTTOM SHEET (GRID & LIST VIEW MODES)  */}
+      {/* 8. SLIDE-OVER DRAWER / BOTTOM SHEET (MOBILE BOTTOM SHEET & DESKTOP DRAWER) */}
       {/* ============================================================= */}
-      {calendarViewMode !== "compact" && activeDayDateStr && activeDaySummary && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+      {activeDayDateStr && activeDaySummary && (
+        <div className={`fixed inset-0 z-50 flex justify-end ${calendarViewMode === "compact" ? "sm:hidden" : ""}`}>
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
@@ -1868,10 +1996,10 @@ export function CalendarClient({
             role="dialog"
             aria-modal="true"
             aria-label="Day Inspection"
-            className="fixed bottom-0 left-0 right-0 max-h-[85vh] rounded-t-3xl sm:bottom-auto sm:top-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-full sm:w-[500px] sm:rounded-none bg-white shadow-2xl flex flex-col z-10 overflow-y-auto border-t sm:border-t-0 sm:border-l border-slate-200 pb-safe animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
+            className="fixed bottom-0 left-0 right-0 max-h-[88dvh] rounded-t-3xl sm:bottom-auto sm:top-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-full sm:w-[500px] sm:rounded-none bg-white shadow-2xl flex flex-col z-10 overflow-y-auto border-t sm:border-t-0 sm:border-l border-slate-200 pb-safe animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
           >
             {/* Mobile Drag Handle Indicator */}
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mt-3 sm:hidden" />
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mt-2.5 mb-1 sm:hidden shrink-0" />
 
             {/* Drawer Header with Full Dual Dates */}
             <div className="p-4 sm:p-5 border-b border-slate-200 bg-white/95 backdrop-blur z-20 flex items-center justify-between sticky top-0">

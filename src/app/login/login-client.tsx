@@ -24,11 +24,7 @@ export function LoginClient() {
       .then((res) => res.json())
       .then((data) => {
         if (data.authenticated && data.user) {
-          if (data.user.mustChangePassword) {
-            router.push("/change-password");
-          } else {
-            router.push("/dashboard");
-          }
+          router.push("/dashboard");
         }
       })
       .catch(() => {});
@@ -78,15 +74,7 @@ export function LoginClient() {
         return;
       }
 
-      // Check user password status
-      const statusRes = await fetch("/api/auth/status");
-      const statusData = await statusRes.json();
-
-      if (statusData.authenticated && statusData.user?.mustChangePassword) {
-        router.push("/change-password");
-      } else {
-        router.push("/dashboard");
-      }
+      router.push("/dashboard");
       router.refresh();
     } catch (err: any) {
       console.error("Sign in exception:", err);

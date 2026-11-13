@@ -11,6 +11,7 @@ import {
   bulkAssignQAProductsAction,
   getOMFactoryCalendarDataAction,
 } from "@/actions/om-actions";
+import { sendReportReminderAction } from "@/actions/review-actions";
 import { SearchInput } from "@/components/ui";
 import {
   Building2,
@@ -19,6 +20,8 @@ import {
   Plus,
   Check,
   AlertCircle,
+  AlertTriangle,
+  Bell,
   Shield,
   Layers,
   ChevronRight,
@@ -545,13 +548,22 @@ export function OMClient({
                           <div className="p-3 bg-emerald-50 text-emerald-800 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                             <Building2 className="w-6 h-6" />
                           </div>
-                          <span
-                            className={`badge badge-sm font-bold ${
-                              f.active ? "bg-emerald-100 text-emerald-800 border-none" : "badge-ghost text-slate-400"
-                            }`}
-                          >
-                            {f.active ? "Active" : "Archived"}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <span
+                              className="badge badge-sm font-bold bg-amber-50 text-amber-800 border-amber-300 gap-1 shadow-2xs"
+                              title="Warning: Review or daily report upload required"
+                            >
+                              <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                              <span>Review Pending</span>
+                            </span>
+                            <span
+                              className={`badge badge-sm font-bold ${
+                                f.active ? "bg-emerald-100 text-emerald-800 border-none" : "badge-ghost text-slate-400"
+                              }`}
+                            >
+                              {f.active ? "Active" : "Archived"}
+                            </span>
+                          </div>
                         </div>
 
                         <h3 className="font-black text-slate-900 text-lg mt-3 group-hover:text-emerald-700 transition-colors">
@@ -614,6 +626,34 @@ export function OMClient({
                           >
                             <Layers className="w-3 h-3" />
                             <span>Lines</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const res = await sendReportReminderAction({
+                                factoryId: f.id,
+                                date: todayGC,
+                              });
+                              if (res.success) {
+                                setToastMsg({
+                                  type: "success",
+                                  text: `Notification sent to Factory Managers for ${f.name}.`,
+                                });
+                                setTimeout(() => setToastMsg(null), 3500);
+                              } else {
+                                setToastMsg({
+                                  type: "error",
+                                  text: res.error || "Failed to notify Factory Managers.",
+                                });
+                                setTimeout(() => setToastMsg(null), 4000);
+                              }
+                            }}
+                            className="btn btn-xs rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold"
+                            title="Remind Factory Managers to upload daily reports"
+                          >
+                            <Bell className="w-3 h-3 text-amber-700" />
+                            <span>Notify FM</span>
                           </button>
                         </div>
                       </div>

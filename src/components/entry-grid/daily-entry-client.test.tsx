@@ -26,11 +26,11 @@ vi.mock("@/actions/review-actions", () => ({
     review: {
       id: "rev_1",
       factoryId: "fac_1",
-      date: "2026-11-08",
+      date: "2026-11-13",
       status: "reviewed",
       reviewedBy: "om_1",
       reviewerName: "Dawit OM",
-      reviewedAt: "2026-11-08T15:00:00.000Z",
+      reviewedAt: "2026-11-13T15:00:00.000Z",
       note: null,
     },
   }),
@@ -39,7 +39,7 @@ vi.mock("@/actions/review-actions", () => ({
     success: true,
     itemReview: {
       status: "approved",
-      reviewedAt: "2026-11-08T15:00:00.000Z",
+      reviewedAt: "2026-11-13T15:00:00.000Z",
       note: null,
     },
   }),
@@ -53,6 +53,11 @@ vi.mock("@/actions/review-actions", () => ({
       plannedQty: 3000,
       dailyTarget: 120,
     },
+  }),
+  sendReportReminderAction: vi.fn().mockResolvedValue({
+    success: true,
+    notifiedCount: 2,
+    recipients: ["Abebe FM", "Chala FM"],
   }),
 }));
 
@@ -92,7 +97,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("switches view mode when Table and Cards buttons are clicked", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -119,7 +124,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("navigates to previous day, next day, and today when date buttons are clicked", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-12"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -132,13 +137,13 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
     const nextDayBtn = screen.getByTitle("Next Day");
     const todayBtn = screen.getByRole("button", { name: "Today" });
 
-    // Click Previous Day (2026-11-08 -> 2026-11-07)
+    // Click Previous Day (2026-11-12 -> 2026-11-11)
     fireEvent.click(prevDayBtn);
-    expect(mockPush).toHaveBeenCalledWith("/entry?date=2026-11-07");
+    expect(mockPush).toHaveBeenCalledWith("/entry?date=2026-11-11");
 
-    // Click Next Day (2026-11-08 -> 2026-11-09)
+    // Click Next Day (2026-11-12 -> 2026-11-13)
     fireEvent.click(nextDayBtn);
-    expect(mockPush).toHaveBeenCalledWith("/entry?date=2026-11-09");
+    expect(mockPush).toHaveBeenCalledWith("/entry?date=2026-11-13");
 
     // Click Today
     fireEvent.click(todayBtn);
@@ -148,7 +153,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("disables save button when there are no changes, and enables when modified", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -171,7 +176,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("triggers save action and displays feedback when 'Save Daily Numbers' button is clicked", async () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -194,7 +199,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("locks inputs, displays locked banner and replaces save button with completion badge when isDaySubmitted is true for FM", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -228,7 +233,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("locks inputs immediately after FM saves daily numbers (strict one data entry per day)", async () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -265,7 +270,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("allows Sys Admin to edit even when isDaySubmitted is true (admin override)", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -285,7 +290,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("resets edits when 'Reset' button is clicked", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -310,7 +315,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
   it("displays special day holiday banner and sets target to 0 when non-working specialDay is passed", () => {
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -350,7 +355,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -403,7 +408,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -477,7 +482,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -525,7 +530,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
     render(
       <DailyEntryClient
-        initialDate="2026-11-08"
+        initialDate="2026-11-13"
         factoryId="fac_1"
         factoryName="Addis Ababa Plant"
         workingDays={[1, 2, 3, 4, 5, 6]}
@@ -553,7 +558,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
     it("renders read-only mode banner and disables editing for OM role", () => {
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -592,18 +597,18 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
         review: {
           id: "rev_1",
           factoryId: "fac_1",
-          date: "2026-11-08",
+          date: "2026-11-13",
           status: "reviewed",
           reviewedBy: "om_1",
           reviewerName: "Dawit OM",
-          reviewedAt: "2026-11-08T15:00:00.000Z",
+          reviewedAt: "2026-11-13T15:00:00.000Z",
           note: null,
         },
       });
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -622,7 +627,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
           reviewActions.markDailyReportReviewedAction
         ).toHaveBeenCalledWith({
           factoryId: "fac_1",
-          date: "2026-11-08",
+          date: "2026-11-13",
         });
       });
 
@@ -639,7 +644,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -649,7 +654,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
             isReviewed: true,
             reviewedBy: "om_1",
             reviewerName: "Dawit OM",
-            reviewedAt: "2026-11-08T15:00:00.000Z",
+            reviewedAt: "2026-11-13T15:00:00.000Z",
             note: null,
           }}
         />
@@ -666,7 +671,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
           reviewActions.unmarkDailyReportReviewedAction
         ).toHaveBeenCalledWith({
           factoryId: "fac_1",
-          date: "2026-11-08",
+          date: "2026-11-13",
         });
       });
     });
@@ -686,14 +691,14 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
             defects: 5,
             defectRate: 1.0,
             note: "Quality within acceptable tolerance",
-            createdAt: "2026-11-08T14:30:00.000Z",
+            createdAt: "2026-11-13T14:30:00.000Z",
           },
         },
       ];
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -734,7 +739,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -766,14 +771,14 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
             defects: 5,
             defectRate: 1.0,
             note: null,
-            createdAt: "2026-11-08T14:30:00.000Z",
+            createdAt: "2026-11-13T14:30:00.000Z",
           },
         },
       ];
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -803,14 +808,14 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
             defects: 0,
             defectRate: 0,
             note: "All good",
-            createdAt: "2026-11-08T14:30:00.000Z",
+            createdAt: "2026-11-13T14:30:00.000Z",
           },
         },
       ];
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -828,7 +833,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
     it("allows OM to review per-item (approve or deny) and calls reviewItemAction", async () => {
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -848,7 +853,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
       await waitFor(() => {
         expect(reviewActions.reviewItemAction).toHaveBeenCalledWith({
           factoryId: "fac_1",
-          date: "2026-11-08",
+          date: "2026-11-13",
           lineId: "line_1",
           productId: "prod_1",
           status: "approved",
@@ -862,7 +867,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
       await waitFor(() => {
         expect(reviewActions.reviewItemAction).toHaveBeenCalledWith({
           factoryId: "fac_1",
-          date: "2026-11-08",
+          date: "2026-11-13",
           lineId: "line_1",
           productId: "prod_1",
           status: "denied",
@@ -888,7 +893,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
 
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -917,7 +922,7 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
     it("allows OM to open Edit Daily Plan modal, adjust daily target, and updates annual plan", async () => {
       render(
         <DailyEntryClient
-          initialDate="2026-11-08"
+          initialDate="2026-11-13"
           factoryId="fac_1"
           factoryName="Addis Ababa Plant"
           workingDays={[1, 2, 3, 4, 5, 6]}
@@ -952,11 +957,398 @@ describe("Button Interaction Tests - DailyEntryClient", () => {
           factoryId: "fac_1",
           lineId: "line_1",
           productId: "prod_1",
-          date: "2026-11-08",
+          date: "2026-11-13",
           planId: undefined,
           newDailyTarget: 150,
         });
       });
+    });
+
+    it("displays warning signs for factories and products that did not get review", () => {
+      // Unreviewed rows and no reportReview
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={sampleRows}
+          userRole="fm"
+          reportReview={null}
+        />
+      );
+
+      // Warning banner for unreviewed daily report
+      expect(screen.getByText(/Unreviewed Daily Report/i)).toBeDefined();
+      expect(screen.getByText(/Review Pending/i)).toBeDefined();
+
+      // Warning badge on product row for unreviewed product
+      expect(screen.getAllByText("Unreviewed").length).toBeGreaterThan(0);
+    });
+
+    it("allows Operation Manager to send reminder notifications to Factory Managers", async () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={sampleRows}
+          userRole="om"
+          reportReview={null}
+        />
+      );
+
+      // Find "Notify Factory Managers" button in the unreviewed banner
+      const notifyBtn = screen.getByRole("button", { name: /Notify Factory Managers/i });
+      fireEvent.click(notifyBtn);
+
+      await waitFor(() => {
+        expect(reviewActions.sendReportReminderAction).toHaveBeenCalledWith({
+          factoryId: "fac_1",
+          date: "2026-11-13",
+        });
+      });
+    });
+
+    it("strictly locks editing and alterations for Factory Managers when viewing a past month", () => {
+      // 2025-01-10 is a past month relative to 2026-11
+      render(
+        <DailyEntryClient
+          initialDate="2025-01-10"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={sampleRows}
+          userRole="fm"
+        />
+      );
+
+      // Lockout banner should be visible
+      expect(screen.getByText(/Reporting Period Closed/i)).toBeDefined();
+      expect(screen.getByText(/Month Passed • Locked/i)).toBeDefined();
+
+      // Save bar should show locked message
+      expect(screen.getAllByText(/Reporting Window Closed/i).length).toBeGreaterThan(0);
+
+      // Numeric stepper buttons should be disabled
+      const stepperMinusBtns = screen.getAllByRole("button", { name: /decrease/i });
+      stepperMinusBtns.forEach((btn) => {
+        expect(btn).toHaveProperty("disabled", true);
+      });
+    });
+
+    it("opens responsive Ethiopian date picker bottom-sheet when Ethiopian calendar option is touched", () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={sampleRows}
+          userRole="fm"
+          calendarSystem="ethiopian"
+        />
+      );
+
+      // Verify no date picker dialog is open initially
+      expect(screen.queryByRole("dialog", { name: "Ethiopian Date Selection" })).toBeNull();
+
+      // Click the Ethiopian calendar date button in the toolbar
+      const ethDateBtn = screen.getAllByTitle("ቀን ምረጥ / Select Ethiopian Date")[0];
+      fireEvent.click(ethDateBtn);
+
+      // Bottom-sheet dialog should open
+      const dialog = screen.getByRole("dialog", { name: "Ethiopian Date Selection" });
+      expect(dialog).toBeDefined();
+      expect(dialog.className).toContain("slide-in-from-bottom");
+      expect(dialog.className).toContain("rounded-t-3xl");
+
+      // Verify 7-column weekday headers are rendered (ሰኞ to እሁድ)
+      expect(screen.getByText("ሰኞ")).toBeDefined();
+      expect(screen.getByText("እሁድ")).toBeDefined();
+
+      // Verify date buttons (1 to 30) exist
+      const day1Btn = screen.getByRole("button", { name: "1" });
+      expect(day1Btn).toBeDefined();
+
+      // Test Month Steppers: Click Next Month and Prev Month
+      const nextMonthBtn = screen.getByRole("button", { name: "Next Month" });
+      const prevMonthBtn = screen.getByRole("button", { name: "Previous Month" });
+      expect(nextMonthBtn).toBeDefined();
+      expect(prevMonthBtn).toBeDefined();
+
+      // Click cancel to close
+      const cancelBtn = screen.getByRole("button", { name: "ይቅር (Cancel)" });
+      fireEvent.click(cancelBtn);
+      expect(screen.queryByRole("dialog", { name: "Ethiopian Date Selection" })).toBeNull();
+    });
+
+    it("allows selecting a date in the Ethiopian date picker and applies navigation", () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={sampleRows}
+          userRole="fm"
+          calendarSystem="ethiopian"
+        />
+      );
+
+      const ethDateBtn = screen.getAllByTitle("ቀን ምረጥ / Select Ethiopian Date")[0];
+      fireEvent.click(ethDateBtn);
+
+      // Select day 1
+      const day1Btn = screen.getByRole("button", { name: "1" });
+      fireEvent.click(day1Btn);
+
+      // Click Apply
+      const applyBtn = screen.getByRole("button", { name: "አረጋግጥ (Apply)" });
+      fireEvent.click(applyBtn);
+
+      // Navigation should be triggered
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("/entry?date="));
+      expect(screen.queryByRole("dialog", { name: "Ethiopian Date Selection" })).toBeNull();
+    });
+  });
+
+  describe("Search, Sorting & Layout Hierarchy Tests - DailyEntryClient", () => {
+    const multiLineRows: GridRowData[] = [
+      {
+        lineId: "line_1",
+        lineName: "Sewing Line Alpha",
+        productId: "prod_1",
+        productName: "T-Shirt Classic",
+        sku: "TS-CLASSIC",
+        plan: {
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          plannedQty: 2500,
+          dailyTarget: 100,
+        },
+        entry: {
+          finishedGood: 80,
+          rework: 2,
+          reject: 1,
+          scrap: 0,
+          wip: 10,
+          downtimeMinutes: 0,
+          issueNote: null,
+        },
+      },
+      {
+        lineId: "line_2",
+        lineName: "Sewing Line Beta",
+        productId: "prod_2",
+        productName: "Denim Jeans",
+        sku: "DJ-SLIM",
+        plan: {
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          plannedQty: 5000,
+          dailyTarget: 200,
+        },
+        entry: {
+          finishedGood: 250,
+          rework: 5,
+          reject: 2,
+          scrap: 1,
+          wip: 20,
+          downtimeMinutes: 15,
+          issueNote: null,
+        },
+      },
+      {
+        lineId: "line_3",
+        lineName: "Finishing Line Gamma",
+        productId: "prod_1",
+        productName: "T-Shirt Classic",
+        sku: "TS-CLASSIC",
+        plan: {
+          startDate: "2026-11-01",
+          endDate: "2026-11-30",
+          plannedQty: 1000,
+          dailyTarget: 50,
+        },
+        entry: {
+          finishedGood: 30,
+          rework: 0,
+          reject: 0,
+          scrap: 0,
+          wip: 5,
+          downtimeMinutes: 0,
+          issueNote: null,
+        },
+      },
+    ];
+
+    it("renders unreviewed reminder and smaller KPI cards at the top before the search & controls toolbar", () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={multiLineRows}
+          userRole="fm"
+          reportReview={null}
+        />
+      );
+
+      // Verify unreviewed report banner is displayed
+      const unreviewedBanner = screen.getByText(/Unreviewed Daily Report/i);
+      expect(unreviewedBanner).toBeDefined();
+
+      // Verify KPI cards are displayed
+      const totalFGCard = screen.getByText(/Total Finished Good/i);
+      expect(totalFGCard).toBeDefined();
+
+      // Verify search & sorting toolbar is displayed
+      const searchInput = screen.getByLabelText(/Search lines or products/i);
+      const sortSelect = screen.getByLabelText(/Sort production entries/i);
+      expect(searchInput).toBeDefined();
+      expect(sortSelect).toBeDefined();
+
+      // Verify relative DOM position hierarchy:
+      // Unreviewed reminder banner precedes KPI cards, which precedes search toolbar, which precedes the table
+      const bannerEl = screen.getByText(/Unreviewed Daily Report/i).closest("div.rounded-2xl");
+      const kpiEl = screen.getByText(/Total Finished Good/i).closest("div.card");
+      const toolbarEl = searchInput.closest("div.rounded-2xl");
+      const tableEl = screen.getByRole("table");
+
+      expect(bannerEl).toBeDefined();
+      expect(kpiEl).toBeDefined();
+      expect(toolbarEl).toBeDefined();
+      expect(tableEl).toBeDefined();
+
+      // Check document order: banner < kpi < toolbar < table
+      const allElements = Array.from(document.querySelectorAll("*"));
+      const bannerIndex = allElements.indexOf(bannerEl!);
+      const kpiIndex = allElements.indexOf(kpiEl!);
+      const toolbarIndex = allElements.indexOf(toolbarEl!);
+      const tableIndex = allElements.indexOf(tableEl);
+
+      expect(bannerIndex).toBeLessThan(kpiIndex);
+      expect(kpiIndex).toBeLessThan(toolbarIndex);
+      expect(toolbarIndex).toBeLessThan(tableIndex);
+    });
+
+    it("filters production lines by search text query matching line name, product name, or SKU", () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={multiLineRows}
+          userRole="fm"
+        />
+      );
+
+      const searchInput = screen.getByLabelText(/Search lines or products/i) as HTMLInputElement;
+
+      // Initially all 3 lines are present in the document
+      expect(screen.getByText("Sewing Line Alpha")).toBeDefined();
+      expect(screen.getByText("Sewing Line Beta")).toBeDefined();
+      expect(screen.getByText("Finishing Line Gamma")).toBeDefined();
+
+      // Search by SKU: "DJ-SLIM"
+      fireEvent.change(searchInput, { target: { value: "DJ-SLIM" } });
+
+      // Sewing Line Beta should be shown, others filtered out
+      expect(screen.getByText("Sewing Line Beta")).toBeDefined();
+      expect(screen.queryByText("Sewing Line Alpha")).toBeNull();
+      expect(screen.queryByText("Finishing Line Gamma")).toBeNull();
+
+      // Clear search via clear button
+      const clearBtn = screen.getByLabelText("Clear search");
+      fireEvent.click(clearBtn);
+
+      // All 3 lines are visible again
+      expect(screen.getByText("Sewing Line Alpha")).toBeDefined();
+      expect(screen.getByText("Sewing Line Beta")).toBeDefined();
+      expect(screen.getByText("Finishing Line Gamma")).toBeDefined();
+
+      // Search by Line name: "Gamma"
+      fireEvent.change(searchInput, { target: { value: "Gamma" } });
+      expect(screen.getByText("Finishing Line Gamma")).toBeDefined();
+      expect(screen.queryByText("Sewing Line Alpha")).toBeNull();
+      expect(screen.queryByText("Sewing Line Beta")).toBeNull();
+
+      // Click "Reset Filters"
+      const resetBtn = screen.getByRole("button", { name: /Reset Filters/i });
+      fireEvent.click(resetBtn);
+      expect(screen.getByText("Sewing Line Alpha")).toBeDefined();
+      expect(screen.getByText("Sewing Line Beta")).toBeDefined();
+    });
+
+    it("sorts entries according to selected sort criteria in flat line mode", () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={multiLineRows}
+          userRole="fm"
+        />
+      );
+
+      // Switch to Flat Line View so rows appear directly in table order
+      const byLineBtn = screen.getByTitle(/Flat Line View/i);
+      fireEvent.click(byLineBtn);
+
+      const sortSelect = screen.getByLabelText(/Sort production entries/i) as HTMLSelectElement;
+
+      // Sort by Finished Goods High to Low
+      fireEvent.change(sortSelect, { target: { value: "fg-desc" } });
+
+      // Line Beta (250 FG) should appear before Line Alpha (80 FG) before Line Gamma (30 FG)
+      let rowsAfterSort = Array.from(document.querySelectorAll("tbody tr")).map((tr) => tr.textContent || "");
+      let betaIdx = rowsAfterSort.findIndex((t) => t.includes("Sewing Line Beta"));
+      let alphaIdx = rowsAfterSort.findIndex((t) => t.includes("Sewing Line Alpha"));
+      let gammaIdx = rowsAfterSort.findIndex((t) => t.includes("Finishing Line Gamma"));
+
+      expect(betaIdx).toBeGreaterThanOrEqual(0);
+      expect(alphaIdx).toBeGreaterThanOrEqual(0);
+      expect(gammaIdx).toBeGreaterThanOrEqual(0);
+      expect(betaIdx).toBeLessThan(alphaIdx);
+      expect(alphaIdx).toBeLessThan(gammaIdx);
+
+      // Sort by Finished Goods Low to High
+      fireEvent.change(sortSelect, { target: { value: "fg-asc" } });
+      rowsAfterSort = Array.from(document.querySelectorAll("tbody tr")).map((tr) => tr.textContent || "");
+      betaIdx = rowsAfterSort.findIndex((t) => t.includes("Sewing Line Beta"));
+      alphaIdx = rowsAfterSort.findIndex((t) => t.includes("Sewing Line Alpha"));
+      gammaIdx = rowsAfterSort.findIndex((t) => t.includes("Finishing Line Gamma"));
+
+      expect(gammaIdx).toBeLessThan(alphaIdx);
+      expect(alphaIdx).toBeLessThan(betaIdx);
+    });
+
+    it("shows helpful empty state when search produces 0 matches, with a Clear Search button", () => {
+      render(
+        <DailyEntryClient
+          initialDate="2026-11-13"
+          factoryId="fac_1"
+          factoryName="Addis Ababa Plant"
+          workingDays={[1, 2, 3, 4, 5, 6]}
+          initialRows={multiLineRows}
+          userRole="fm"
+        />
+      );
+
+      const searchInput = screen.getByLabelText(/Search lines or products/i);
+      fireEvent.change(searchInput, { target: { value: "NonexistentItem12345" } });
+
+      expect(screen.getByText(/No production lines match "NonexistentItem12345"/i)).toBeDefined();
+
+      const clearSearchBtn = screen.getByRole("button", { name: "Clear Search" });
+      fireEvent.click(clearSearchBtn);
+
+      expect(screen.getByText("Sewing Line Alpha")).toBeDefined();
     });
   });
 });

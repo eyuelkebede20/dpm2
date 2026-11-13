@@ -162,4 +162,41 @@ describe("Button & Notification Interaction Tests - NotificationsDropdown", () =
       expect(reviewActions.markAllNotificationsReadAction).toHaveBeenCalled();
     });
   });
+
+  it("renders upload reminder notification with Action Required badge and Upload Report link", async () => {
+    vi.mocked(reviewActions.getNotificationsAction).mockResolvedValue({
+      success: true,
+      notifications: [
+        {
+          id: "n_remind",
+          title: "⚠️ Action Required: Upload Daily Report - Hawassa Plant",
+          message: "Daily production report for 2026-11-13 has not been reviewed or uploaded yet.",
+          type: "report_reminder",
+          link: "/entry?date=2026-11-13",
+          factoryId: "fac_1",
+          factoryName: "Hawassa Plant",
+          reportDate: "2026-11-13",
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          value: "Action Required",
+          isPositive: false,
+        },
+      ] as any,
+      unreadCount: 1,
+    });
+
+    render(<NotificationsDropdown userRole="fm" />);
+
+    const bellBtn = screen.getByRole("button", { name: /notifications/i });
+    fireEvent.click(bellBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Action Required")).toBeDefined();
+      expect(screen.getByText(/Upload Report/i)).toBeDefined();
+      expect(screen.getByRole("link", { name: /Upload Report/i })).toHaveProperty(
+        "href",
+        expect.stringContaining("/entry?date=2026-11-13")
+      );
+    });
+  });
 });

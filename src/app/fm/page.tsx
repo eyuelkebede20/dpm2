@@ -20,11 +20,13 @@ export default async function FMPage() {
   const calendarSystem =
     (context.industryProfile as any)?.calendarSystem || "ethiopian";
 
-  const factory = await getFMFactory();
-  const lines = await getLines();
-  const products = await getProducts();
-  const lineProducts = await getLineProductsAssociations();
-  const plans = await getPlans();
+  const [factory, lines, products, lineProducts, plans] = await Promise.all([
+    getFMFactory(),
+    getLines(),
+    getProducts(),
+    getLineProductsAssociations(),
+    getPlans(),
+  ]);
 
   return (
     <PageContainer className="space-y-8">

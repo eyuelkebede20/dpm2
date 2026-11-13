@@ -252,3 +252,42 @@ export function getEthDayOfWeek(year: number, month: number, day: number): numbe
   // In JDN, (jdn + 1) % 7 maps to 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   return (jdn + 1) % 7;
 }
+
+/**
+ * Checks whether the month of a given report date has passed relative to a reference date (defaults to today).
+ * Factory Managers are restricted to altering reports strictly within the active month.
+ *
+ * @param reportDate ISO date string (YYYY-MM-DD)
+ * @param calendarSystem 'ethiopian' or 'gregorian'
+ * @param referenceDate Base date to compare against (defaults to today)
+ * @returns true if reportDate belongs to a past month; false if it belongs to current (or future) month.
+ */
+export function isReportMonthPassed(
+  reportDate: string,
+  calendarSystem: "ethiopian" | "gregorian" = "ethiopian",
+  referenceDate: Date | string = new Date()
+): boolean {
+  if (!reportDate || !/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) {
+    return false;
+  }
+
+  const refDateObj = typeof referenceDate === "string" ? new Date(referenceDate) : referenceDate;
+
+  if (calendarSystem === "ethiopian") {
+    const reportEth = gregorianToEth(reportDate);
+    const refEth = gregorianToEth(refDateObj);
+
+    if (reportEth.year < refEth.year) return true;
+    if (reportEth.year === refEth.year && reportEth.month < refEth.month) return true;
+    return false;
+  } else {
+    const reportYear = parseInt(reportDate.slice(0, 4), 10);
+    const reportMonth = parseInt(reportDate.slice(5, 7), 10);
+    const refYear = refDateObj.getFullYear();
+    const refMonth = refDateObj.getMonth() + 1;
+
+    if (reportYear < refYear) return true;
+    if (reportYear === refYear && reportMonth < refMonth) return true;
+    return false;
+  }
+}

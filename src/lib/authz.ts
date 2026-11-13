@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { users, factoryUsers, qaAssignments, lines, factories } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { hasRolePermission, ac, roles, ResourceType as RbacResourceType, Action as RbacAction } from "@/lib/rbac";
+import { verifySysAdminDevToken, SYSADMIN_DEV_TOKEN_COOKIE } from "@/lib/dev-token";
 
 export { hasRolePermission, ac, roles };
 
@@ -128,6 +129,7 @@ export const getSessionContext = cache(async function getSessionContext(): Promi
   user: SessionUser | null;
   rawAdminUser: SessionUser | null;
   isImpersonating: boolean;
+  canSwitchRole: boolean;
 }> {
   try {
     const reqHeaders = await headers();
@@ -136,7 +138,7 @@ export const getSessionContext = cache(async function getSessionContext(): Promi
     });
 
     if (!session || !session.user) {
-      return { user: null, rawAdminUser: null, isImpersonating: false };
+      return { user: null, rawAdminUser: null, isImpersonating: false, canSwitchRole: false };
     }
 
     const rawUser = session.user as unknown as {
@@ -149,15 +151,24 @@ export const getSessionContext = cache(async function getSessionContext(): Promi
     };
 
     if (!rawUser.active) {
-      return { user: null, rawAdminUser: null, isImpersonating: false };
+      return { user: null, rawAdminUser: null, isImpersonating: false, canSwitchRole: false };
     }
+
+    const cookieStore = await cookies();
+    const devToken = cookieStore.get(SYSADMIN_DEV_TOKEN_COOKIE)?.value;
+    let devAdminUser: SessionUser | null = null;
+    if (devToken) {
+      devAdminUser = await verifySysAdminDevToken(devToken);
+    }
+
+    let isImpersonating = false;
+    let impersonatedUser: SessionUser | null = null;
 
     if (
       rawUser.role === "sys_admin" &&
       process.env.NODE_ENV !== "production" &&
       process.env.ENABLE_DEV_IMPERSONATION === "true"
     ) {
-      const cookieStore = await cookies();
       const impersonateUserId = cookieStore.get("dpm_impersonate_user_id")?.value;
       if (impersonateUserId) {
         const [targetUser] = await db
@@ -167,31 +178,21 @@ export const getSessionContext = cache(async function getSessionContext(): Promi
           .limit(1);
 
         if (targetUser && targetUser.active && ["om", "fm"].includes(targetUser.role)) {
-          return {
-            user: {
-              id: targetUser.id,
-              name: targetUser.name,
-              email: targetUser.email,
-              role: targetUser.role as Role,
-              active: targetUser.active,
-              mustChangePassword: targetUser.mustChangePassword,
-              impersonatedBy: rawUser.id,
-            },
-            rawAdminUser: {
-              id: rawUser.id,
-              name: rawUser.name,
-              email: rawUser.email,
-              role: rawUser.role,
-              active: rawUser.active,
-              mustChangePassword: rawUser.mustChangePassword,
-            },
-            isImpersonating: true,
+          impersonatedUser = {
+            id: targetUser.id,
+            name: targetUser.name,
+            email: targetUser.email,
+            role: targetUser.role as Role,
+            active: targetUser.active,
+            mustChangePassword: targetUser.mustChangePassword,
+            impersonatedBy: rawUser.id,
           };
+          isImpersonating = true;
         }
       }
     }
 
-    const standardUser: SessionUser = {
+    const standardUser: SessionUser = impersonatedUser || {
       id: rawUser.id,
       name: rawUser.name,
       email: rawUser.email,
@@ -200,13 +201,18 @@ export const getSessionContext = cache(async function getSessionContext(): Promi
       mustChangePassword: rawUser.mustChangePassword ?? false,
     };
 
+    const isSysAdmin = rawUser.role === "sys_admin";
+    const canSwitchRole = isSysAdmin || Boolean(devAdminUser);
+    const rawAdminUser = isSysAdmin ? standardUser : devAdminUser;
+
     return {
       user: standardUser,
-      rawAdminUser: rawUser.role === "sys_admin" ? standardUser : null,
-      isImpersonating: false,
+      rawAdminUser,
+      isImpersonating: isImpersonating || (Boolean(devAdminUser) && !isSysAdmin),
+      canSwitchRole,
     };
   } catch {
-    return { user: null, rawAdminUser: null, isImpersonating: false };
+    return { user: null, rawAdminUser: null, isImpersonating: false, canSwitchRole: false };
   }
 });
 
@@ -323,7 +329,6 @@ export async function can(
 /**
  * Safe Page Guard for Next.js Server Components.
  * Redirects unauthenticated visitors to /login instead of throwing a 500 error.
- * Redirects mustChangePassword users to /change-password.
  * Redirects unauthorized roles to /dashboard.
  */
 export async function requireAuthPage(allowedRoles?: Role[]): Promise<SessionUser> {
@@ -332,10 +337,6 @@ export async function requireAuthPage(allowedRoles?: Role[]): Promise<SessionUse
     user = await requireUser();
   } catch {
     redirect("/login");
-  }
-
-  if (user.mustChangePassword) {
-    redirect("/change-password");
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {

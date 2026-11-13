@@ -192,7 +192,7 @@ export async function provisionFactoryUserAction(rawInput: unknown) {
         email: email.toLowerCase().trim(),
         role,
         active: true,
-        mustChangePassword: true,
+        mustChangePassword: false,
         createdBy: user.id,
       });
 

@@ -12,10 +12,12 @@ import {
   factories,
   notifications,
   plans,
+  industryProfile,
 } from "@/db/schema";
 import { eq, and, inArray, lte, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { calculateDailyTarget } from "@/lib/target";
+import { isReportMonthPassed } from "@/lib/ethiopian-calendar";
 
 const saveDailyEntrySchema = z
   .object({
@@ -73,6 +75,31 @@ export async function saveDailyReportEntryAction(rawInput: unknown) {
 
   if (!allowed) {
     return { success: false, error: "Forbidden: Not authorized to enter reports for this line" };
+  }
+
+  // Strict enforcement: Factory Managers can only alter reports of that month (after that month has passed, they can't)
+  if (user.role === "fm") {
+    let calendarSystem: "ethiopian" | "gregorian" = "ethiopian";
+    try {
+      const [profile] = await db
+        .select({ calendarSystem: industryProfile.calendarSystem })
+        .from(industryProfile)
+        .where(eq(industryProfile.id, "default"))
+        .limit(1);
+      if (profile?.calendarSystem) {
+        calendarSystem = profile.calendarSystem as "ethiopian" | "gregorian";
+      }
+    } catch {
+      calendarSystem = "ethiopian";
+    }
+
+    if (isReportMonthPassed(data.date, calendarSystem)) {
+      return {
+        success: false,
+        error:
+          "Forbidden: Factory Managers can only alter reports of the active month. The reporting window for this month has closed.",
+      };
+    }
   }
 
   try {
@@ -341,7 +368,30 @@ export async function saveDailyReportBatchAction(rawInput: unknown) {
   }
 
   // Strict check: Factory Managers cannot submit multiple times for the same date (1 entry per day)
+  // and can only alter reports of the active month (after that month has passed, they can't)
   if (user.role === "fm") {
+    let calendarSystem: "ethiopian" | "gregorian" = "ethiopian";
+    try {
+      const [profile] = await db
+        .select({ calendarSystem: industryProfile.calendarSystem })
+        .from(industryProfile)
+        .where(eq(industryProfile.id, "default"))
+        .limit(1);
+      if (profile?.calendarSystem) {
+        calendarSystem = profile.calendarSystem as "ethiopian" | "gregorian";
+      }
+    } catch {
+      calendarSystem = "ethiopian";
+    }
+
+    if (isReportMonthPassed(data.date, calendarSystem)) {
+      return {
+        success: false,
+        error:
+          "Forbidden: Factory Managers can only alter reports of the active month. The reporting window for this month has closed.",
+      };
+    }
+
     const existingEntries = await db
       .select({ id: reportEntries.id })
       .from(reportEntries)

@@ -297,7 +297,7 @@ describe("Admin Workflows - Sys Admin Operations", () => {
       expect(res.error).toContain("already exists");
     });
 
-    it("successfully creates OM with mustChangePassword = true in transaction", async () => {
+    it("successfully creates OM with mustChangePassword = false in transaction", async () => {
       // No existing user
       vi.mocked(db.select).mockReturnValueOnce({
         from: vi.fn(() => ({
@@ -317,7 +317,7 @@ describe("Admin Workflows - Sys Admin Operations", () => {
       expect(mockInsertedUsers.length).toBe(1);
       expect(mockInsertedUsers[0].name).toBe("Solomon OM");
       expect(mockInsertedUsers[0].role).toBe("om");
-      expect(mockInsertedUsers[0].mustChangePassword).toBe(true);
+      expect(mockInsertedUsers[0].mustChangePassword).toBe(false);
       expect(mockInsertedUsers[0].active).toBe(true);
 
       expect(mockInsertedAccounts.length).toBe(1);
@@ -395,7 +395,7 @@ describe("Admin Workflows - Sys Admin Operations", () => {
       expect(mockInsertedUsers.length).toBe(1);
       expect(mockInsertedUsers[0].name).toBe("Abebe FM");
       expect(mockInsertedUsers[0].role).toBe("fm");
-      expect(mockInsertedUsers[0].mustChangePassword).toBe(true);
+      expect(mockInsertedUsers[0].mustChangePassword).toBe(false);
     });
 
     it("allows Sys Admin to reassign any user role", async () => {

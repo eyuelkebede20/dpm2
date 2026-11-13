@@ -5,6 +5,11 @@ import { users, sessions } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { auth } from "@/lib/auth";
+import {
+  createSysAdminDevToken,
+  verifySysAdminDevToken,
+  SYSADMIN_DEV_TOKEN_COOKIE,
+} from "@/lib/dev-token";
 
 const DEFAULT_ROUTES: Record<string, string> = {
   sys_admin: "/admin",
@@ -24,7 +29,10 @@ export async function GET() {
   }
 
   try {
-    // Strict Access Control: Only authenticated sys_admin can view dev user list
+    const cookieStore = await cookies();
+    const devToken = cookieStore.get(SYSADMIN_DEV_TOKEN_COOKIE)?.value;
+    let devAdminUser = devToken ? await verifySysAdminDevToken(devToken) : null;
+
     let currentUser = null;
     try {
       const reqHeaders = await headers();
@@ -39,11 +47,24 @@ export async function GET() {
       }
     } catch {}
 
-    if (!currentUser || currentUser.role !== "sys_admin") {
+    const isSysAdmin = currentUser?.role === "sys_admin";
+    if (!isSysAdmin && !devAdminUser) {
       return NextResponse.json(
         { enabled: false, error: "Forbidden: Only authenticated System Administrators can access developer switch role" },
         { status: 403 }
       );
+    }
+
+    // If currently sys_admin and cookie is not set yet, set dev token
+    if (isSysAdmin && currentUser) {
+      const token = createSysAdminDevToken({ id: currentUser.id, email: currentUser.email });
+      cookieStore.set(SYSADMIN_DEV_TOKEN_COOKIE, token, {
+        httpOnly: true,
+        secure: (process.env.NODE_ENV as string) === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60,
+      });
     }
 
     const allUsers = await db
@@ -60,7 +81,9 @@ export async function GET() {
 
     return NextResponse.json({
       enabled: true,
-      currentUser,
+      currentUser: currentUser || devAdminUser,
+      originalAdmin: devAdminUser || (isSysAdmin ? currentUser : null),
+      canSwitchRole: true,
       users: allUsers,
     });
   } catch (err: any) {
@@ -78,22 +101,31 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Strict Access Control: Only authenticated sys_admin can switch developer roles
-    let callerRole: string | null = null;
+    const cookieStore = await cookies();
+    const devToken = cookieStore.get(SYSADMIN_DEV_TOKEN_COOKIE)?.value;
+    let devAdminUser = devToken ? await verifySysAdminDevToken(devToken) : null;
+
+    let callerUser: any = null;
     try {
       const reqHeaders = await headers();
       const session = await auth.api.getSession({ headers: reqHeaders });
       if (session?.user) {
-        callerRole = (session.user as any).role || null;
+        callerUser = session.user;
       }
     } catch {}
 
-    if (callerRole !== "sys_admin") {
+    const isCallerSysAdmin = callerUser?.role === "sys_admin";
+    if (!isCallerSysAdmin && !devAdminUser) {
       return NextResponse.json(
         { error: "Forbidden: Only authenticated System Administrators can switch developer roles" },
         { status: 403 }
       );
     }
+
+    // Determine the persistent sysadmin identity
+    const adminIdentity = isCallerSysAdmin
+      ? { id: callerUser.id, email: callerUser.email }
+      : { id: devAdminUser!.id, email: devAdminUser!.email };
 
     const body = await req.json().catch(() => ({}));
     const { role, userId, targetRoute } = body;
@@ -152,14 +184,23 @@ export async function POST(req: NextRequest) {
       .digest("base64");
     const signedToken = `${token}.${signature}`;
 
-    // Set cookie on response
-    const cookieStore = await cookies();
+    // Set active session cookie
     cookieStore.set("dpm.session_token", signedToken, {
       httpOnly: true,
       secure: (process.env.NODE_ENV as string) === "production",
       sameSite: "lax",
       path: "/",
       expires: expiresAt,
+    });
+
+    // Persist the sysadmin dev token cookie so the user can continue switching roles
+    const newDevToken = createSysAdminDevToken(adminIdentity);
+    cookieStore.set(SYSADMIN_DEV_TOKEN_COOKIE, newDevToken, {
+      httpOnly: true,
+      secure: (process.env.NODE_ENV as string) === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // 7 days until sysadmin logs out or clears cookie
     });
 
     // Clear any previous impersonation cookie
@@ -175,6 +216,7 @@ export async function POST(req: NextRequest) {
         email: targetUser.email,
         role: targetUser.role,
       },
+      canSwitchRole: true,
       redirectTo: destination,
     });
   } catch (err: any) {
@@ -197,6 +239,7 @@ export async function DELETE() {
     const cookieStore = await cookies();
     cookieStore.delete("dpm.session_token");
     cookieStore.delete("dpm_impersonate_user_id");
+    cookieStore.delete(SYSADMIN_DEV_TOKEN_COOKIE);
     return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error("Dev logout error:", err);

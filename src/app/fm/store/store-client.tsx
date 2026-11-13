@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createStoreTransactionAction } from "@/actions/fm-actions";
 import { SearchInput } from "@/components/ui";
+import { usePagination } from "@/hooks/use-pagination";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Warehouse,
   TrendingUp,
@@ -106,6 +108,12 @@ export function StoreClient({
       );
     });
   }, [transactions, txFilter, txSearch]);
+
+  // Client-side pagination for smooth ledger loading
+  const txPagination = usePagination({
+    items: filteredTransactions,
+    initialPageSize: 10,
+  });
 
   // Submit Transaction
   const handleCreateTransaction = async (e: React.FormEvent) => {
@@ -324,7 +332,7 @@ export function StoreClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredTransactions.map((tx) => {
+                {txPagination.paginatedItems.map((tx) => {
                   const isPositive = tx.delta >= 0;
                   return (
                     <tr key={tx.id} className="hover:bg-slate-50/60 transition-colors">
@@ -378,7 +386,7 @@ export function StoreClient({
               No transactions match your query.
             </div>
           ) : (
-            filteredTransactions.map((tx) => {
+            txPagination.paginatedItems.map((tx) => {
               const isPositive = tx.delta >= 0;
               return (
                 <div
@@ -421,6 +429,13 @@ export function StoreClient({
             })
           )}
         </div>
+
+        {/* Scalable Pagination Controls for Transactions Ledger */}
+        <Pagination
+          {...txPagination}
+          itemLabel="transactions"
+          className="border-t border-slate-100 pt-3"
+        />
       </div>
 
       {/* Modal: Store Transaction / Stock Adjustment */}

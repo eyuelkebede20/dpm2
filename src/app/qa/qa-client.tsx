@@ -4,6 +4,8 @@ import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { QAEntryItem, reviewQAEntryAction } from "@/actions/qa-actions";
 import { SearchInput } from "@/components/ui";
+import { usePagination } from "@/hooks/use-pagination";
+import { Pagination } from "@/components/ui/pagination";
 import {
   CheckCircle2,
   XCircle,
@@ -125,6 +127,17 @@ export function QAClient({
         return true;
       });
   }, [entries, historyFilter, selectedProductFilter, searchQuery]);
+
+  // Scalable client-side pagination for smooth loading
+  const pendingPagination = usePagination({
+    items: pendingEntries,
+    initialPageSize: 10,
+  });
+
+  const historyPagination = usePagination({
+    items: historyEntries,
+    initialPageSize: 10,
+  });
 
   // Handle Review Action (Approve / Reject)
   const handleReview = async (
@@ -454,9 +467,10 @@ export function QAClient({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4">
-              {pendingEntries.map((item) => {
-                const isProcessing = processingId === item.id;
+            <>
+              <div className="grid grid-cols-1 gap-4">
+                {pendingPagination.paginatedItems.map((item) => {
+                  const isProcessing = processingId === item.id;
                 return (
                   <div
                     key={item.id}
@@ -601,7 +615,9 @@ export function QAClient({
                   </div>
                 );
               })}
-            </div>
+              </div>
+              <Pagination {...pendingPagination} itemLabel="batches" />
+            </>
           )}
         </div>
       )}
@@ -622,8 +638,9 @@ export function QAClient({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:gap-4">
-              {historyEntries.map((item) => {
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:gap-4">
+                {historyPagination.paginatedItems.map((item) => {
                 const isApproved = item.status === "approved";
                 const isProcessing = processingId === item.id;
 
@@ -740,7 +757,9 @@ export function QAClient({
                   </div>
                 );
               })}
-            </div>
+              </div>
+              <Pagination {...historyPagination} itemLabel="reviews" />
+            </>
           )}
         </div>
       )}

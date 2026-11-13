@@ -91,11 +91,13 @@ interface DevAccount {
 interface RoleSwitcherProps {
   currentRole?: string | null;
   currentEmail?: string | null;
+  canSwitchRole?: boolean;
 }
 
-export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
+export function RoleSwitcher({ currentRole, currentEmail, canSwitchRole }: RoleSwitcherProps) {
   const isSysAdmin = currentRole === "sys_admin";
-  const { isDeveloperMode, setDeveloperMode } = useDeveloperMode(isSysAdmin);
+  const hasAdminPrivilege = isSysAdmin || Boolean(canSwitchRole);
+  const { isDeveloperMode, setDeveloperMode } = useDeveloperMode(hasAdminPrivilege);
 
   const pathname = usePathname();
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -113,7 +115,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
 
   // Load all users on popover open
   useEffect(() => {
-    if (isOpen && !usersLoaded && isSysAdmin && isDeveloperMode) {
+    if (isOpen && !usersLoaded && hasAdminPrivilege && isDeveloperMode) {
       fetch("/api/dev/switch-role")
         .then((res) => res.json())
         .then((data) => {
@@ -124,7 +126,7 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
         })
         .catch(() => {});
     }
-  }, [isOpen, usersLoaded, isSysAdmin, isDeveloperMode]);
+  }, [isOpen, usersLoaded, hasAdminPrivilege, isDeveloperMode]);
 
   // Close on Escape or click outside
   useEffect(() => {
@@ -217,8 +219,9 @@ export function RoleSwitcher({ currentRole, currentEmail }: RoleSwitcherProps) {
   });
 
   // STRICT ACCESS CONTROL:
-  // Only authenticated System Administrators with Developer Option enabled in Settings can see this icon/button.
-  if (!isSysAdmin || !isDeveloperMode) {
+  // Only authenticated System Administrators (or impersonating sysadmin via dev token)
+  // with Developer Option enabled in Settings can see this icon/button.
+  if (!hasAdminPrivilege || !isDeveloperMode) {
     return null;
   }
 

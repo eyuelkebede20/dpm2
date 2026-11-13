@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { getSessionContext } from "@/lib/authz";
@@ -5,6 +6,7 @@ import { Navbar } from "@/components/navbar";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { PwaOtaManager } from "@/components/pwa/pwa-ota-manager";
+import { NavigationProgress } from "@/components/ui/navigation-progress";
 
 export const viewport: Viewport = {
   themeColor: "#1e293b",
@@ -33,11 +35,14 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { user, isImpersonating } = await getSessionContext();
+  const { user, isImpersonating, canSwitchRole } = await getSessionContext();
 
   return (
     <html lang="en" data-theme="light">
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased flex flex-col">
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
         <PwaOtaManager>
           {user && isImpersonating && (
             <ImpersonationBanner
@@ -50,10 +55,11 @@ export default async function RootLayout({
           )}
           {user && <Navbar user={user} />}
           <main className="flex-1 pb-16 md:pb-0">{children}</main>
-          {user && user.role === "sys_admin" && (
+          {user && (user.role === "sys_admin" || canSwitchRole) && (
             <RoleSwitcher
               currentRole={user.role}
               currentEmail={user.email}
+              canSwitchRole={canSwitchRole}
             />
           )}
         </PwaOtaManager>

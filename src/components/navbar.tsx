@@ -82,6 +82,7 @@ export function Navbar({ user }: NavbarProps) {
   const handleSignOut = async () => {
     try {
       setSigningOut(true);
+      await fetch("/api/dev/switch-role", { method: "DELETE" }).catch(() => {});
       await authClient.signOut();
       router.push("/login");
       router.refresh();

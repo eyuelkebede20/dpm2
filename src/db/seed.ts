@@ -108,44 +108,6 @@ export async function seedDatabase(options: { reset?: boolean } = { reset: true 
     calendarSystem: "ethiopian",
   });
 
-  // 1b. Backend Server Endpoints & Network Presets (Factory LAN vs Cloud)
-  console.log("2b. Seeding Standard Server Endpoints (LAN / Internet / Localhost)...");
-  const defaultServerEndpoints = [
-    {
-      id: "srv_lan_factory",
-      name: "Main Plant Factory LAN",
-      url: "http://192.168.1.100:3000",
-      description: "On-premises high-speed factory local area network server",
-      environment: "lan",
-      isDefault: true,
-      isActive: true,
-      createdBy: "usr_admin",
-    },
-    {
-      id: "srv_hq_cloud",
-      name: "Homicho HQ Internet Cloud",
-      url: "https://dpm.homicho.et",
-      description: "Central cloud server accessible over public internet and mobile data",
-      environment: "cloud",
-      isDefault: false,
-      isActive: true,
-      createdBy: "usr_admin",
-    },
-    {
-      id: "srv_localhost",
-      name: "Localhost Edge / Developer",
-      url: "http://localhost:3000",
-      description: "Local development gateway running on localhost",
-      environment: "local",
-      isDefault: false,
-      isActive: true,
-      createdBy: "usr_admin",
-    },
-  ];
-  for (const srv of defaultServerEndpoints) {
-    await db.insert(serverEndpoints).values(srv);
-  }
-
   // 2. Standard Defense Munition Downtime Reasons (DOW-01 through DOW-09)
   console.log("3. Seeding Standard Defense Downtime Reasons (DOW-01 .. DOW-09)...");
   const standardDowntimeReasons = [
@@ -344,6 +306,44 @@ export async function seedDatabase(options: { reset?: boolean } = { reset: true 
       userId: u.id,
       password: u.password,
     });
+  }
+
+  // Server endpoint creators must exist before these rows are inserted.
+  console.log("2b. Seeding Standard Server Endpoints (LAN / Internet / Localhost)...");
+  const defaultServerEndpoints = [
+    {
+      id: "srv_lan_factory",
+      name: "Main Plant Factory LAN",
+      url: "http://192.168.1.100:3000",
+      description: "On-premises high-speed factory local area network server",
+      environment: "lan",
+      isDefault: true,
+      isActive: true,
+      createdBy: "usr_admin",
+    },
+    {
+      id: "srv_hq_cloud",
+      name: "Homicho HQ Internet Cloud",
+      url: "https://dpm.homicho.et",
+      description: "Central cloud server accessible over public internet and mobile data",
+      environment: "cloud",
+      isDefault: false,
+      isActive: true,
+      createdBy: "usr_admin",
+    },
+    {
+      id: "srv_localhost",
+      name: "Localhost Edge / Developer",
+      url: "http://localhost:3000",
+      description: "Local development gateway running on localhost",
+      environment: "local",
+      isDefault: false,
+      isActive: true,
+      createdBy: "usr_admin",
+    },
+  ];
+  for (const srv of defaultServerEndpoints) {
+    await db.insert(serverEndpoints).values(srv);
   }
 
   // 5. 5 Munitions Factories (From DPM HAEI Complex)

@@ -7,6 +7,7 @@ import {
   dailyReportReviews,
   notifications,
   factories,
+  factoryUsers,
   users,
   plans,
   industryProfile,
@@ -235,12 +236,20 @@ export async function getNotificationsAction() {
       .limit(30);
 
     const enriched = list.map((n) => {
+      const isReminder = n.type === "report_reminder";
       const displayName =
-        n.title.replace(/^New Production Report:\s*/i, "").trim() || "Daily Report";
+        n.title
+          .replace(/^⚠️ Action Required:\s*/i, "")
+          .replace(/^New Production Report:\s*/i, "")
+          .replace(/^⚠️ Daily Report Reminder:\s*/i, "")
+          .trim() || "Daily Report";
       let value = n.message || "";
       let isPositive = true;
 
-      if (value.startsWith("+") || value.startsWith("-")) {
+      if (isReminder) {
+        value = "Action Required";
+        isPositive = false;
+      } else if (value.startsWith("+") || value.startsWith("-")) {
         isPositive = !value.startsWith("-");
       } else {
         value = "+0 pcs";
@@ -609,6 +618,129 @@ export async function updateDailyPlanAction(rawInput: unknown) {
     return {
       success: false,
       error: err.message || "Failed to update daily plan",
+    };
+  }
+}
+
+const sendReportReminderSchema = z
+  .object({
+    factoryId: z.string().min(1, "Factory ID is required"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
+    message: z.string().max(500, "Message too long").optional().nullable(),
+  })
+  .strict();
+
+/**
+ * Operation Manager or Sys Admin sends a notification to Factory Managers
+ * reminding them to upload their daily report for a given factory and date.
+ */
+export async function sendReportReminderAction(rawInput: unknown) {
+  const user = await requireUser();
+
+  if (user.role !== "om" && user.role !== "sys_admin") {
+    return {
+      success: false,
+      error: "Forbidden: Only Operation Managers or Sys Admins can send report reminders",
+    };
+  }
+
+  const parsed = sendReportReminderSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.errors[0]?.message || "Invalid input",
+    };
+  }
+
+  const { factoryId, date, message } = parsed.data;
+
+  // Verify factory ownership if OM
+  const [factory] = await db
+    .select({ id: factories.id, name: factories.name, omId: factories.omId })
+    .from(factories)
+    .where(eq(factories.id, factoryId))
+    .limit(1);
+
+  if (!factory) {
+    return { success: false, error: "Factory not found" };
+  }
+
+  if (user.role === "om" && factory.omId !== user.id) {
+    return {
+      success: false,
+      error: "Forbidden: You are not assigned as the Operation Manager for this factory",
+    };
+  }
+
+  // Find all active Factory Managers assigned to this factory
+  const fms = await db
+    .select({
+      userId: factoryUsers.userId,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(factoryUsers)
+    .innerJoin(users, eq(users.id, factoryUsers.userId))
+    .where(
+      and(
+        eq(factoryUsers.factoryId, factoryId),
+        eq(users.role, "fm"),
+        eq(users.active, true)
+      )
+    );
+
+  if (fms.length === 0) {
+    return {
+      success: false,
+      error: "No active Factory Managers are assigned to this factory to receive reminders.",
+    };
+  }
+
+  const reminderMsg =
+    message?.trim() ||
+    `Daily production report for ${date} has not been reviewed or uploaded yet. Please enter and upload today's production numbers.`;
+
+  try {
+    for (const fm of fms) {
+      const notifId = `notif_remind_${factoryId}_${date}_${fm.userId}`;
+      await db
+        .insert(notifications)
+        .values({
+          id: notifId,
+          userId: fm.userId,
+          title: `⚠️ Action Required: Upload Daily Report - ${factory.name}`,
+          message: reminderMsg,
+          type: "report_reminder",
+          link: `/entry?date=${date}`,
+          factoryId: factory.id,
+          reportDate: date,
+          isRead: false,
+          createdAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: notifications.id,
+          set: {
+            title: `⚠️ Action Required: Upload Daily Report - ${factory.name}`,
+            message: reminderMsg,
+            isRead: false,
+            createdAt: new Date(),
+          },
+        });
+    }
+
+    revalidatePath("/entry");
+    revalidatePath("/om");
+
+    return {
+      success: true,
+      notifiedCount: fms.length,
+      recipients: fms.map((f) => f.userName),
+    };
+  } catch (err: any) {
+    console.error("Send report reminder error:", err);
+    return {
+      success: false,
+      error: err.message || "Failed to send report reminder notification",
     };
   }
 }

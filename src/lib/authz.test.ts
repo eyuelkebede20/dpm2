@@ -209,12 +209,13 @@ describe("authz.ts - Central Authorization Guard", () => {
       expect(redirect).toHaveBeenCalledWith("/login");
     });
 
-    it("redirects user with mustChangePassword = true to /change-password", async () => {
+    it("does not force redirect user with mustChangePassword = true to /change-password", async () => {
       vi.mocked(auth.api.getSession).mockResolvedValue({
         user: { ...fmUser, mustChangePassword: true },
       } as any);
-      await expect(requireAuthPage()).rejects.toThrow("NEXT_REDIRECT: /change-password");
-      expect(redirect).toHaveBeenCalledWith("/change-password");
+      const user = await requireAuthPage(["fm"]);
+      expect(user.mustChangePassword).toBe(true);
+      expect(redirect).not.toHaveBeenCalled();
     });
 
     it("redirects user with unauthorized role to /dashboard", async () => {

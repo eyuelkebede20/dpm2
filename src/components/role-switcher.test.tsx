@@ -59,16 +59,24 @@ describe("RoleSwitcher - Strict Access Control & Interactive Audit", () => {
       expect(screen.queryByTitle("Switch Active Developer Role")).toBeNull();
     });
 
-    it("renders NOTHING when user is logged in as non-sys_admin (OM, FM, QA) even if dev mode was enabled in storage", () => {
+    it("renders NOTHING when user is logged in as non-sys_admin without canSwitchRole even if dev mode was enabled in storage", () => {
       setDeveloperModeActive(true);
 
       const roles = ["om", "fm", "qa", "guest"] as const;
       for (const role of roles) {
         cleanup();
-        const { container } = render(<RoleSwitcher currentRole={role} />);
+        const { container } = render(<RoleSwitcher currentRole={role} canSwitchRole={false} />);
         expect(container.firstChild).toBeNull();
         expect(screen.queryByTitle("Switch Active Developer Role")).toBeNull();
       }
+    });
+
+    it("renders floating action button when user has non-admin currentRole but canSwitchRole is true (sysadmin dev token active)", () => {
+      setDeveloperModeActive(true);
+      render(<RoleSwitcher currentRole="om" canSwitchRole={true} />);
+
+      const toggleBtn = screen.getByTitle("Switch Active Developer Role");
+      expect(toggleBtn).toBeDefined();
     });
 
     it("renders NOTHING for sys_admin when developer option is OFF / default", () => {

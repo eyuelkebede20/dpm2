@@ -53,12 +53,19 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Strict 1 Entry Per Day Lockout: locks all inputs and steppers when entry is submitted, rendering completion banner and badge (`src/components/entry-grid/daily-entry-client.test.tsx`)
 - [x] Immediate in-session lockout after save, preventing duplicate or subsequent submissions (`src/components/entry-grid/daily-entry-client.test.tsx`)
 - [x] Admin override mode: allows Sys Admin to edit numbers when needed with visible override indicator (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Unreviewed daily report warning banner: surfaces when report has not received OM review (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Product unreviewed & not uploaded warning signs: displayed on product rows and cards when unreviewed or unrecorded (`src/components/entry-grid/daily-entry-client.test.tsx`)
+- [x] Strict FM monthly alteration lockout: locks all steppers, inputs, and submit button when viewing past month (`src/components/entry-grid/daily-entry-client.test.tsx`, `src/actions/report-actions.test.ts`)
+- [x] 1-Click "Notify Factory Managers" reminder action for OM (`src/components/entry-grid/daily-entry-client.test.tsx`, `src/actions/review-actions.test.ts`)
 
 ### `/calendar` (Month Production Calendar View)
 - [x] Month navigation: Prev Month, Next Month, Today (`src/components/calendar/calendar-client.test.tsx`)
-- [x] Calendar day cells: displays total output and variance badge (`src/components/calendar/calendar-client.test.tsx`)
-- [x] Day cell click: opens side-drawer with line breakdown (`src/components/calendar/calendar-client.test.tsx`)
-- [x] Drawer "Edit Report" button: deep-links to `/entry?date=...` (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Quick Month Jumper: responsive mobile bottom-sheet modal (`animate-in slide-in-from-bottom`, drag handle) and desktop centered dialog supporting 13 Ethiopian months & 12 Gregorian months (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Responsive Calendar Date Boxes: bold font-mono numerals (`text-sm sm:text-base md:text-lg font-black`), dual-calendar micro-labels (`EC` / `GC`), high-contrast rings (Today, Holiday, Off-day), touch targets ≥ 44px (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Compact vs Grid vs List view modes with mobile-optimized compact badge indicators (`✦` for holidays) preventing overcrowded text overlap (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Day cell click: opens responsive bottom-sheet inspection drawer on mobile (< 640px) and inline card on desktop with line breakdown (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Drawer "Edit Daily Production Numbers" button: deep-links to `/entry?date=...` (`src/components/calendar/calendar-client.test.tsx`)
+- [x] Responsive Ethiopian Date Picker Modal: mobile-native bottom sheet (`rounded-t-3xl`, drag handle, `pb-safe`) and desktop centered dialog with 7-column weekday headers (`ETH_PICKER_WEEKDAYS`), leading blank offset, and live dual-date preview chips (`src/components/entry-grid/daily-entry-client.test.tsx`)
 
 ---
 
@@ -81,6 +88,8 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] QA Matrix checkboxes: toggles assignment with pending spinner (`src/app/om/om-client.test.tsx`)
 - [x] Notification badge & report card OM review sign-off (`src/actions/review-actions.test.ts`)
 - [x] Item-by-item OM review with note and approval status (`src/actions/review-actions.test.ts`)
+- [x] Operating plant cards display `⚠️ Review Pending` warning sign (`src/app/om/om-client.test.tsx`)
+- [x] Quick "Notify FM" button dispatches upload reminder notifications to assigned Factory Managers (`src/app/om/om-client.test.tsx`, `src/actions/review-actions.test.ts`)
 
 ### `/qa` (Quality Assurance Portal)
 - [x] Pending reports list with status badges (`src/actions/qa-actions.test.ts`)
@@ -220,6 +229,25 @@ This living checklist tracks every interactive element (buttons, forms, links, t
 - [x] Monthly Tab: monthly scheduled target, month-to-date output, remaining balance, fulfillment bar, and completion status (`src/components/planning/planning-client.test.tsx`)
 - [x] Quick `+ Set Plan` action: OM can click `set-plan-[productId]` on any unplanned product row to prefill and open create modal (`src/components/planning/planning-client.test.tsx`)
 - [x] Factory Manager Read-Only Lockdown: FM sees all 4 tabs, warnings, targets, and progress, with all alteration controls (`New Plan`, `Batch Add`, `Edit`, `Set Plan`) strictly hidden (`src/components/planning/planning-client.test.tsx`)
+
+---
+
+## 12. DevMode Role Switcher & Authentication Resilience
+
+### SysAdmin Dev Token Role Switching (`<RoleSwitcher />`)
+- [x] Issues signed `dpm_dev_sysadmin_token` cookie when Sys Admin logs in or switches roles (`src/lib/dev-token.test.ts`, `src/app/api/auth/status/route.test.ts`)
+- [x] `verifySysAdminDevToken` checks HMAC-SHA256 signature, validates database user active status, and confirms `sys_admin` role (`src/lib/dev-token.test.ts`)
+- [x] Session context (`getSessionContext()`) reads dev token and preserves `canSwitchRole: true` across all role transitions (`src/lib/authz.test.ts`)
+- [x] `<RoleSwitcher />` remains visible and fully interactive when switched to `om`, `fm`, or `qa` (`src/components/role-switcher.test.tsx`)
+- [x] `/api/dev/switch-role` (GET, POST) allows role switching when active session role is `sys_admin` OR valid `dpm_dev_sysadmin_token` is present (`src/app/api/dev/switch-role/route.test.ts`)
+- [x] Explicit Sign Out (`handleSignOut`) and `DELETE /api/dev/switch-role` clear `dpm_dev_sysadmin_token`, `dpm.session_token`, and `dpm_impersonate_user_id` (`src/components/navbar.tsx`, `src/app/api/dev/switch-role/route.test.ts`)
+
+### Temporary Password Login Removal
+- [x] Removed all forced redirects to `/change-password` from `LoginClient` on mount and after successful authentication (`src/app/login/login-client.test.tsx`)
+- [x] `requireAuthPage()` does not force redirect users with `mustChangePassword = true` to `/change-password`, routing directly to requested page or `/dashboard` (`src/lib/authz.test.ts`)
+- [x] User creation actions (`createOmAction`, `createUserAction`, `provisionFactoryUserAction`) default `mustChangePassword` to `false` (`src/actions/admin-actions.test.ts`, `src/actions/om-actions.test.ts`)
+- [x] Admin password reset schema (`adminResetPasswordSchema`) defaults `mustChangePassword` to `false` (`src/actions/admin-actions.test.ts`)
+
 
 
 

@@ -212,7 +212,7 @@ export async function createUserAction(rawInput: unknown) {
         email: email.toLowerCase().trim(),
         role,
         active: true,
-        mustChangePassword: true,
+        mustChangePassword: false,
         createdBy: user.id,
       });
 
@@ -302,7 +302,7 @@ export async function createOperationManagerAction(rawInput: unknown) {
         email: email.toLowerCase().trim(),
         role: "om",
         active: true,
-        mustChangePassword: true,
+        mustChangePassword: false,
         createdBy: user.id,
       });
 
@@ -358,7 +358,7 @@ const adminResetPasswordSchema = z
       .string()
       .min(12, "Password must be at least 12 characters long")
       .max(128, "Password is too long"),
-    mustChangePassword: z.boolean().default(true),
+    mustChangePassword: z.boolean().default(false),
   })
   .strict();
 

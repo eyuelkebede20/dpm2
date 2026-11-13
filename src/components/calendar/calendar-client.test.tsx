@@ -1,7 +1,7 @@
 import "@/test/setup-dom";
 import React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { CalendarClient } from "./calendar-client";
 
 const mockPush = vi.fn();
@@ -342,5 +342,95 @@ describe("Button Interaction Tests - CalendarClient", { timeout: 15000 }, () => 
 
     // Inspect should show Production by Product header
     expect(screen.getAllByText(/Production by Product/i).length).toBeGreaterThan(0);
+  });
+
+  it("opens responsive bottom-sheet month jumper in Ethiopian mode and jumps to month", () => {
+    renderCalendar();
+
+    // Find and click the month jumper trigger
+    const jumperBtn = screen.getByTitle("Jump to Ethiopian Month");
+    fireEvent.click(jumperBtn);
+
+    // Jumper dialog should be open with bottom-sheet styling
+    const dialog = screen.getByRole("dialog", { name: "Select Ethiopian Month & Year" });
+    expect(dialog).toBeDefined();
+    expect(dialog.className).toContain("slide-in-from-bottom");
+    expect(dialog.className).toContain("rounded-t-3xl");
+
+    // Close button
+    const closeBtn = screen.getByRole("button", { name: "Close month jumper" });
+    fireEvent.click(closeBtn);
+    expect(screen.queryByRole("dialog", { name: "Select Ethiopian Month & Year" })).toBeNull();
+  });
+
+  it("opens responsive bottom-sheet month jumper in Gregorian mode and jumps to month", () => {
+    render(
+      <CalendarClient
+        factoryId="fac_1"
+        factoryName="Addis Ababa Plant"
+        calendarType="gregorian"
+        ethiopianYear={2019}
+        ethiopianMonth={2}
+        gregorianMonthStr="2026-11"
+        startDateStr="2026-11-01"
+        endDateStr="2026-11-30"
+        workingDays={[1, 2, 3, 4, 5, 6]}
+        entries={sampleEntries}
+        plans={samplePlans}
+      />
+    );
+
+    // Click the Gregorian month header
+    const jumperBtn = screen.getByTitle("Jump to Gregorian Month");
+    fireEvent.click(jumperBtn);
+
+    // Jumper dialog should be open
+    const dialog = screen.getByRole("dialog", { name: "Select Gregorian Month & Year" });
+    expect(dialog).toBeDefined();
+    expect(dialog.className).toContain("slide-in-from-bottom");
+
+    // Verify Gregorian months are displayed inside dialog (e.g., January, November)
+    expect(within(dialog).getByRole("button", { name: /January/i })).toBeDefined();
+    expect(within(dialog).getByRole("button", { name: /November/i })).toBeDefined();
+
+    // Click January to jump
+    const janBtn = within(dialog).getByRole("button", { name: /January/i });
+    fireEvent.click(janBtn);
+    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining("month=2026-01"));
+  });
+
+  it("opens bottom-sheet day inspection drawer when date tile is clicked in compact view", () => {
+    renderCalendar();
+
+    // Switch to Compact view
+    const compactBtn = screen.getByRole("button", { name: "Compact" });
+    fireEvent.click(compactBtn);
+
+    // Verify initial load has no day inspection dialog
+    expect(screen.queryByRole("dialog", { name: "Day Inspection" })).toBeNull();
+
+    // Click compact day tile
+    const compactTiles = screen.getAllByTestId("compact-day-tile");
+    expect(compactTiles.length).toBeGreaterThan(0);
+    fireEvent.click(compactTiles[0]);
+
+    // Dialog should open with bottom-sheet styling
+    const dialog = screen.getByRole("dialog", { name: "Day Inspection" });
+    expect(dialog).toBeDefined();
+    expect(dialog.className).toContain("slide-in-from-bottom");
+    expect(dialog.className).toContain("rounded-t-3xl");
+  });
+
+  it("renders responsive date boxes with visible day numbers, secondary labels, and status badges", () => {
+    renderCalendar();
+
+    const tiles = screen.getAllByTestId("calendar-day-tile");
+    expect(tiles.length).toBeGreaterThan(0);
+
+    // Each day tile must have min-h >= 58px for touch ergonomics
+    expect(tiles[0].className).toContain("min-h-[58px]");
+
+    // Verify secondary calendar prefix (GC in Ethiopian mode)
+    expect(screen.getAllByText("GC").length).toBeGreaterThan(0);
   });
 });

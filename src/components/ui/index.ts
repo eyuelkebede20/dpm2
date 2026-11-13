@@ -6,3 +6,5 @@ export * from "./input";
 export * from "./search-input";
 export * from "./select";
 export * from "./form-field";
+export * from "./pagination";
+export * from "./navigation-progress";

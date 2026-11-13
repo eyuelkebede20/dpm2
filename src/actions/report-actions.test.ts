@@ -125,7 +125,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
     it("fails when finishedGood is negative", async () => {
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: -5,
@@ -137,7 +137,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
     it("fails when rework, reject, scrap, wip, or downtime is negative", async () => {
       const res1 = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 50,
@@ -146,7 +146,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       expect(res1.success).toBe(false);
 
       const res2 = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 50,
@@ -159,7 +159,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       mockSelectResult = []; // Line not found
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_nonexistent",
         productId: "prod_01",
         finishedGood: 50,
@@ -173,7 +173,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       vi.mocked(authz.can).mockResolvedValue(false);
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 50,
@@ -194,7 +194,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 50,
@@ -210,7 +210,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       mockExistingEntry = null; // First entry for this date/line/product
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 120,
@@ -237,7 +237,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       mockExistingEntry = null;
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 0,
@@ -252,12 +252,12 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
     it("fails when FM tries to submit a revision for an existing entry (one data entry per day restriction)", async () => {
       mockExistingEntry = {
-        id: "rep_2026-11-08_line_01_prod_01",
+        id: "rep_2026-11-13_line_01_prod_01",
         finishedGood: 100,
       };
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 140,
@@ -274,12 +274,12 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       mockExistingEntry = {
-        id: "rep_2026-11-08_line_01_prod_01",
+        id: "rep_2026-11-13_line_01_prod_01",
         finishedGood: 100,
       };
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 140, // Increased by 40
@@ -297,12 +297,12 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       mockExistingEntry = {
-        id: "rep_2026-11-08_line_01_prod_01",
+        id: "rep_2026-11-13_line_01_prod_01",
         finishedGood: 100,
       };
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 75, // Decreased by 25
@@ -320,12 +320,12 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       mockExistingEntry = {
-        id: "rep_2026-11-08_line_01_prod_01",
+        id: "rep_2026-11-13_line_01_prod_01",
         finishedGood: 100,
       };
 
       const res = await saveDailyReportEntryAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 100, // Same quantity
@@ -343,7 +343,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       mockExistingEntry = null;
 
       const res = await saveDailyReportEntry({
-        date: "2026-11-08",
+        date: "2026-11-13",
         lineId: "line_01",
         productId: "prod_01",
         finishedGood: 250,
@@ -356,7 +356,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
       expect(res.success).toBe(true);
       expect(res.deltaRecorded).toBe(250);
-      expect(res.reportEntryId).toBe("rep_2026-11-08_line_01_prod_01");
+      expect(res.reportEntryId).toBe("rep_2026-11-13_line_01_prod_01");
     });
 
     it("throws error in saveDailyReportEntry if line is missing", async () => {
@@ -364,7 +364,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
       await expect(
         saveDailyReportEntry({
-          date: "2026-11-08",
+          date: "2026-11-13",
           lineId: "missing_line",
           productId: "prod_01",
           finishedGood: 50,
@@ -382,7 +382,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
       await expect(
         saveDailyReportEntry({
-          date: "2026-11-08",
+          date: "2026-11-13",
           lineId: "line_01",
           productId: "prod_01",
           finishedGood: 50,
@@ -400,7 +400,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
       const batchResult = await saveDailyReportBatch([
         {
-          date: "2026-11-08",
+          date: "2026-11-13",
           lineId: "line_01",
           productId: "prod_01",
           finishedGood: 100,
@@ -411,7 +411,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
           downtimeMinutes: 0,
         },
         {
-          date: "2026-11-08",
+          date: "2026-11-13",
           lineId: "line_01",
           productId: "prod_02",
           finishedGood: 150,
@@ -440,7 +440,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       const res = await saveDailyReportBatchAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         entries: [
           {
             lineId: "line_01",
@@ -458,7 +458,7 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       mockExistingBatchEntry = null;
 
       const res = await saveDailyReportBatchAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         entries: [
           {
             lineId: "line_01",
@@ -491,10 +491,10 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
 
     it("strictly blocks FM from making multiple entries for the same date (1 entry per day rule)", async () => {
       // Simulate that an entry already exists for this date and line
-      mockExistingBatchEntry = { id: "rep_2026-11-08_line_01_prod_01" };
+      mockExistingBatchEntry = { id: "rep_2026-11-13_line_01_prod_01" };
 
       const res = await saveDailyReportBatchAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         entries: [
           {
             lineId: "line_01",
@@ -519,10 +519,10 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       // Existing entry present
-      mockExistingBatchEntry = { id: "rep_2026-11-08_line_01_prod_01" };
+      mockExistingBatchEntry = { id: "rep_2026-11-13_line_01_prod_01" };
 
       const res = await saveDailyReportBatchAction({
-        date: "2026-11-08",
+        date: "2026-11-13",
         entries: [
           {
             lineId: "line_01",
@@ -533,6 +533,35 @@ describe("Report Workflows - Daily Production Reporting & Stock Ledger", () => {
       });
 
       expect(res.success).toBe(true);
+    });
+
+    it("strictly blocks FM from altering reports of a past month", async () => {
+      // 2025-01-10 is a past month relative to 2026-11
+      const res = await saveDailyReportBatchAction({
+        date: "2025-01-10",
+        entries: [
+          {
+            lineId: "line_01",
+            productId: "prod_01",
+            finishedGood: 120,
+          },
+        ],
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Factory Managers can only alter reports of the active month");
+    });
+
+    it("strictly blocks FM from single report entry for a past month", async () => {
+      const res = await saveDailyReportEntryAction({
+        date: "2025-01-10",
+        lineId: "line_01",
+        productId: "prod_01",
+        finishedGood: 100,
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Factory Managers can only alter reports of the active month");
     });
   });
 });

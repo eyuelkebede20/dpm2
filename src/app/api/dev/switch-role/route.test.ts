@@ -25,6 +25,15 @@ vi.mock("@/lib/auth", () => ({
 
 let mockUsersInDb: any[] = [];
 let mockInsertedSessions: any[] = [];
+let mockDevAdminResult: any = null;
+
+vi.mock("@/lib/dev-token", () => ({
+  SYSADMIN_DEV_TOKEN_COOKIE: "dpm_dev_sysadmin_token",
+  createSysAdminDevToken: vi.fn(() => "mock-signed-dev-token"),
+  verifySysAdminDevToken: vi.fn(async () => mockDevAdminResult),
+  setSysAdminDevCookie: vi.fn(),
+  clearSysAdminDevCookie: vi.fn(),
+}));
 
 vi.mock("@/db", () => {
   return {
@@ -57,6 +66,8 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
     vi.clearAllMocks();
     mockUsersInDb = [];
     mockInsertedSessions = [];
+    mockDevAdminResult = null;
+    mockCookieStore.get.mockReturnValue(undefined);
     (process.env as any).NODE_ENV = "development";
     process.env.ENABLE_DEV_IMPERSONATION = "true";
     process.env.BETTER_AUTH_SECRET = "test-secret-at-least-32-chars-long-abc-123";
@@ -74,15 +85,34 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
       expect(res.status).toBe(403);
     });
 
-    it("returns 403 when session user is not sys_admin", async () => {
+    it("returns 403 when session user is not sys_admin and no dev token present", async () => {
       (auth.api.getSession as any).mockResolvedValue({
         user: { id: "om-1", email: "om@dpm.local", role: "om" },
       });
+      mockCookieStore.get.mockReturnValue(undefined);
 
       const res = await GET();
       expect(res.status).toBe(403);
       const data = await res.json();
       expect(data.error).toContain("Forbidden");
+    });
+
+    it("returns list of active users when caller has non-admin session role but presents valid sysadmin dev token", async () => {
+      (auth.api.getSession as any).mockResolvedValue({
+        user: { id: "om-1", email: "om@dpm.local", role: "om" },
+      });
+      mockCookieStore.get.mockReturnValue({ value: "valid-dev-token" });
+      mockDevAdminResult = { id: "admin-1", email: "admin@dpm.local", role: "sys_admin", name: "Admin" };
+      mockUsersInDb = [
+        { id: "usr_admin", name: "Admin", email: "admin@dpm.local", role: "sys_admin", active: true },
+        { id: "usr_om", name: "OM User", email: "om@dpm.local", role: "om", active: true },
+      ];
+
+      const res = await GET();
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.enabled).toBe(true);
+      expect(data.users.length).toBe(2);
     });
 
     it("returns list of active users when sys_admin is authenticated in dev mode", async () => {
@@ -113,10 +143,11 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
       expect(res.status).toBe(403);
     });
 
-    it("returns 403 when caller is not sys_admin", async () => {
+    it("returns 403 when caller is not sys_admin and no dev token present", async () => {
       (auth.api.getSession as any).mockResolvedValue({
         user: { id: "fm-1", email: "fm@dpm.local", role: "fm" },
       });
+      mockCookieStore.get.mockReturnValue(undefined);
 
       const req = new NextRequest("http://localhost:3000/api/dev/switch-role", {
         method: "POST",
@@ -141,7 +172,7 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
       expect(res.status).toBe(404);
     });
 
-    it("successfully creates session and sets cookie when switching by role as sys_admin", async () => {
+    it("successfully creates session and sets cookies when switching by role as sys_admin", async () => {
       mockUsersInDb = [
         { id: "usr_fm_01", name: "Abebe FM", email: "fm@dpm.local", role: "fm", active: true },
       ];
@@ -166,7 +197,41 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
         expect.any(String),
         expect.objectContaining({ path: "/", httpOnly: true })
       );
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        "dpm_dev_sysadmin_token",
+        expect.any(String),
+        expect.objectContaining({ path: "/", httpOnly: true })
+      );
       expect(mockCookieStore.delete).toHaveBeenCalledWith("dpm_impersonate_user_id");
+    });
+
+    it("successfully switches role when caller has non-admin session role (e.g. om) but presents valid sysadmin dev token", async () => {
+      (auth.api.getSession as any).mockResolvedValue({
+        user: { id: "om-1", email: "om@dpm.local", role: "om" },
+      });
+      mockCookieStore.get.mockReturnValue({ value: "valid-dev-token" });
+      mockDevAdminResult = { id: "admin-1", email: "admin@dpm.local", role: "sys_admin", name: "Admin" };
+      mockUsersInDb = [
+        { id: "usr_qa_01", name: "Hanna QA", email: "qa@dpm.local", role: "qa", active: true },
+      ];
+
+      const req = new NextRequest("http://localhost:3000/api/dev/switch-role", {
+        method: "POST",
+        body: JSON.stringify({ role: "qa" }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.user.role).toBe("qa");
+      expect(data.redirectTo).toBe("/qa");
+
+      expect(mockCookieStore.set).toHaveBeenCalledWith(
+        "dpm_dev_sysadmin_token",
+        expect.any(String),
+        expect.objectContaining({ path: "/", httpOnly: true })
+      );
     });
 
     it("successfully creates session when switching by specific userId as sys_admin", async () => {
@@ -192,13 +257,14 @@ describe("Dev Role Switcher API - /api/dev/switch-role", () => {
   });
 
   describe("DELETE /api/dev/switch-role", () => {
-    it("clears cookies on logout", async () => {
+    it("clears session and sysadmin dev token cookies on logout", async () => {
       const res = await DELETE();
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(mockCookieStore.delete).toHaveBeenCalledWith("dpm.session_token");
       expect(mockCookieStore.delete).toHaveBeenCalledWith("dpm_impersonate_user_id");
+      expect(mockCookieStore.delete).toHaveBeenCalledWith("dpm_dev_sysadmin_token");
     });
   });
 });

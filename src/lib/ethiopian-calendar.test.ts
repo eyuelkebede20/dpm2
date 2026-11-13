@@ -9,6 +9,7 @@ import {
   formatEthDate,
   getEthiopianMonthRange,
   getEthDayOfWeek,
+  isReportMonthPassed,
 } from "./ethiopian-calendar";
 
 describe("ethiopian-calendar.ts - Verified Golden Vectors", () => {
@@ -127,6 +128,44 @@ describe("ethiopian-calendar.ts - Verified Golden Vectors", () => {
       const range = getEthiopianMonthRange(2019, 1);
       expect(range.from).toBe("2026-09-11");
       expect(range.to).toBe("2026-10-10");
+    });
+  });
+
+  describe("isReportMonthPassed - Factory Manager Monthly Alteration Boundary", () => {
+    it("returns false when date is within the active Ethiopian month", () => {
+      // Reference date: 2026-11-13 (Hidar 4, 2018 EC)
+      const refDate = "2026-11-13";
+      // 2026-11-10 is Hidar 1, 2018 EC -> Same month
+      expect(isReportMonthPassed("2026-11-10", "ethiopian", refDate)).toBe(false);
+      // 2026-11-13 is Hidar 4, 2018 EC -> Same day/month
+      expect(isReportMonthPassed("2026-11-13", "ethiopian", refDate)).toBe(false);
+    });
+
+    it("returns true when date belongs to a past Ethiopian month", () => {
+      // Reference date: 2026-11-13 (Hidar 4, 2018 EC - Month 3)
+      const refDate = "2026-11-13";
+      // 2026-10-31 is Tikimt 21, 2018 EC (Month 2) -> Past month!
+      expect(isReportMonthPassed("2026-10-31", "ethiopian", refDate)).toBe(true);
+      // 2026-09-15 is Meskerem 5, 2019 EC (or earlier year) -> Past month!
+      expect(isReportMonthPassed("2026-09-05", "ethiopian", refDate)).toBe(true);
+      // Date in year 2017 EC -> Past year/month
+      expect(isReportMonthPassed("2025-05-10", "ethiopian", refDate)).toBe(true);
+    });
+
+    it("evaluates Gregorian calendar months correctly", () => {
+      // Reference date: 2026-11-13
+      const refDate = "2026-11-13";
+      // 2026-11-01 is same month (November 2026) -> false
+      expect(isReportMonthPassed("2026-11-01", "gregorian", refDate)).toBe(false);
+      // 2026-10-31 is past month (October 2026) -> true
+      expect(isReportMonthPassed("2026-10-31", "gregorian", refDate)).toBe(true);
+      // 2025-11-13 is past year -> true
+      expect(isReportMonthPassed("2025-11-13", "gregorian", refDate)).toBe(true);
+    });
+
+    it("returns false for invalid date strings", () => {
+      expect(isReportMonthPassed("", "ethiopian")).toBe(false);
+      expect(isReportMonthPassed("invalid", "ethiopian")).toBe(false);
     });
   });
 });

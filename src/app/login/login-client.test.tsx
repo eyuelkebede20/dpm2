@@ -92,6 +92,27 @@ describe("Button Interaction Tests - LoginClient", () => {
     });
   });
 
+  it("routes directly to /dashboard without redirecting to /change-password even if user record has mustChangePassword = true", async () => {
+    (authClient.signIn.email as any).mockResolvedValue({ data: { user: { id: "1" } } });
+    (globalThis.fetch as any).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ authenticated: true, user: { mustChangePassword: true } }),
+    });
+
+    render(<LoginClient />);
+
+    const omBtn = screen.getByRole("button", { name: /operation mgr/i });
+    fireEvent.click(omBtn);
+
+    const signInBtn = screen.getByRole("button", { name: /sign in/i });
+    fireEvent.click(signInBtn);
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/dashboard");
+      expect(mockPush).not.toHaveBeenCalledWith("/change-password");
+    });
+  });
+
   it("locks out user and disables 'Sign In' button after 5 consecutive failed attempts", async () => {
     (authClient.signIn.email as any).mockResolvedValue({ error: { message: "Invalid credentials" } });
 

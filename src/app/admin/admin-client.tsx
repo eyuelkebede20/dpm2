@@ -50,6 +50,8 @@ import {
   testServerConnection,
   validateServerUrl,
 } from "@/lib/backend-config";
+import { usePagination } from "@/hooks/use-pagination";
+import { Pagination } from "@/components/ui/pagination";
 
 export interface AdminUserItem {
   id: string;
@@ -513,6 +515,17 @@ export function AdminClient({
     return matchesRole && matchesSearch && matchesStatus;
   });
 
+  // Client-side table pagination for scalable, seamless loading
+  const userPagination = usePagination({
+    items: filteredUsers,
+    initialPageSize: 10,
+  });
+
+  const serverPagination = usePagination({
+    items: serverEndpointsList,
+    initialPageSize: 10,
+  });
+
   return (
     <div className="space-y-6">
       {/* Global Toast Notification */}
@@ -759,7 +772,7 @@ export function AdminClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((u) => {
+                  {userPagination.paginatedItems.map((u) => {
                     const isSelf = currentUserId === u.id;
                     const meta = ROLES_METADATA[u.role];
                     const isUpdating = updatingRoleId === u.id;
@@ -885,6 +898,11 @@ export function AdminClient({
                 </tbody>
               </table>
             )}
+            <Pagination
+              {...userPagination}
+              itemLabel="users"
+              className="border-t border-slate-100 px-4"
+            />
           </div>
         </div>
       )}
@@ -1160,7 +1178,7 @@ export function AdminClient({
                     </td>
                   </tr>
                 ) : (
-                  serverEndpointsList.map((endpoint) => {
+                  serverPagination.paginatedItems.map((endpoint) => {
                     const ping = pingResults[endpoint.id];
                     const isTestingThis = testingId === endpoint.id;
 
@@ -1269,6 +1287,11 @@ export function AdminClient({
                 )}
               </tbody>
             </table>
+            <Pagination
+              {...serverPagination}
+              itemLabel="servers"
+              className="border-t border-slate-100 px-4"
+            />
           </div>
         </div>
       )}

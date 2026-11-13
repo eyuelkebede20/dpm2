@@ -13,10 +13,12 @@ export const dynamic = "force-dynamic";
 export default async function AdminPage() {
   const user = await requireAuthPage(["sys_admin"]);
 
-  const profile = await getIndustryProfile();
-  const oms = await getOperationManagers();
-  const allUsers = await getAllUsersForAdmin();
-  const serverEndpoints = await getAllServerEndpointsForAdminAction();
+  const [profile, oms, allUsers, serverEndpoints] = await Promise.all([
+    getIndustryProfile(),
+    getOperationManagers(),
+    getAllUsersForAdmin(),
+    getAllServerEndpointsForAdminAction(),
+  ]);
 
   const isDevImpersonationEnabled =
     process.env.NODE_ENV !== "production" &&

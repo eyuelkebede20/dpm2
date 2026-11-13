@@ -962,5 +962,148 @@ This document is the living knowledge base for DPM (Daily Production Manager), r
 - **Total Planning Verification:** 25/25 tests passing
 - **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
 
+---
+
+## 2026-11-13 — Seed Server Endpoint Foreign-Key Ordering
+
+**Goal:** Ensure the initial seed can insert default server endpoints without violating their creator-user foreign key.
+
+### Edge cases & gotchas discovered
+
+- `server_endpoints.created_by` references `users.id`; inserting endpoint presets with `createdBy: "usr_admin"` before creating the admin user fails with PostgreSQL error `23503`.
+
+### Decision
+
+- Insert the seeded users and their credential accounts before inserting server endpoint presets.
+
+### Follow-ups
+
+- Run the seed against a disposable database to verify the complete seed sequence.
+
+---
+
+## 2026-11-13 — Daily Reports Warning Signs, Factory Manager Monthly Alteration Lockout & Upload Reminders
+
+**Goal:** Implement prominent warning indicators on daily reports for factories and products that haven't received review (or have missing daily uploads), enable sending notification reminders to Factory Managers to prompt upload, and enforce a strict business constraint restricting Factory Managers from altering reports after that month has passed.
+
+### Architecture & Business Rules Enforced
+
+1. **Strict Monthly Alteration Window for Factory Managers:**
+   - Factory Managers (`fm`) are authorized to create and alter daily reports strictly within the **active calendar month**.
+   - Once a calendar month has passed, the reporting window closes permanently for Factory Managers.
+   - Evaluated dynamically via `isReportMonthPassed(reportDate, calendarSystem, referenceDate)`:
+     - **Ethiopian Calendar:** Converts report date and today's date to Ethiopian Year and Month (`gregorianToEth`). If `reportYear < currentYear || (reportYear === currentYear && reportMonth < currentMonth)`, returns `true` (month has passed).
+     - **Gregorian Calendar:** Compares Gregorian year and month against current year and month.
+   - **Backend Server Actions:** Both `saveDailyReportEntryAction` and `saveDailyReportBatchAction` in `src/actions/report-actions.ts` check `isReportMonthPassed` and reject past-month alterations with error: `"Forbidden: Factory Managers can only alter reports of the active month. The reporting window for this month has closed."`
+   - **Frontend UI (`DailyEntryClient`):** All numeric steppers, quick-adds, and input fields are disabled (`isReadOnly = true`), a prominent amber locked banner is displayed (`Reporting Period Closed • Month Passed • Locked`), and the sticky save bar shows `Reporting Window Closed`.
+
+2. **Visible Warning Signs for Unreviewed Factories & Products:**
+   - **Factory-Level Warning Banner:** When a daily report has not been marked as reviewed by the Operation Manager (`!currentReview?.isReviewed`), a prominent amber warning banner surfaces at the top of `/entry`: `"⚠️ Unreviewed Daily Report (ክለሳ ያልተደረገለት ዕለታዊ ሪፖርት) • Review Pending"`.
+   - **Product-Level Warning Indicators:**
+     - In both Table View and Card View, each product that has not received review (neither QA nor OM reviewed) displays an amber warning badge: `⚠️ Unreviewed (ክለሳ ያልተደረገለት)`.
+     - Products that have no entry saved / 0 output display a rose warning badge: `⚠️ Not Uploaded (ያልተመዘገበ)`.
+   - **OM Portal Factory Cards:** Operating plant cards in `/om` display an amber `⚠️ Review Pending` badge indicating daily review or upload attention is required.
+
+3. **Notification Reminders for Factory Managers:**
+   - Added `sendReportReminderAction` in `src/actions/review-actions.ts`:
+     - Verifies caller is Operation Manager (`om`) assigned to the factory or System Administrator (`sys_admin`).
+     - Queries `factoryUsers` and `users` to find all active Factory Managers (`role === 'fm'`) assigned to that factory.
+     - Dispatches in-app notifications (`type: "report_reminder"`) with title `⚠️ Action Required: Upload Daily Report - [Factory Name]` and direct deep-link `/entry?date=[date]`.
+   - **Notification Dropdown (`NotificationsDropdown`):** Formats `report_reminder` notifications with amber warning badge (`Action Required`) and an `[Upload Report (አስገባ)]` action button that navigates directly to the entry grid.
+   - **OM Interface Triggers:** Accessible "Notify Factory Managers (አስታውስ)" buttons in both the `/entry` top unreviewed banner and the `/om` plant cards allow 1-click reminder dispatch with instant toast feedback.
+
+### Automated Verification Results
+
+- **Report Actions Tests:** 22/22 passed in `src/actions/report-actions.test.ts`
+- **Review Actions Tests:** 17/17 passed in `src/actions/review-actions.test.ts`
+- **Daily Entry Client Tests:** 26/26 passed in `src/components/entry-grid/daily-entry-client.test.tsx`
+- **Notifications Dropdown Tests:** 6/6 passed in `src/components/notifications-dropdown.test.tsx`
+- **OM Client Tests:** 10/10 passed in `src/app/om/om-client.test.tsx`
+- **Ethiopian Calendar Tests:** 19/19 passed in `src/lib/ethiopian-calendar.test.ts`
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+---
+
+## 2026-11-13 — Responsive Mobile Bottom-Sheet Calendar Popups & Enhanced Date Box Visibility
+
+**Goal:** Redesign calendar popups/modals (`showEthPicker`, `showMonthJumper`, and `DayInspectionDrawer`) into responsive native mobile bottom sheets (`slide-in-from-bottom`, `rounded-t-3xl`, drag handle, `pb-safe`, `max-h-[88-92dvh]`), and upgrade calendar date boxes across Compact, Grid, and Picker views for high contrast, responsive heights, and touch targets ≥ 44px.
+
+### Architectural Decisions & UI/UX Standards Applied
+
+1. **Native Mobile Bottom-Sheet Modal Architecture:**
+   - **Mobile Viewport (`< 640px`):** Dialogs pop up smoothly from the bottom:
+     - Backdrop: `fixed inset-0 z-50 flex flex-col justify-end p-0 bg-slate-900/50 backdrop-blur-xs transition-opacity duration-200`.
+     - Card: `w-full max-h-[90-92dvh] rounded-t-3xl rounded-b-none border-t border-slate-200 shadow-2xl p-4 pb-safe flex flex-col overflow-y-auto animate-in slide-in-from-bottom duration-200`.
+     - Mobile Drag Handle: `w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-2.5 sm:hidden shrink-0`.
+     - Full keyboard accessibility (`Escape` key listener, `role="dialog"`, `aria-modal="true"`).
+   - **Desktop Viewport (`≥ 640px`):** Dialogs automatically adapt:
+     - `showEthPicker`: Centers smoothly with `sm:items-center sm:justify-center sm:rounded-3xl sm:border sm:max-w-md sm:max-h-[85vh] sm:p-6 sm:slide-in-from-bottom-2`.
+     - `showMonthJumper`: Centers smoothly with `sm:items-center sm:justify-center sm:rounded-3xl sm:border sm:max-w-lg sm:max-h-[85vh] sm:p-6 sm:slide-in-from-top-2`.
+     - `DayInspectionDrawer`: Slides in as an elegant right slide-over drawer (`sm:bottom-auto sm:top-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-full sm:w-[500px] sm:rounded-none sm:border-l sm:slide-in-from-right`).
+
+2. **True 7-Day Ethiopian Month Picker Grid:**
+   - Replaced previous 6-column unaligned day list with an authentic 7-column calendar month grid:
+     - Weekday headers (`ሰኞ, ማክ, ረቡ, ሐሙ, አር, ቅዳ, እሁ` / `Mon..Sun`).
+     - Accurate leading blank offset for day 1: `(getDay(parseISO(firstDayIso)) + 6) % 7`.
+     - Day tiles: `min-h-[38px] sm:min-h-[42px]` touch targets, bold typography (`font-bold font-mono text-xs sm:text-sm`), selected day in brand indigo (`bg-indigo-600 text-white font-extrabold shadow-md scale-105 ring-2 ring-indigo-400`), and today marked with emerald border/dot.
+     - Month navigation steppers: Integrated Prev Month and Next Month circle buttons (`ChevronLeft` / `ChevronRight`) alongside month and year dropdowns.
+     - Live dual-date feedback: Displays both Ethiopian date (`🇪🇹 Hidar 4, 2019 ዓ.ም`) and formatted Gregorian equivalent (`GC: Friday, November 13, 2026`).
+
+3. **Dual-Mode Quick Month Jumper (Ethiopian 13-Month & Gregorian 12-Month):**
+   - In Ethiopian mode: Displays Year strip (2015..2020 ዓ.ም) + 13 Ethiopian Month cards (Meskerem to Pagume) with Amharic & English names, Pagume badge, and future month lockout.
+   - In Gregorian mode: Displays Year strip (2023..2027) + 12 Gregorian Month cards (January to December) with `jumpToGregorianMonth`.
+   - Calendar toolbar: Clicking the month header in either mode now opens the responsive bottom-sheet jumper.
+
+4. **Calendar Date Box Responsiveness & Visibility:**
+   - **Compact View:** Increased cell sizing to `min-h-[44px] min-w-[44px] sm:min-h-[50px] p-1.5` for touch ergonomics. Primary numerals elevated to `text-sm sm:text-base font-black font-mono`. Secondary labels elevated to `text-[9px] sm:text-[10px] font-medium font-mono`. High-contrast status borders (Today: `border-2 border-emerald-500 bg-emerald-50/40`, Holiday: `border-amber-300 bg-amber-50/80`). Tapping any compact date on mobile opens the bottom-sheet day inspection drawer.
+   - **Grid View:** Increased responsive height to `min-h-[58px] sm:min-h-[74px] md:min-h-[86px] lg:min-h-[96px]`. Date numeral elevated to `text-sm sm:text-base md:text-lg font-black`. On mobile (`< 640px`), verbose pills are replaced with clean indicator badges (`✦` for holidays, `Today`, `Off`), preventing crowded text overlap and ensuring date numbers remain prominent.
+
+### Automated Verification Results
+
+- **Calendar Client Tests:** 18/18 passed in `src/components/calendar/calendar-client.test.tsx`
+- **Daily Entry Client Tests:** 28/28 passed in `src/components/entry-grid/daily-entry-client.test.tsx`
+- **Plan Date Picker Tests:** 4/4 passed in `src/components/planning/plan-date-picker.test.tsx`
+- **Ethiopian Calendar Tests:** 19/19 passed in `src/lib/ethiopian-calendar.test.ts`
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+---
+
+## 2026-11-13 — SysAdmin DevMode Token-Tied Role Switching & Temporary Password Removal
+
+**Goal:** Persist SysAdmin DevMode role switching across all role switches (`sys_admin` ↔ `om` ↔ `fm` ↔ `qa`) using a signed `dpm_dev_sysadmin_token` cookie until explicit logout or cookie clearing, and remove all forced redirects to `/change-password` on login.
+
+### Architectural Decisions & Implementation Details
+
+1. **HMAC-SHA256 Signed SysAdmin Dev Token (`src/lib/dev-token.ts`):**
+   - Implemented `createSysAdminDevToken`, `verifySysAdminDevToken`, `setSysAdminDevCookie`, and `clearSysAdminDevCookie`.
+   - Token payload format: `${userId}:${email}:${timestamp}.${signature}` with `base64url` HMAC-SHA256 signature and constant-time validation (`crypto.timingSafeEqual`) against `BETTER_AUTH_SECRET`.
+   - Validates that the underlying user account is active, exists in PostgreSQL, and holds the `sys_admin` role.
+
+2. **Session Context & Dev Switcher Persistence:**
+   - In `src/lib/authz.ts`, `getSessionContext()` inspects `dpm_dev_sysadmin_token` cookie whenever the active session role is not `sys_admin`.
+   - Exposes `canSwitchRole: isSysAdmin || Boolean(devAdminUser)` and `rawAdminUser` to server layouts and components.
+   - `/api/dev/switch-role` (GET, POST) allows role transitions if caller is `sys_admin` OR possesses a valid `dpm_dev_sysadmin_token`.
+   - Root layout (`src/app/layout.tsx`) and `<RoleSwitcher />` render the floating switcher button whenever `canSwitchRole` is true, ensuring the switcher never disappears when switching between `om`, `fm`, or `qa`.
+   - `DELETE /api/dev/switch-role` and Navbar sign-out clear `dpm_dev_sysadmin_token`, `dpm.session_token`, and `dpm_impersonate_user_id`.
+
+3. **Elimination of Forced Temporary Password Change on Login:**
+   - Removed forced `/change-password` redirects from `src/app/login/login-client.tsx` and `src/lib/authz.ts` (`requireAuthPage()`). Users navigate directly to `/dashboard`.
+   - Updated `adminResetPasswordSchema` in `src/actions/admin-actions.ts` to default `mustChangePassword` to `false`.
+   - Updated `createOperationManagerAction`, `createUserAction`, and `provisionFactoryUserAction` to set `mustChangePassword: false`.
+
+### Automated Verification Results
+
+- **Dev Token Tests:** 5/5 passed in `src/lib/dev-token.test.ts`
+- **Authz Guard Tests:** 17/17 passed in `src/lib/authz.test.ts`
+- **Dev Role Switcher Route Tests:** 11/11 passed in `src/app/api/dev/switch-role/route.test.ts`
+- **Role Switcher UI Tests:** 8/8 passed in `src/components/role-switcher.test.tsx`
+- **Login Client Tests:** 5/5 passed in `src/app/login/login-client.test.tsx`
+- **Admin Actions Tests:** 28/28 passed in `src/actions/admin-actions.test.ts`
+- **OM Actions Tests:** 24/24 passed in `src/actions/om-actions.test.ts`
+- **Total Scoped Tests:** 98/98 passed across 7 test files
+- **TypeScript Typecheck:** 0 errors (`pnpm tsc --noEmit` exited with code 0)
+
+
+
 
 

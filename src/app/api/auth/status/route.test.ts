@@ -16,6 +16,7 @@ describe("Auth Status API Route - GET /api/auth/status", () => {
       user: null,
       rawAdminUser: null,
       isImpersonating: false,
+      canSwitchRole: false,
     });
 
     const res = await GET();
@@ -37,6 +38,7 @@ describe("Auth Status API Route - GET /api/auth/status", () => {
       },
       rawAdminUser: null,
       isImpersonating: false,
+      canSwitchRole: false,
     });
 
     const res = await GET();

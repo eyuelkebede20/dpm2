@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   Bell,
   Lock,
+  Search,
+  ArrowUpDown,
 } from "lucide-react";
 import { StepperInput } from "@/components/ui/stepper-input";
 import { LineTallyVisualizer } from "./line-tally-visualizer";
@@ -176,6 +178,18 @@ export function DailyEntryClient({
   );
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [selectedProductFilter, setSelectedProductFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [sortBy, setSortBy] = useState<
+    | "line-asc"
+    | "line-desc"
+    | "product-asc"
+    | "product-desc"
+    | "fg-desc"
+    | "fg-asc"
+    | "target-desc"
+    | "variance-desc"
+    | "variance-asc"
+  >("line-asc");
   const [groupMode, setGroupMode] = useState<"product" | "line">("product");
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{
@@ -781,13 +795,79 @@ export function DailyEntryClient({
     return Array.from(map.values()).sort((a, b) => a.productName.localeCompare(b.productName));
   }, [rows, selectedDate, workingDays, specialDaysList]);
 
-  // Filtered rows based on selected product
-  const displayedRows = useMemo(() => {
+  // Filtered rows based on selected product (used for summary KPI metrics)
+  const productFilteredRows = useMemo(() => {
     if (selectedProductFilter === "all") return rows;
     return rows.filter((r) => r.productId === selectedProductFilter);
   }, [rows, selectedProductFilter]);
 
-  // Rows grouped by product for "By Product" display mode
+  // Filtered and sorted rows based on product filter, text search query, and sort mode
+  const displayedRows = useMemo(() => {
+    let result = productFilteredRows;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (r) =>
+          r.lineName.toLowerCase().includes(q) ||
+          r.productName.toLowerCase().includes(q) ||
+          r.sku.toLowerCase().includes(q)
+      );
+    }
+
+    return [...result].sort((a, b) => {
+      if (sortBy === "line-asc") {
+        return a.lineName.localeCompare(b.lineName, undefined, { numeric: true });
+      }
+      if (sortBy === "line-desc") {
+        return b.lineName.localeCompare(a.lineName, undefined, { numeric: true });
+      }
+      if (sortBy === "product-asc") {
+        return a.productName.localeCompare(b.productName);
+      }
+      if (sortBy === "product-desc") {
+        return b.productName.localeCompare(a.productName);
+      }
+      if (sortBy === "fg-desc") {
+        return (b.entry.finishedGood || 0) - (a.entry.finishedGood || 0);
+      }
+      if (sortBy === "fg-asc") {
+        return (a.entry.finishedGood || 0) - (b.entry.finishedGood || 0);
+      }
+      if (sortBy === "target-desc") {
+        const targetA =
+          calculateDailyTarget(a.plan, selectedDate, workingDays, specialDaysList)
+            .dailyTarget || 0;
+        const targetB =
+          calculateDailyTarget(b.plan, selectedDate, workingDays, specialDaysList)
+            .dailyTarget || 0;
+        return targetB - targetA;
+      }
+      if (sortBy === "variance-desc") {
+        const targetA = calculateDailyTarget(a.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+        const targetB = calculateDailyTarget(b.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+        const vA = calculateVariance(a.entry.finishedGood || 0, targetA);
+        const vB = calculateVariance(b.entry.finishedGood || 0, targetB);
+        return (vB.variance ?? -999999) - (vA.variance ?? -999999);
+      }
+      if (sortBy === "variance-asc") {
+        const targetA = calculateDailyTarget(a.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+        const targetB = calculateDailyTarget(b.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+        const vA = calculateVariance(a.entry.finishedGood || 0, targetA);
+        const vB = calculateVariance(b.entry.finishedGood || 0, targetB);
+        return (vA.variance ?? 999999) - (vB.variance ?? 999999);
+      }
+      return 0;
+    });
+  }, [
+    productFilteredRows,
+    searchQuery,
+    sortBy,
+    selectedDate,
+    workingDays,
+    specialDaysList,
+  ]);
+
+  // Rows grouped by product for "By Product" display mode (filtered and sorted)
   const productGroups = useMemo(() => {
     const groups = new Map<
       string,
@@ -798,9 +878,18 @@ export function DailyEntryClient({
       }
     >();
 
+    const q = searchQuery.trim().toLowerCase();
+
     rows.forEach((row, globalIndex) => {
       if (selectedProductFilter !== "all" && row.productId !== selectedProductFilter) {
         return;
+      }
+      if (q) {
+        const matches =
+          row.lineName.toLowerCase().includes(q) ||
+          row.productName.toLowerCase().includes(q) ||
+          row.sku.toLowerCase().includes(q);
+        if (!matches) return;
       }
 
       if (!groups.has(row.productId)) {
@@ -830,8 +919,66 @@ export function DailyEntryClient({
       groups.get(row.productId)!.items.push({ row, globalIndex });
     });
 
-    return Array.from(groups.values());
-  }, [rows, selectedProductFilter, productSummaries]);
+    const groupList = Array.from(groups.values());
+
+    // Sort items within each product group according to sortBy
+    groupList.forEach((group) => {
+      group.items.sort((aItem, bItem) => {
+        const a = aItem.row;
+        const b = bItem.row;
+        if (sortBy === "line-asc") {
+          return a.lineName.localeCompare(b.lineName, undefined, { numeric: true });
+        }
+        if (sortBy === "line-desc") {
+          return b.lineName.localeCompare(a.lineName, undefined, { numeric: true });
+        }
+        if (sortBy === "fg-desc") {
+          return (b.entry.finishedGood || 0) - (a.entry.finishedGood || 0);
+        }
+        if (sortBy === "fg-asc") {
+          return (a.entry.finishedGood || 0) - (b.entry.finishedGood || 0);
+        }
+        if (sortBy === "target-desc") {
+          const targetA = calculateDailyTarget(a.plan, selectedDate, workingDays, specialDaysList).dailyTarget || 0;
+          const targetB = calculateDailyTarget(b.plan, selectedDate, workingDays, specialDaysList).dailyTarget || 0;
+          return targetB - targetA;
+        }
+        if (sortBy === "variance-desc") {
+          const targetA = calculateDailyTarget(a.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+          const targetB = calculateDailyTarget(b.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+          const vA = calculateVariance(a.entry.finishedGood || 0, targetA);
+          const vB = calculateVariance(b.entry.finishedGood || 0, targetB);
+          return (vB.variance ?? -999999) - (vA.variance ?? -999999);
+        }
+        if (sortBy === "variance-asc") {
+          const targetA = calculateDailyTarget(a.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+          const targetB = calculateDailyTarget(b.plan, selectedDate, workingDays, specialDaysList).dailyTarget;
+          const vA = calculateVariance(a.entry.finishedGood || 0, targetA);
+          const vB = calculateVariance(b.entry.finishedGood || 0, targetB);
+          return (vA.variance ?? 999999) - (vB.variance ?? 999999);
+        }
+        return 0;
+      });
+    });
+
+    // Also sort the groups themselves if sorting by product name
+    if (sortBy === "product-asc") {
+      groupList.sort((a, b) => a.product.name.localeCompare(b.product.name));
+    } else if (sortBy === "product-desc") {
+      groupList.sort((a, b) => b.product.name.localeCompare(a.product.name));
+    }
+
+    return groupList;
+  }, [
+    rows,
+    selectedProductFilter,
+    searchQuery,
+    sortBy,
+    productSummaries,
+    selectedDate,
+    workingDays,
+    specialDaysList,
+  ]);
 
   // Aggregated totals (reflects filtered rows when a product is selected)
   let totalFG = 0;
@@ -843,7 +990,7 @@ export function DailyEntryClient({
   let totalWIP = 0;
   let totalDowntime = 0;
 
-  displayedRows.forEach((r) => {
+  productFilteredRows.forEach((r) => {
     totalFG += r.entry.finishedGood || 0;
     totalRework += r.entry.rework || 0;
     totalReject += r.entry.reject || 0;
@@ -1746,91 +1893,8 @@ export function DailyEntryClient({
           )}
         </div>
 
-        {/* Product Filter & Date Selector & Mode Toggle */}
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* Product Filter Dropdown */}
-          {availableProducts.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
-              <Boxes className="w-3.5 h-3.5 text-indigo-600 ml-1.5 shrink-0" />
-              <select
-                value={selectedProductFilter}
-                onChange={(e) => setSelectedProductFilter(e.target.value)}
-                className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6"
-                aria-label="Filter by Product"
-              >
-                <option value="all">All Products ({availableProducts.length})</option>
-                {availableProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.sku})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* Group Mode Toggle: By Product vs By Line */}
-          <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setGroupMode("product")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                groupMode === "product"
-                  ? "bg-white text-indigo-700 shadow-2xs"
-                  : "btn-ghost text-slate-500"
-              }`}
-              title="Display Based on Product"
-            >
-              <Boxes className="w-3 h-3" />
-              <span>By Product</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupMode("line")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                groupMode === "line"
-                  ? "bg-white text-indigo-700 shadow-2xs"
-                  : "btn-ghost text-slate-500"
-              }`}
-              title="Flat Line View"
-            >
-              <span>By Line</span>
-            </button>
-          </div>
-
-          {/* View Mode Switcher (Table View vs Cards View) */}
-          <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                viewMode === "table"
-                  ? "bg-white text-slate-900 shadow-2xs"
-                  : "btn-ghost text-slate-500"
-              }`}
-              title="Table View"
-              aria-label="Table View"
-            >
-              <TableIcon className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden xs:inline">Table</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("cards")}
-              className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
-                viewMode === "cards"
-                  ? "bg-white text-slate-900 shadow-2xs"
-                  : "btn-ghost text-slate-500"
-              }`}
-              title="Card View (Mobile Optimized)"
-              aria-label="Card View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden xs:inline">Cards</span>
-            </button>
-          </div>
-
-          {/* Date Selector Bar */}
-          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
+        {/* Date Selector Bar */}
+        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-2xs">
             {isEth && ethDate && (
               <button
                 type="button"
@@ -1918,7 +1982,6 @@ export function DailyEntryClient({
             </button>
           </div>
         </div>
-      </div>
 
       {/* Special Off-Day Holiday Banner */}
       {specialDay && !specialDay.isWorkingDay && (
@@ -2280,6 +2343,170 @@ export function DailyEntryClient({
         </div>
       )}
 
+      {/* Interactive Controls & Filters Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-2xs mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Search Input & Sort Selector */}
+          <div className="flex flex-1 flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search line name, product, or SKU..."
+                aria-label="Search lines or products"
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-xs sm:text-sm font-medium text-slate-900 rounded-xl border border-slate-200 focus:border-indigo-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:text-slate-400"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Sort Selector */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6 cursor-pointer"
+                aria-label="Sort production entries"
+              >
+                <option value="line-asc">Line Name (A–Z)</option>
+                <option value="line-desc">Line Name (Z–A)</option>
+                <option value="product-asc">Product Name (A–Z)</option>
+                <option value="product-desc">Product Name (Z–A)</option>
+                <option value="fg-desc">Finished Good (High to Low)</option>
+                <option value="fg-asc">Finished Good (Low to High)</option>
+                <option value="target-desc">Daily Target (High to Low)</option>
+                <option value="variance-desc">Variance (Ahead first)</option>
+                <option value="variance-asc">Variance (Behind first)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Product Filter & Group Toggle & View Mode Switcher */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Product Filter Dropdown */}
+            {availableProducts.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <Boxes className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <select
+                  value={selectedProductFilter}
+                  onChange={(e) => setSelectedProductFilter(e.target.value)}
+                  className="select select-xs border-none bg-transparent font-bold text-slate-800 focus:outline-hidden text-xs pr-6 cursor-pointer"
+                  aria-label="Filter by Product"
+                >
+                  <option value="all">All Products ({availableProducts.length})</option>
+                  {availableProducts.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.sku})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Group Mode Toggle: By Product vs By Line */}
+            <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setGroupMode("product")}
+                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
+                  groupMode === "product"
+                    ? "bg-white text-indigo-700 shadow-2xs"
+                    : "btn-ghost text-slate-500"
+                }`}
+                title="Display Based on Product"
+              >
+                <Boxes className="w-3 h-3" />
+                <span>By Product</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setGroupMode("line")}
+                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
+                  groupMode === "line"
+                    ? "bg-white text-indigo-700 shadow-2xs"
+                    : "btn-ghost text-slate-500"
+                }`}
+                title="Flat Line View"
+              >
+                <span>By Line</span>
+              </button>
+            </div>
+
+            {/* View Mode Switcher (Table View vs Cards View) */}
+            <div className="join bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setViewMode("table")}
+                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
+                  viewMode === "table"
+                    ? "bg-white text-slate-900 shadow-2xs"
+                    : "btn-ghost text-slate-500"
+                }`}
+                title="Table View"
+                aria-label="Table View"
+              >
+                <TableIcon className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden xs:inline">Table</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("cards")}
+                className={`btn btn-xs join-item rounded-lg font-bold gap-1 min-h-[32px] px-2.5 touch-manipulation ${
+                  viewMode === "cards"
+                    ? "bg-white text-slate-900 shadow-2xs"
+                    : "btn-ghost text-slate-500"
+                }`}
+                title="Card View (Mobile Optimized)"
+                aria-label="Card View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+                <span className="hidden xs:inline">Cards</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Active Filter & Match Counter Strip */}
+        {(searchQuery.trim() !== "" || selectedProductFilter !== "all") && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-slate-600">
+              <span className="font-semibold">
+                Showing <b className="text-slate-900 font-mono">{displayedRows.length}</b> of{" "}
+                <b className="text-slate-900 font-mono">{rows.length}</b> production lines
+              </span>
+              {searchQuery.trim() && (
+                <span className="badge badge-sm badge-neutral font-mono">
+                  matching &quot;{searchQuery.trim()}&quot;
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSelectedProductFilter("all");
+              }}
+              className="btn btn-xs btn-ghost text-indigo-600 hover:text-indigo-800 font-bold gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Filters</span>
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Entry Grid - Table View */}
       {viewMode === "table" ? (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-2xs overflow-hidden">
@@ -2338,15 +2565,28 @@ export function DailyEntryClient({
                   <tr>
                     <td colSpan={15} className="text-center py-12 text-slate-400">
                       <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                      No production lines producing the selected product.
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedProductFilter("all")}
-                          className="btn btn-xs btn-outline btn-neutral rounded-lg"
-                        >
-                          Show All Products
-                        </button>
+                      {searchQuery.trim()
+                        ? `No production lines match "${searchQuery.trim()}".`
+                        : "No production lines producing the selected product."}
+                      <div className="mt-2 flex items-center justify-center gap-2">
+                        {searchQuery.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchQuery("")}
+                            className="btn btn-xs btn-outline btn-neutral rounded-lg"
+                          >
+                            Clear Search
+                          </button>
+                        )}
+                        {selectedProductFilter !== "all" && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProductFilter("all")}
+                            className="btn btn-xs btn-outline btn-neutral rounded-lg"
+                          >
+                            Show All Products
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -2437,15 +2677,28 @@ export function DailyEntryClient({
           ) : displayedRows.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400">
               <Boxes className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-              No production lines producing the selected product.
-              <div className="mt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedProductFilter("all")}
-                  className="btn btn-xs btn-outline btn-neutral rounded-lg"
-                >
-                  Show All Products
-                </button>
+              {searchQuery.trim()
+                ? `No production lines match "${searchQuery.trim()}".`
+                : "No production lines producing the selected product."}
+              <div className="mt-2 flex items-center justify-center gap-2">
+                {searchQuery.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="btn btn-xs btn-outline btn-neutral rounded-lg"
+                  >
+                    Clear Search
+                  </button>
+                )}
+                {selectedProductFilter !== "all" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProductFilter("all")}
+                    className="btn btn-xs btn-outline btn-neutral rounded-lg"
+                  >
+                    Show All Products
+                  </button>
+                )}
               </div>
             </div>
           ) : groupMode === "product" ? (

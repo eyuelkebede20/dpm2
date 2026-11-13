@@ -7,15 +7,19 @@ import {
   markAllNotificationsReadAction,
   reviewItemAction,
   updateDailyPlanAction,
+  sendReportReminderAction,
 } from "./review-actions";
 import * as authz from "@/lib/authz";
 import { db } from "@/db";
 import {
   factories,
+  factoryUsers,
+  users,
   plans,
   dailyReportReviews,
   industryProfile,
   specialDays,
+  notifications,
 } from "@/db/schema";
 
 vi.mock("next/cache", () => ({
@@ -34,6 +38,8 @@ let mockUpdatedNotifications: any[] = [];
 let mockPlanInDb: any = null;
 let mockUpdatedPlan: any = null;
 let mockExistingReviewRecord: any = null;
+let mockFmsList: any[] = [];
+let mockInsertedNotifications: any[] = [];
 
 vi.mock("@/db", () => {
   return {
@@ -46,28 +52,32 @@ vi.mock("@/db", () => {
             if (table === dailyReportReviews) return mockExistingReviewRecord ? [mockExistingReviewRecord] : [];
             if (table === industryProfile) return [{ workingDays: [1, 2, 3, 4, 5, 6] }];
             if (table === specialDays) return [];
+            if (table === factoryUsers) return mockFmsList;
+            if (table === notifications) return mockNotificationsList;
             return mockFactory ? [mockFactory] : [];
           };
 
-          return {
-            then: (resolve: any) => resolve(resolveForTable()),
+          const queryObj: any = {
+            innerJoin: vi.fn(() => queryObj),
+            where: vi.fn(() => queryObj),
             limit: vi.fn(() => Promise.resolve(resolveForTable())),
-            where: vi.fn(() => ({
-              limit: vi.fn(() => Promise.resolve(resolveForTable())),
-              orderBy: vi.fn(() => ({
-                limit: vi.fn(() => Promise.resolve(mockNotificationsList)),
-              })),
-            })),
+            orderBy: vi.fn(() => queryObj),
+            then: (resolve: any) => Promise.resolve(resolveForTable()).then(resolve),
           };
+
+          return queryObj;
         }),
       })),
       insert: vi.fn(() => ({
-        values: vi.fn((vals: any) => ({
-          onConflictDoUpdate: vi.fn((opts: any) => {
-            mockUpsertedReview = vals;
-            return Promise.resolve([{ id: vals.id }]);
-          }),
-        })),
+        values: vi.fn((vals: any) => {
+          mockInsertedNotifications.push(vals);
+          return {
+            onConflictDoUpdate: vi.fn((opts: any) => {
+              mockUpsertedReview = vals;
+              return Promise.resolve([{ id: vals.id }]);
+            }),
+          };
+        }),
       })),
       update: vi.fn(() => ({
         set: vi.fn((vals: any) => ({
@@ -350,6 +360,73 @@ describe("Review Actions - Operation Manager & Notifications", () => {
       expect(mockUpdatedPlan).toBeDefined();
       expect(mockUpdatedPlan.initialPlannedQty).toBe(26000);
       expect(mockUpdatedPlan.plannedQty).toBeGreaterThan(0);
+    });
+  });
+
+  describe("sendReportReminderAction", () => {
+    it("rejects when called by FM", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(fmUser);
+
+      const res = await sendReportReminderAction({
+        factoryId: "fac_1",
+        date: "2026-11-13",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Forbidden");
+    });
+
+    it("rejects when factory is not found or OM is not assigned to factory", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+      mockFactory = { id: "fac_1", name: "Plant 1", omId: "usr_other_om" };
+
+      const res = await sendReportReminderAction({
+        factoryId: "fac_1",
+        date: "2026-11-13",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Forbidden: You are not assigned");
+    });
+
+    it("rejects when no active FMs are assigned to factory", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+      mockFactory = { id: "fac_1", name: "Plant 1", omId: "usr_om_1" };
+      mockFmsList = [];
+
+      const res = await sendReportReminderAction({
+        factoryId: "fac_1",
+        date: "2026-11-13",
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("No active Factory Managers are assigned");
+    });
+
+    it("dispatches notification reminders to all active Factory Managers for the factory", async () => {
+      vi.mocked(authz.requireUser).mockResolvedValue(omUser);
+      mockFactory = { id: "fac_1", name: "Hawassa Plant", omId: "usr_om_1" };
+      mockFmsList = [
+        { userId: "usr_fm_1", userName: "Abebe FM", userEmail: "abebe@dpm.local" },
+        { userId: "usr_fm_2", userName: "Chala FM", userEmail: "chala@dpm.local" },
+      ];
+      mockInsertedNotifications = [];
+
+      const res = await sendReportReminderAction({
+        factoryId: "fac_1",
+        date: "2026-11-13",
+        message: "Please upload today's production report immediately.",
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.notifiedCount).toBe(2);
+      expect(res.recipients).toEqual(["Abebe FM", "Chala FM"]);
+      expect(mockInsertedNotifications.length).toBe(2);
+      expect(mockInsertedNotifications[0].userId).toBe("usr_fm_1");
+      expect(mockInsertedNotifications[0].type).toBe("report_reminder");
+      expect(mockInsertedNotifications[0].title).toContain("Hawassa Plant");
+      expect(mockInsertedNotifications[0].message).toContain("Please upload today's production report");
+      expect(mockInsertedNotifications[0].link).toBe("/entry?date=2026-11-13");
     });
   });
 });
